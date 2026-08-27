@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { headers } from "next/headers";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,19 +12,20 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
-  const image = `${protocol}://${host}/og.png`;
-  return {
-    title: "骏骏订单｜得物订单管理",
-    description: "面向得物卖家的移动端库存与订单管理系统。",
-    icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
-    openGraph: { title: "骏骏订单", description: "库存与订单，一手掌握", images: [image] },
-    twitter: { card: "summary_large_image", title: "骏骏订单", description: "库存与订单，一手掌握", images: [image] },
-  };
-}
+const configuredOrigin = process.env.SITE_ORIGIN?.trim().replace(/\/$/, "");
+const siteOrigin = configuredOrigin && /^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(configuredOrigin)
+  ? configuredOrigin
+  : undefined;
+const socialImage = siteOrigin ? `${siteOrigin}/og-v2.png` : undefined;
+
+export const metadata: Metadata = {
+  metadataBase: siteOrigin ? new URL(siteOrigin) : undefined,
+  title: "骏骏订单｜多渠道采购转卖管理",
+  description: "贯穿采购上报、订单审核、收货入库、售出发货与利润核算的轻量级 H5 管理系统。",
+  icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
+  openGraph: { title: "骏骏订单", description: "采购、入库、售出、利润，全链路一手掌握", images: socialImage ? [socialImage] : undefined },
+  twitter: { card: "summary_large_image", title: "骏骏订单", description: "采购、入库、售出、利润，全链路一手掌握", images: socialImage ? [socialImage] : undefined },
+};
 
 export default function RootLayout({
   children,
