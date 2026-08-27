@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-junjun_order}
+      POSTGRES_USER: ${POSTGRES_USER:-junjun}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-junjun} -d ${POSTGRES_DB:-junjun_order}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-junjun}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-junjun_order}
+      DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-10}
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      ADMIN_NAME: ${ADMIN_NAME:-系统管理员}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      SITE_ORIGIN: ${SITE_ORIGIN:-}
+      UPLOAD_DIR: /app/data/uploads
+      OCR_ENDPOINT: ${OCR_ENDPOINT:-}
+      OCR_TOKEN: ${OCR_TOKEN:-}
+      DEWU_SYNC_ENDPOINT: ${DEWU_SYNC_ENDPOINT:-}
+      DEWU_APP_KEY: ${DEWU_APP_KEY:-}
+      DEWU_APP_SECRET: ${DEWU_APP_SECRET:-}
+    volumes:
+      - app_uploads:/app/data/uploads
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-:80}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  app_uploads:
+  caddy_data:
+  caddy_config:

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Role = "admin" | "buyer";
 type AdminTab = "dashboard" | "stock" | "orders" | "profile";
@@ -23,6 +24,7 @@ const statusTone: Record<OrderStatus, string> = { "待审核":"gray", "在途":"
 const money = (value: number) => `¥${value.toLocaleString("zh-CN", { minimumFractionDigits:2 })}`;
 
 export default function Home() {
+  const router=useRouter();
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [people, setPeople] = useState<AppUser[]>([]);
   const [adminTab, setAdminTab] = useState<AdminTab>("dashboard");
@@ -39,12 +41,12 @@ export default function Home() {
   const notify = (text: string) => { setToast(text); window.setTimeout(() => setToast(""), 2200); };
   const openOrder = (id: string) => { setSelectedId(id); setOverlay("detail"); };
   const applySnapshot = useCallback((data:Snapshot) => { setCurrentUser(data.user);setPeople(data.users);setOrders(data.orders);setStock(data.stock); },[]);
-  const load = useCallback(async() => { setLoading(true);setFatalError("");try{const response=await fetch("/api/app",{cache:"no-store"});const json=await response.json() as Snapshot&{error?:string};if(!response.ok)throw new Error(json.error||"加载失败");applySnapshot(json);}catch(error){setFatalError(error instanceof Error?error.message:"加载失败");}finally{setLoading(false);}},[applySnapshot]);
+  const load = useCallback(async() => { setLoading(true);setFatalError("");try{const response=await fetch("/api/app",{cache:"no-store"});if(response.status===401){router.replace("/login");return;}const json=await response.json() as Snapshot&{error?:string};if(!response.ok)throw new Error(json.error||"加载失败");applySnapshot(json);}catch(error){setFatalError(error instanceof Error?error.message:"加载失败");}finally{setLoading(false);}},[applySnapshot,router]);
   useEffect(()=>{
     const timer=window.setTimeout(()=>{void load();},0);
     return()=>window.clearTimeout(timer);
   },[load]);
-  async function mutate(action:string,payload:Record<string,unknown>={}) { const response=await fetch("/api/app",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,...payload})});const json=await response.json() as {data:Snapshot;createdOrderId?:string;error?:string};if(!response.ok)throw new Error(json.error||"操作失败");applySnapshot(json.data);return json; }
+  async function mutate(action:string,payload:Record<string,unknown>={}) { const response=await fetch("/api/app",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,...payload})});if(response.status===401){router.replace("/login");throw new Error("登录已过期");}const json=await response.json() as {data:Snapshot;createdOrderId?:string;error?:string};if(!response.ok)throw new Error(json.error||"操作失败");applySnapshot(json.data);return json; }
   async function run(action:string,payload:Record<string,unknown>,success:string){try{await mutate(action,payload);setOverlay(null);notify(success);}catch(error){notify(error instanceof Error?error.message:"操作失败");}}
   const approve=(id:string)=>void run("approve",{orderId:id},"订单审核通过，已进入在途状态");
   const reject=(id:string,reason:string)=>void run("reject",{orderId:id,reason},"订单已驳回，采购员将收到提醒");
@@ -63,7 +65,7 @@ export default function Home() {
       {role === "admin" && adminTab === "dashboard" && <AdminDashboard orders={orders} stock={stock} onReceipt={() => setOverlay("receipt")} onOrders={() => setAdminTab("orders")} onStock={() => setAdminTab("stock")} />}
       {role === "admin" && adminTab === "stock" && <StockPage stock={stock} onSuggest={() => notify("已生成 3 条采购建议")} />}
       {role === "admin" && adminTab === "orders" && <AdminOrders orders={orders} onOpen={openOrder} onApprove={approve} onReject={(id) => { setSelectedId(id); setOverlay("reject"); }} onShip={(id) => { setSelectedId(id); setOverlay("ship"); }} />}
-      {role === "admin" && adminTab === "profile" && <AdminProfile user={currentUser} people={people} onRole={(userId,nextRole)=>void run("set-user-role",{userId,role:nextRole},"用户角色已更新")} onNotify={notify} />}
+      {role === "admin" && adminTab === "profile" && <AdminProfile user={currentUser} people={people} onRole={(userId,nextRole)=>void run("set-user-role",{userId,role:nextRole},"用户角色已更新")} onActive={(userId,active)=>void run("set-user-active",{userId,active},active?"账号已启用":"账号已停用")} onCreate={(member)=>void run("create-user",member,"成员账号已创建")} onNotify={notify} />}
 
       {role === "buyer" && buyerTab === "home" && <BuyerHome buyerName={currentUser.name} orders={orders} onUpload={() => {setSelectedId("");setBuyerTab("upload");}} onMine={() => setBuyerTab("mine")} onEdit={(id) => { setSelectedId(id); setBuyerTab("upload"); }} />}
       {role === "buyer" && buyerTab === "upload" && <UploadPage editing={orders.find(item=>item.id===selectedId&&item.status==="已驳回")} onSubmit={upload} />}
@@ -141,7 +143,19 @@ function UploadPage({editing,onSubmit}:{editing?:PurchaseOrder;onSubmit:(order:P
 
 function BuyerOrders({ orders,onOpen }: { orders:PurchaseOrder[];onOpen:(id:string)=>void }) { const [status,setStatus] = useState("全部"); const [query,setQuery] = useState(""); const visible = orders.filter(o => (status === "全部" || o.status === status) && `${o.title}${o.sku}${o.platformNo}`.toLowerCase().includes(query.toLowerCase())); return <section className="enter"><Search value={query} onChange={setQuery} placeholder="搜索商品 / 订单号" /><div className="chip-row scroll">{["全部","待审核","在途","已入库","待发货","已发货"].map(v => <button key={v} className={status === v ? "active" : ""} onClick={() => setStatus(v)}>{v}</button>)}</div><SectionHead title="我的采购订单" note={`${visible.length} 笔`} /><div className="order-list">{visible.map(order => <OrderCard key={order.id} order={order} onOpen={() => onOpen(order.id)} />)}</div></section>; }
 
-function AdminProfile({user,people,onRole,onNotify}:{user:AppUser;people:AppUser[];onRole:(id:string,role:Role)=>void;onNotify:(text:string)=>void}){return <section className="enter profile-page"><div className="profile-card"><div className="avatar">{user.name.slice(0,1)}</div><div><h2>{user.name}</h2><span>{user.email}</span></div><Badge tone="purple">管理员</Badge></div><SectionHead title="成员与权限" note={`${people.length} 人`}/><div className="member-list">{people.map(person=><div key={person.id}><span><b>{person.name}</b><small>{person.email}</small></span><select value={person.role} disabled={person.id===user.id} onChange={e=>onRole(person.id,e.target.value as Role)}><option value="buyer">采购员</option><option value="admin">管理员</option></select></div>)}</div><SectionHead title="系统能力" note="云端运行"/><div className="profile-menu"><button onClick={()=>onNotify("利润数据由已发货订单实时计算")}><i>📈</i><span>利润统计</span><small>实时</small><em>›</em></button><a href="/api/export"><i>📤</i><span>导出订单数据</span><small>CSV</small><em>›</em></a><button onClick={()=>onNotify("平台适配器需在部署环境配置凭证")}><i>🔗</i><span>外部平台连接</span><small>服务端配置</small><em>›</em></button></div><a className="logout" href="/signout-with-chatgpt?return_to=/">退出登录</a><p className="version">骏骏订单 v1.0 · 数据持久化与操作审计已启用</p></section>;}
+function AdminProfile({user,people,onRole,onActive,onCreate,onNotify}:{user:AppUser;people:AppUser[];onRole:(id:string,role:Role)=>void;onActive:(id:string,active:boolean)=>void;onCreate:(member:Record<string,unknown>)=>void;onNotify:(text:string)=>void}){
+  const [showCreate,setShowCreate]=useState(false);
+  function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();const data=new FormData(event.currentTarget);onCreate({name:String(data.get("name")??""),email:String(data.get("email")??""),password:String(data.get("password")??""),role:String(data.get("role")??"buyer")});event.currentTarget.reset();setShowCreate(false);}
+  return <section className="enter profile-page">
+    <div className="profile-card"><div className="avatar">{user.name.slice(0,1)}</div><div><h2>{user.name}</h2><span>{user.email}</span></div><Badge tone="purple">管理员</Badge></div>
+    <SectionHead title="成员与权限" note={`${people.length} 人`}/>
+    <button className="member-create-button" onClick={()=>setShowCreate(value=>!value)}>＋ 创建成员账号</button>
+    {showCreate&&<form className="member-create-form" onSubmit={submit}><input name="name" required placeholder="成员姓名"/><input name="email" type="email" required placeholder="登录邮箱"/><input name="password" type="password" required minLength={8} placeholder="初始密码（至少 8 位）"/><select name="role" defaultValue="buyer"><option value="buyer">采购员</option><option value="admin">管理员</option></select><button className="primary-button" type="submit">创建账号</button></form>}
+    <div className="member-list">{people.map(person=><div key={person.id} className={!person.active?"member-disabled":""}><span><b>{person.name}</b><small>{person.email}</small></span><select value={person.role} disabled={person.id===user.id||!person.active} onChange={e=>onRole(person.id,e.target.value as Role)}><option value="buyer">采购员</option><option value="admin">管理员</option></select>{person.id!==user.id&&<button className="member-state-button" onClick={()=>onActive(person.id,!person.active)}>{person.active?"停用":"启用"}</button>}</div>)}</div>
+    <SectionHead title="系统能力" note="独立部署"/><div className="profile-menu"><button onClick={()=>onNotify("利润数据由已发货订单实时计算")}><i>📈</i><span>利润统计</span><small>实时</small><em>›</em></button><a href="/api/export"><i>📤</i><span>导出订单数据</span><small>CSV</small><em>›</em></a><button onClick={()=>onNotify("平台适配器需在服务器环境变量中配置凭证")}><i>🔗</i><span>外部平台连接</span><small>服务端配置</small><em>›</em></button></div>
+    <a className="logout" href="/api/auth/logout">退出登录</a><p className="version">骏骏订单 v2.0 · 独立服务器版</p>
+  </section>;
+}
 
 function ReceiptSheet({ orders,onClose,onReceive,onManual,onNotify }: { orders:PurchaseOrder[];onClose:()=>void;onReceive:(id:string,loc:string)=>void;onManual:()=>void;onNotify:(t:string)=>void }) {
   const [stage,setStage]=useState<"capture"|"result">("capture"),[courier,setCourier]=useState(""),[location,setLocation]=useState(""),[busy,setBusy]=useState(false); const match=orders.find(order=>order.courierNo===courier&&order.status==="在途");

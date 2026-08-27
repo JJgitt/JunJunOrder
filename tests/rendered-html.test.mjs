@@ -1,48 +1,46 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
-async function render() {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-  return worker.fetch(
-    new Request("http://localhost/", { headers: { accept: "text/html" } }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
-    { waitUntil() {}, passThroughOnException() {} },
-  );
-}
-
-test("server-renders the production application shell", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
-
-  const html = await response.text();
-  assert.match(html, /<html lang="zh-CN">/i);
-  assert.match(html, /<title>骏骏订单｜多渠道采购转卖管理<\/title>/i);
-  assert.match(html, /正在连接业务数据/);
-  assert.match(html, /正在验证登录状态并载入订单、库存与权限/);
-  assert.doesNotMatch(html, /Your site is taking shape|codex-preview/i);
+test("produces a standalone Next.js server",async()=>{
+  await access(new URL("../.next/standalone/server.js",import.meta.url));
+  await access(new URL("../.next/static/",import.meta.url));
+  const manifest=JSON.parse(await readFile(new URL("../.next/routes-manifest.json",import.meta.url),"utf8"));
+  assert.ok(Array.isArray(manifest.dynamicRoutes));
 });
 
-test("ships persistent storage bindings and schema migration", async () => {
-  const [hosting, migration, api, schema] = await Promise.all([
-    readFile(new URL("../dist/.openai/hosting.json", import.meta.url), "utf8"),
-    readFile(new URL("../dist/.openai/drizzle/0000_sleepy_the_phantom.sql", import.meta.url), "utf8"),
-    readFile(new URL("../app/api/app/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+test("is independent from chatgpt.site and Cloudflare storage",async()=>{
+  const [pkg,compose,schema,auth,files]=await Promise.all([
+    readFile(new URL("../package.json",import.meta.url),"utf8"),
+    readFile(new URL("../compose.yaml",import.meta.url),"utf8"),
+    readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
+    readFile(new URL("../lib/auth.ts",import.meta.url),"utf8"),
+    readFile(new URL("../lib/file-storage.ts",import.meta.url),"utf8"),
   ]);
+  const packageJson=JSON.parse(pkg);
+  assert.equal(packageJson.scripts.build,"next build");
+  assert.ok(packageJson.dependencies.next);
+  assert.ok(packageJson.dependencies.postgres);
+  assert.equal(packageJson.dependencies.vinext,undefined);
+  assert.match(compose,/postgres:17-alpine/);
+  assert.match(compose,/app_uploads:\/app\/data\/uploads/);
+  assert.match(schema,/pgTable\("users"/);
+  assert.match(schema,/passwordHash/);
+  assert.match(auth,/HttpOnly|SESSION_COOKIE|jwtVerify/);
+  assert.match(files,/UPLOAD_DIR|uploadPath/);
+  await assert.rejects(access(new URL("../.openai/hosting.json",import.meta.url)));
+});
 
-  assert.deepEqual(JSON.parse(hosting), {
-    project_id: "appgprj_6a8584e05c108191ab6574c26447ce9a",
-    d1: "DB",
-    r2: "FILES",
-  });
-  for (const table of ["users", "purchase_orders", "inventory", "inventory_lots", "inventory_movements", "order_images", "audit_logs"]) {
-    assert.match(migration, new RegExp(`CREATE TABLE [\\\"\\\`]${table}[\\\"\\\`]`));
+test("ships a PostgreSQL migration and deployment bootstrap",async()=>{
+  const [migration,bootstrap,dockerfile]=await Promise.all([
+    readFile(new URL("../drizzle/0000_puzzling_pet_avengers.sql",import.meta.url),"utf8"),
+    readFile(new URL("../scripts/bootstrap.mjs",import.meta.url),"utf8"),
+    readFile(new URL("../Dockerfile",import.meta.url),"utf8"),
+  ]);
+  for(const table of ["users","purchase_orders","inventory","inventory_lots","inventory_movements","order_images","audit_logs"]){
+    assert.match(migration,new RegExp(`CREATE TABLE "${table}"`));
   }
-  assert.match(migration, /PRAGMA optimize/);
-  assert.match(api, /requireAppUser|requireAdmin|d1\.batch/);
-  assert.match(schema, /uniqueIndex|primaryKey/);
+  assert.match(bootstrap,/_junjun_migrations/);
+  assert.match(bootstrap,/ADMIN_PASSWORD/);
+  assert.match(dockerfile,/node scripts\/bootstrap\.mjs && node server\.js/);
 });

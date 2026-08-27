@@ -1,35 +1,64 @@
 import { eq } from "drizzle-orm";
-import { getD1, getDb } from "@/db";
+import { jwtVerify, SignJWT } from "jose";
+import { getDb } from "@/db";
 import { users } from "@/db/schema";
 
 export type AppUser = { id:string; email:string; name:string; role:"admin"|"buyer"; active:boolean };
+export const SESSION_COOKIE = "junjun_session";
 
-function identityFrom(request: Request) {
-  const id = request.headers.get("oai-authenticated-user-id");
-  const email = request.headers.get("oai-authenticated-user-email");
-  const encodedName = request.headers.get("oai-authenticated-user-full-name");
-  const encoding = request.headers.get("oai-authenticated-user-full-name-encoding");
-  if (id && email) {
-    let name = email;
-    if (encodedName && encoding === "percent-encoded-utf-8") {
-      try { name = decodeURIComponent(encodedName); } catch { name = email; }
-    }
-    return { id, email, name };
+function secret() {
+  const value = process.env.AUTH_SECRET;
+  if (!value || value.length < 32) throw new Error("AUTH_SECRET 必须至少为 32 个字符");
+  return new TextEncoder().encode(value);
+}
+
+function cookieValue(request: Request, name: string) {
+  const cookies = request.headers.get("cookie") ?? "";
+  for (const item of cookies.split(";")) {
+    const [key, ...parts] = item.trim().split("=");
+    if (key === name) return decodeURIComponent(parts.join("="));
   }
-  const url = new URL(request.url);
-  if (url.hostname === "localhost" || url.hostname === "127.0.0.1") return { id:"local-dev-admin", email:"admin@local.dev", name:"本地管理员" };
   return null;
 }
 
+export async function createSessionToken(user: Pick<AppUser, "id"|"email"|"role">) {
+  return new SignJWT({ email:user.email, role:user.role })
+    .setProtectedHeader({ alg:"HS256", typ:"JWT" })
+    .setSubject(user.id)
+    .setIssuedAt()
+    .setExpirationTime("7d")
+    .sign(secret());
+}
+
+export function sessionCookie(token:string) {
+  const secure = process.env.COOKIE_SECURE !== "false";
+  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${secure ? "; Secure" : ""}`;
+}
+
+export function clearSessionCookie() {
+  const secure = process.env.COOKIE_SECURE !== "false";
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`;
+}
+
+export function assertSameOrigin(request:Request) {
+  const origin=request.headers.get("origin");
+  const host=request.headers.get("host");
+  if(origin&&host&&new URL(origin).host!==host)throw new Response(JSON.stringify({error:"请求来源无效"}),{status:403,headers:{"content-type":"application/json"}});
+}
+
 export async function requireAppUser(request: Request): Promise<AppUser> {
-  const identity = identityFrom(request);
-  if (!identity) throw new Response(JSON.stringify({ error:"请先登录" }), { status:401, headers:{ "content-type":"application/json" } });
-  const d1 = getD1();
-  await d1.prepare(`INSERT INTO users (id,email,name,role,active,created_at,updated_at)
-    SELECT ?1,?2,?3,CASE WHEN EXISTS(SELECT 1 FROM users) THEN 'buyer' ELSE 'admin' END,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
-    ON CONFLICT(id) DO UPDATE SET email=excluded.email,name=excluded.name,updated_at=CURRENT_TIMESTAMP`).bind(identity.id,identity.email,identity.name).run();
-  const [row] = await getDb().select().from(users).where(eq(users.id, identity.id)).limit(1);
-  if (!row || !row.active) throw new Response(JSON.stringify({ error:"账号已停用" }), { status:403, headers:{ "content-type":"application/json" } });
+  const token = cookieValue(request, SESSION_COOKIE);
+  if (!token) throw new Response(JSON.stringify({ error:"请先登录" }), { status:401, headers:{ "content-type":"application/json" } });
+  let userId:string;
+  try {
+    const verified=await jwtVerify(token,secret(),{algorithms:["HS256"]});
+    if(!verified.payload.sub)throw new Error("missing subject");
+    userId=verified.payload.sub;
+  } catch {
+    throw new Response(JSON.stringify({ error:"登录已过期，请重新登录" }), { status:401, headers:{ "content-type":"application/json","set-cookie":clearSessionCookie() } });
+  }
+  const [row] = await getDb().select().from(users).where(eq(users.id,userId)).limit(1);
+  if (!row || !row.active) throw new Response(JSON.stringify({ error:"账号不存在或已停用" }), { status:403, headers:{ "content-type":"application/json","set-cookie":clearSessionCookie() } });
   return { id:row.id,email:row.email,name:row.name,role:row.role,active:row.active };
 }
 
@@ -39,7 +68,10 @@ export function requireAdmin(user: AppUser) {
 
 export function routeError(error: unknown) {
   if (error instanceof Response) return error;
+  const dbError=error as {code?:string};
   const message = error instanceof Error ? error.message : "服务器内部错误";
-  const status = message.includes("UNIQUE constraint failed") ? 409 : message.includes("no such table") ? 503 : 500;
-  return Response.json({ error: status === 409 ? "该平台订单号已存在" : status === 503 ? "数据库尚未初始化，请先部署迁移" : message }, { status });
+  const status = dbError.code === "23505" ? 409 : message.includes("DATABASE_URL") || message.includes("connect") ? 503 : 500;
+  const safeMessage=status===409?"该邮箱或平台订单号已存在":status===503?"数据库暂时不可用，请联系管理员":process.env.NODE_ENV==="production"?"服务器内部错误":message;
+  console.error(error);
+  return Response.json({ error:safeMessage }, { status });
 }

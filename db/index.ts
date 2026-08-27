@@ -1,18 +1,24 @@
-import { env } from "cloudflare:workers";
-import { drizzle } from "drizzle-orm/d1";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "./schema";
 
-export function getDb() {
-  if (!env.DB) {
-    throw new Error(
-      "Cloudflare D1 binding `DB` is unavailable. Set the `d1` field in .openai/hosting.json to `DB` or let your control plane inject the real binding values before using the database."
-    );
+type Database = ReturnType<typeof drizzle<typeof schema>>;
+
+const globalDatabase = globalThis as typeof globalThis & {
+  junjunSql?: ReturnType<typeof postgres>;
+  junjunDb?: Database;
+};
+
+export function getDb(): Database {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL 未配置");
+  if (!globalDatabase.junjunSql) {
+    globalDatabase.junjunSql = postgres(url, {
+      max: Number(process.env.DATABASE_POOL_SIZE ?? 10),
+      idle_timeout: 20,
+      connect_timeout: 10,
+    });
   }
-
-  return drizzle(env.DB, { schema });
-}
-
-export function getD1(): D1Database {
-  if (!env.DB) throw new Error("Cloudflare D1 binding `DB` is unavailable.");
-  return env.DB;
+  globalDatabase.junjunDb ??= drizzle(globalDatabase.junjunSql, { schema });
+  return globalDatabase.junjunDb;
 }
