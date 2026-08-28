@@ -42,3 +42,4 @@ yarn-error.log*
 /.workbuddy/
 *.tsbuildinfo
 /data/
+/.runtime/
