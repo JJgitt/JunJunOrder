@@ -44,3 +44,16 @@ test("ships a PostgreSQL migration and deployment bootstrap",async()=>{
   assert.match(bootstrap,/ADMIN_PASSWORD/);
   assert.match(dockerfile,/node scripts\/bootstrap\.mjs && node server\.js/);
 });
+
+test("administrator inherits purchase-order entry capabilities",async()=>{
+  const [page,appRoute]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
+  ]);
+  assert.match(page,/type AdminTab = [^;]+"upload"/);
+  assert.match(page,/role === "admin" && adminTab === "upload"/);
+  assert.match(page,/mode="admin"/);
+  assert.match(page,/新增采购订单/);
+  assert.match(appRoute,/if\(action==="create-order"\)/);
+  assert.match(appRoute,/user\.role==="admin"\s*\?and\(eq\(purchaseOrders\.id,id\),eq\(purchaseOrders\.status,"已驳回"\)\)/);
+});

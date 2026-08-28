@@ -63,7 +63,10 @@ export async function POST(request:Request){
       const id=string(body.orderId),platform=string(body.platform),platformNo=string(body.platformNo),title=string(body.title),sku=string(body.sku),size=string(body.size);
       if(!id||!platform||!platformNo||!title||!sku||!size||cents(body.amount)<=0)return Response.json({error:"请完整填写采购订单必填项"},{status:400});
       await db.transaction(async tx=>{
-        const changed=await tx.update(purchaseOrders).set({platform,platformOrderNo:platformNo,title,sku,size,qty:positiveInt(body.qty),amountCents:cents(body.amount),courierNo:string(body.courierNo),status:"待审核",rejectReason:null,updatedAt:now()}).where(and(eq(purchaseOrders.id,id),eq(purchaseOrders.purchaserId,user.id),eq(purchaseOrders.status,"已驳回"))).returning({id:purchaseOrders.id});
+        const editableOrder=user.role==="admin"
+          ?and(eq(purchaseOrders.id,id),eq(purchaseOrders.status,"已驳回"))
+          :and(eq(purchaseOrders.id,id),eq(purchaseOrders.purchaserId,user.id),eq(purchaseOrders.status,"已驳回"));
+        const changed=await tx.update(purchaseOrders).set({platform,platformOrderNo:platformNo,title,sku,size,qty:positiveInt(body.qty),amountCents:cents(body.amount),courierNo:string(body.courierNo),status:"待审核",rejectReason:null,updatedAt:now()}).where(editableOrder).returning({id:purchaseOrders.id});
         if(!changed.length)throw new Response(JSON.stringify({error:"订单不可修改或状态已变化"}),{status:409,headers:{"content-type":"application/json"}});
         await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"resubmit",entityType:"purchase_order",entityId:id,detailJson:"{}"});
       });
