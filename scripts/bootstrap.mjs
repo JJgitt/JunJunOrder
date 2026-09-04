@@ -32,10 +32,10 @@ try{
 
   const [{count}]=await sql`select count(*)::int as count from users`;
   if(count===0){
-    const email=process.env.ADMIN_EMAIL?.trim().toLowerCase(),password=process.env.ADMIN_PASSWORD,name=process.env.ADMIN_NAME?.trim()||"系统管理员";
-    if(!email||!password||password.length<8)throw new Error("ADMIN_EMAIL and an ADMIN_PASSWORD of at least 8 characters are required for first startup");
+    const wechatId=(process.env.ADMIN_WECHAT_ID||process.env.ADMIN_EMAIL)?.trim().toLowerCase(),password=process.env.ADMIN_PASSWORD,name=process.env.ADMIN_NAME?.trim()||"系统管理员";
+    if(!wechatId||!password||password.length<8)throw new Error("ADMIN_WECHAT_ID and an ADMIN_PASSWORD of at least 8 characters are required for first startup");
     const passwordHash=await hash(password,12),id=`usr_${randomUUID()}`;
-    await sql`insert into users (id,email,name,password_hash,role,active) values (${id},${email},${name},${passwordHash},'admin',true)`;
-    console.log(`Created initial administrator ${email}`);
+    await sql`insert into users (id,wechat_id,name,password_hash,role,active) values (${id},${wechatId},${name},${passwordHash},'admin',true)`;
+    console.log(`Created initial administrator ${wechatId}`);
   }
 }finally{await sql.end({timeout:5});}

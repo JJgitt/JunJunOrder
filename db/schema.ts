@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { boolean, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow();
@@ -5,24 +6,28 @@ const updatedAt = () => timestamp("updated_at", { withTimezone: true, mode: "str
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
-  email: text("email").notNull(),
+  wechatId: text("wechat_id").notNull(),
+  phone: text("phone").notNull().default(""),
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
   role: text("role", { enum: ["admin", "buyer"] }).notNull().default("buyer"),
   active: boolean("active").notNull().default(true),
+  approvalStatus: text("approval_status", { enum: ["pending", "approved", "rejected"] }).notNull().default("approved"),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true, mode: "string" }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-}, (table) => [uniqueIndex("idx_users_email").on(table.email)]);
+}, (table) => [
+  uniqueIndex("idx_users_wechat_id").on(table.wechatId),
+  uniqueIndex("idx_users_phone").on(table.phone).where(sql`"phone" <> ''`),
+  index("idx_users_approval_created").on(table.approvalStatus, table.createdAt),
+]);
 
 export const purchaseOrders = pgTable("purchase_orders", {
   id: text("id").primaryKey(),
   platform: text("platform").notNull(),
   platformOrderNo: text("platform_order_no").notNull(),
-  title: text("title").notNull(),
-  sku: text("sku").notNull(),
-  size: text("size").notNull(),
-  qty: integer("qty").notNull().default(1),
-  amountCents: integer("amount_cents").notNull(),
+  courierCompany: text("courier_company").notNull().default(""),
   courierNo: text("courier_no").notNull().default(""),
   status: text("status", { enum: ["待审核", "在途", "已入库", "待发货", "已发货", "已驳回"] }).notNull().default("待审核"),
   rejectReason: text("reject_reason"),
@@ -30,6 +35,23 @@ export const purchaseOrders = pgTable("purchase_orders", {
   auditorId: text("auditor_id").references(() => users.id),
   receivedAt: timestamp("received_at", { withTimezone: true, mode: "string" }),
   location: text("location"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  uniqueIndex("idx_orders_platform_order_no").on(table.platform, table.platformOrderNo).where(sql`"platform_order_no" <> ''`),
+  index("idx_orders_status_created").on(table.status, table.createdAt),
+  index("idx_orders_purchaser_created").on(table.purchaserId, table.createdAt),
+  index("idx_orders_courier_no").on(table.courierNo),
+]);
+
+export const orderItems = pgTable("order_items", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").notNull().references(() => purchaseOrders.id),
+  title: text("title").notNull(),
+  sku: text("sku").notNull(),
+  size: text("size").notNull(),
+  qty: integer("qty").notNull().default(1),
+  amountCents: integer("amount_cents").notNull(),
   resalePlatform: text("resale_platform"),
   resaleOrderNo: text("resale_order_no"),
   salePriceCents: integer("sale_price_cents"),
@@ -39,11 +61,8 @@ export const purchaseOrders = pgTable("purchase_orders", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (table) => [
-  uniqueIndex("idx_orders_platform_order_no").on(table.platform, table.platformOrderNo),
-  index("idx_orders_status_created").on(table.status, table.createdAt),
-  index("idx_orders_purchaser_created").on(table.purchaserId, table.createdAt),
-  index("idx_orders_courier_no").on(table.courierNo),
-  index("idx_orders_sku_size").on(table.sku, table.size),
+  index("idx_order_items_order_id").on(table.orderId),
+  index("idx_order_items_sku_size").on(table.sku, table.size),
 ]);
 
 export const inventory = pgTable("inventory", {
@@ -55,14 +74,15 @@ export const inventory = pgTable("inventory", {
 }, (table) => [primaryKey({ columns: [table.sku, table.size] })]);
 
 export const inventoryLots = pgTable("inventory_lots", {
-  orderId: text("order_id").primaryKey().references(() => purchaseOrders.id),
+  itemId: text("item_id").primaryKey().references(() => orderItems.id),
+  orderId: text("order_id").notNull().references(() => purchaseOrders.id),
   sku: text("sku").notNull(),
   size: text("size").notNull(),
   qty: integer("qty").notNull(),
   location: text("location").notNull(),
   receivedAt: timestamp("received_at", { withTimezone: true, mode: "string" }).notNull(),
   shippedAt: timestamp("shipped_at", { withTimezone: true, mode: "string" }),
-}, (table) => [index("idx_inventory_lots_sku_size").on(table.sku, table.size)]);
+}, (table) => [index("idx_inventory_lots_sku_size").on(table.sku, table.size), index("idx_inventory_lots_order_id").on(table.orderId)]);
 
 export const inventoryMovements = pgTable("inventory_movements", {
   id: text("id").primaryKey(),

@@ -26,7 +26,8 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       ADMIN_NAME: ${ADMIN_NAME:-系统管理员}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
+      ADMIN_WECHAT_ID: ${ADMIN_WECHAT_ID:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       SITE_ORIGIN: ${SITE_ORIGIN:-}
       UPLOAD_DIR: /app/data/uploads

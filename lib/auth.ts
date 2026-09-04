@@ -3,7 +3,7 @@ import { jwtVerify, SignJWT } from "jose";
 import { getDb } from "@/db";
 import { users } from "@/db/schema";
 
-export type AppUser = { id:string; email:string; name:string; role:"admin"|"buyer"; active:boolean };
+export type AppUser = { id:string; wechatId:string; phone:string; name:string; role:"admin"|"buyer"; active:boolean; approvalStatus:"pending"|"approved"|"rejected" };
 export const SESSION_COOKIE = "junjun_session";
 
 function secret() {
@@ -21,8 +21,8 @@ function cookieValue(request: Request, name: string) {
   return null;
 }
 
-export async function createSessionToken(user: Pick<AppUser, "id"|"email"|"role">) {
-  return new SignJWT({ email:user.email, role:user.role })
+export async function createSessionToken(user: Pick<AppUser, "id"|"wechatId"|"role">) {
+  return new SignJWT({ wechatId:user.wechatId, role:user.role })
     .setProtectedHeader({ alg:"HS256", typ:"JWT" })
     .setSubject(user.id)
     .setIssuedAt()
@@ -58,8 +58,8 @@ export async function requireAppUser(request: Request): Promise<AppUser> {
     throw new Response(JSON.stringify({ error:"登录已过期，请重新登录" }), { status:401, headers:{ "content-type":"application/json","set-cookie":clearSessionCookie() } });
   }
   const [row] = await getDb().select().from(users).where(eq(users.id,userId)).limit(1);
-  if (!row || !row.active) throw new Response(JSON.stringify({ error:"账号不存在或已停用" }), { status:403, headers:{ "content-type":"application/json","set-cookie":clearSessionCookie() } });
-  return { id:row.id,email:row.email,name:row.name,role:row.role,active:row.active };
+  if (!row || !row.active || row.approvalStatus!=="approved") throw new Response(JSON.stringify({ error:"账号不存在、未通过审批或已停用" }), { status:403, headers:{ "content-type":"application/json","set-cookie":clearSessionCookie() } });
+  return { id:row.id,wechatId:row.wechatId,phone:row.phone,name:row.name,role:row.role,active:row.active,approvalStatus:row.approvalStatus };
 }
 
 export function requireAdmin(user: AppUser) {
@@ -68,10 +68,11 @@ export function requireAdmin(user: AppUser) {
 
 export function routeError(error: unknown) {
   if (error instanceof Response) return error;
-  const dbError=error as {code?:string};
+  const dbError=error as {code?:string;cause?:{code?:string}};
+  const dbCode=dbError.code??dbError.cause?.code;
   const message = error instanceof Error ? error.message : "服务器内部错误";
-  const status = dbError.code === "23505" ? 409 : message.includes("DATABASE_URL") || message.includes("connect") ? 503 : 500;
-  const safeMessage=status===409?"该邮箱或平台订单号已存在":status===503?"数据库暂时不可用，请联系管理员":process.env.NODE_ENV==="production"?"服务器内部错误":message;
+  const status = dbCode === "23505" ? 409 : message.includes("DATABASE_URL") || message.includes("connect") ? 503 : 500;
+  const safeMessage=status===409?"该微信号、手机号或平台订单号已存在":status===503?"数据库暂时不可用，请联系管理员":process.env.NODE_ENV==="production"?"服务器内部错误":message;
   console.error(error);
   return Response.json({ error:safeMessage }, { status });
 }
