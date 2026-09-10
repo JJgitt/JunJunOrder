@@ -50,7 +50,7 @@ healthy() {
 }
 
 rollback() {
-  trap - ERR INT TERM
+  trap - ERR INT TERM HUP
   echo 'Deployment failed; restoring previous application image (database is NOT rolled back).' >&2
   export DEPLOY_IMAGE="$old_image"
   if "${compose[@]}" up -d --no-deps --no-build app && healthy; then
@@ -60,10 +60,12 @@ rollback() {
   fi
   exit 1
 }
-trap rollback ERR INT TERM
+trap rollback ERR INT TERM HUP
 "${compose[@]}" up -d --no-deps --no-build app
 healthy
+# Keep existing administrator restart commands on the successfully deployed image.
+docker tag "$image" hongyun-order-app:latest
 install -d -m 700 /var/lib/hongyun-cicd
 printf '%s\n' "$image" > /var/lib/hongyun-cicd/current-image
-trap - ERR INT TERM
+trap - ERR INT TERM HUP
 echo 'Deployment healthy. Database and image uploads remain in existing volumes.'
