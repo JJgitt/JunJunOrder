@@ -1,0 +1,8 @@
+services:
+  postgres:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/postgres:17
+  app:
+    ports:
+      - "127.0.0.1:3000:3000"
+  caddy:
+    profiles: ["caddy"]

@@ -1,0 +1,1 @@
+junjun ALL=(root) NOPASSWD: /usr/local/sbin/hongyun-deploy

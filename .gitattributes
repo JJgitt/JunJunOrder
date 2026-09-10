@@ -1,0 +1,3 @@
+.github/** text eol=lf
+deploy/ci/** text eol=lf
+*.sh text eol=lf

@@ -68,11 +68,12 @@ export function requireAdmin(user: AppUser) {
 
 export function routeError(error: unknown) {
   if (error instanceof Response) return error;
-  const dbError=error as {code?:string;cause?:{code?:string}};
+  const dbError=error as {code?:string;constraint_name?:string;cause?:{code?:string;constraint_name?:string}};
   const dbCode=dbError.code??dbError.cause?.code;
+  const constraint=dbError.constraint_name??dbError.cause?.constraint_name;
   const message = error instanceof Error ? error.message : "服务器内部错误";
   const status = dbCode === "23505" ? 409 : message.includes("DATABASE_URL") || message.includes("connect") ? 503 : 500;
-  const safeMessage=status===409?"该微信号、手机号或平台订单号已存在":status===503?"数据库暂时不可用，请联系管理员":process.env.NODE_ENV==="production"?"服务器内部错误":message;
+  const safeMessage=status===409?(constraint==="idx_orders_platform_order_no"?"该采购渠道下的订单号已有未驳回采购单，请勿重复提交":"该微信号、手机号或平台订单号已存在"):status===503?"数据库暂时不可用，请联系管理员":process.env.NODE_ENV==="production"?"服务器内部错误":message;
   console.error(error);
   return Response.json({ error:safeMessage }, { status });
 }

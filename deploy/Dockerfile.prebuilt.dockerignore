@@ -1,0 +1,10 @@
+*
+!.next/
+!.next/standalone/**
+!.next/static/**
+!public/**
+!drizzle/**
+!scripts/**
+!node_modules/
+!node_modules/postgres/**
+!node_modules/bcryptjs/**

@@ -231,12 +231,12 @@
   <tr><td>查看订单列表</td><td>✅（仅自己的）</td><td>✅（全部 + 全维度筛选）</td><td>—</td></tr>
   <tr><td>审核订单（通过/驳回）</td><td>❌</td><td>✅</td><td>驳回需填写原因</td></tr>
   <tr><td>📷 快递拍照识别 + 关联查询</td><td>❌</td><td>✅（核心功能）</td><td>拍照 OCR 识别快递单号，反查关联的货品与采购订单号</td></tr>
-  <tr><td>收货入库（拍照识别/扫码/手输）</td><td>❌</td><td>✅</td><td>记录库位；未关联包裹可手动绑定订单；重复入库拦截</td></tr>
+  <tr><td>收货入库（拍照识别/扫码/手输）</td><td>❌</td><td>✅</td><td>记录库位；手动入库时可从最近使用的历史库位一键选择，也可手输新库位；未关联包裹可手动绑定订单；重复入库拦截</td></tr>
   <tr><td>撤销入库（已入库 → 在途）</td><td>❌</td><td>✅</td><td>入库误操作时可退回在途：库存同步扣回、清空库位与入库时间并留调整流水；<strong>订单内已有商品发货时禁止退回</strong></td></tr>
   <tr><td>标记发货 / 填快递单号</td><td>❌</td><td>✅</td><td>按商品行逐个发货</td></tr>
   <tr><td>库存查询</td><td>❌（仅可见「该单是否已入库」状态）</td><td>✅</td><td>—</td></tr>
   <tr><td>数据看板 / 利润统计</td><td>❌</td><td>✅</td><td>敏感数据仅老板可见</td></tr>
-  <tr><td>采购员账号管理</td><td>❌</td><td>✅</td><td>增删改、停用、重置密码</td></tr>
+  <tr><td>采购员账号管理</td><td>❌</td><td>✅</td><td>增删改、停用、重置密码；<strong>删除仅限采购员</strong>且需二次确认，已有订单或操作记录的账号不可删除（改用停用）</td></tr>
 </table>
 
 <!-- ============ 3 业务流程 ============ -->
@@ -323,13 +323,14 @@
   <tr><td rowspan="5"><span class="badge b-blue">采购员前台</span></td>
       <td>登录</td><td>手机号/账号 + 密码登录</td><td><span class="badge b-red">P0</span></td></tr>
   <tr><td>上传订单</td><td>表单录入：渠道、平台单号（选填）、快递单号（必填：管理员收货时凭此匹配入库）；<strong>支持一单多商品</strong>：每个商品行单独填写商品名、货号、尺码、数量、实付金额，可动态增删</td><td><span class="badge b-red">P0</span></td></tr>
-  <tr><td>上传订单</td><td>订单截图上传（每单最多 3 张），后续版本做 OCR 自动识别</td><td><span class="badge b-orange">P1</span></td></tr>
-  <tr><td>我的订单</td><td>按状态 Tab 查看（全部/待审核/在途/已入库/已售出）；被驳回置顶提示</td><td><span class="badge b-red">P0</span></td></tr>
+  <tr><td>上传订单</td><td>订单截图上传（每单最多 3 张）</td><td><span class="badge b-orange">P1</span></td></tr>
+  <tr><td>智能识图</td><td>上传平台订单详情截图（京东 / 拼多多 / 淘宝 / 唯品会 / 抖音），视觉大模型抽取渠道、订单号、快递公司、快递单号及每个商品的名称 / 货号 / 尺码 / 数量 / 实付金额，自动填表并把截图加入附件；结果为草稿，提交前需核对。服务端通过 OpenAI 兼容协议接入，环境变量 <code>VISION_API_BASE / VISION_API_KEY / VISION_MODEL</code></td><td><span class="badge b-orange">P1</span></td></tr>
+  <tr><td>我的订单</td><td>按状态筛选（<strong>可多选</strong>：全部/待审核/在途/已入库/已驳回）；未选或点「全部」显示全部订单；被驳回置顶提示</td><td><span class="badge b-red">P0</span></td></tr>
   <tr><td>我的统计</td><td>本月采购单数、总金额</td><td><span class="badge b-orange">P2</span></td></tr>
 
   <tr><td rowspan="12"><span class="badge b-purple">管理员后台</span></td>
       <td>数据看板</td><td>今日入库/出库/待发货/在途单数；待办事项（待审核 N、待收包裹 N、待发货 N）</td><td><span class="badge b-red">P0</span></td></tr>
-  <tr><td>订单查询</td><td>全维度筛选：状态、渠道、采购员、日期区间、关键词（单号/货号/商品名）</td><td><span class="badge b-red">P0</span></td></tr>
+  <tr><td>订单查询</td><td>全维度筛选：状态（<strong>可多选</strong>，标签可同时点亮，未选或点「全部」显示全部）、渠道、采购员（<strong>可多选</strong>，按钮上显示已选摘要，面板内展示每人订单数）、日期区间、关键词（单号/货号/商品名）</td><td><span class="badge b-red">P0</span></td></tr>
   <tr><td>订单审核</td><td>通过 / 驳回（驳回必填原因）</td><td><span class="badge b-red">P0</span></td></tr>
   <tr><td>📷 快递拍照识别</td><td>H5 调相机/相册 → 上传 → 后端 OCR 识别物流单号 → 自动回填（可手动修正）</td><td><span class="badge b-red">P0</span></td></tr>
   <tr><td>关联查询</td><td>按识别/输入的单号反查：货品、货号/尺码、采购渠道、采购订单号、采购员、状态；无匹配时给出引导与补救入口</td><td><span class="badge b-red">P0</span></td></tr>
@@ -802,7 +803,7 @@
 <table>
   <tr><th>版本</th><th>范围</th><th>说明</th></tr>
   <tr><td><b>v1.0（本期）</b></td><td>双端登录分流、订单上传/审核、<strong>📷 快递拍照识别收货</strong>、入库/发货全流程、库存、看板</td><td>先跑通业务闭环，数据真实落库；快递 OCR 采用云接口</td></tr>
-  <tr><td><b>v1.1</b></td><td>采购截图 OCR 自动识别、利润统计页、Excel 导出</td><td>减少录入成本，账目清晰</td></tr>
+  <tr><td><b>v1.1</b></td><td>采购截图智能识图（已实现，视觉大模型）、利润统计页、Excel 导出</td><td>减少录入成本，账目清晰</td></tr>
   <tr><td><b>v1.2</b></td><td>得物开放平台对接（自动同步售价/售出状态）、消息推送</td><td>减少重复录入；需得物开发者资质</td></tr>
   <tr><td><b>v2.0</b></td><td>多采购渠道比价、滞销预警、小程序端</td><td>经营分析增强</td></tr>
 </table>

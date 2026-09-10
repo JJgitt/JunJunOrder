@@ -38,7 +38,7 @@ export const purchaseOrders = pgTable("purchase_orders", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (table) => [
-  uniqueIndex("idx_orders_platform_order_no").on(table.platform, table.platformOrderNo).where(sql`"platform_order_no" <> ''`),
+  uniqueIndex("idx_orders_platform_order_no").on(table.platform, table.platformOrderNo).where(sql`"platform_order_no" <> '' AND "status" <> '已驳回'`),
   index("idx_orders_status_created").on(table.status, table.createdAt),
   index("idx_orders_purchaser_created").on(table.purchaserId, table.createdAt),
   index("idx_orders_courier_no").on(table.courierNo),
@@ -52,6 +52,8 @@ export const orderItems = pgTable("order_items", {
   size: text("size").notNull(),
   qty: integer("qty").notNull().default(1),
   amountCents: integer("amount_cents").notNull(),
+  purchaseCourierCompany: text("purchase_courier_company").notNull().default(""),
+  purchaseCourierNo: text("purchase_courier_no").notNull().default(""),
   resalePlatform: text("resale_platform"),
   resaleOrderNo: text("resale_order_no"),
   salePriceCents: integer("sale_price_cents"),
@@ -63,6 +65,7 @@ export const orderItems = pgTable("order_items", {
 }, (table) => [
   index("idx_order_items_order_id").on(table.orderId),
   index("idx_order_items_sku_size").on(table.sku, table.size),
+  index("idx_order_items_purchase_courier_no").on(table.purchaseCourierNo),
 ]);
 
 export const inventory = pgTable("inventory", {

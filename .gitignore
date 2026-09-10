@@ -43,3 +43,7 @@ yarn-error.log*
 *.tsbuildinfo
 /data/
 /.runtime/
+/.idea/
+/.next-dev.*.log
+*_actions
+*_deploy

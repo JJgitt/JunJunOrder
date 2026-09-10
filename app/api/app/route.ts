@@ -1,6 +1,6 @@
 import { hash } from "bcryptjs";
 import { unlink } from "node:fs/promises";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { auditLogs, inventory, inventoryLots, inventoryMovements, orderImages, orderItems, purchaseOrders, users } from "@/db/schema";
 import { assertSameOrigin, requireAdmin, requireAppUser, routeError } from "@/lib/auth";
@@ -18,12 +18,13 @@ const cents=(value:unknown)=>Math.max(0,Math.round(Number(value)*100));
 const conflict=(message:string)=>new Response(JSON.stringify({error:message}),{status:409,headers:{"content-type":"application/json"}});
 const notFound=(message:string)=>new Response(JSON.stringify({error:message}),{status:404,headers:{"content-type":"application/json"}});
 
-type ItemInput={id:string;title:string;sku:string;size:string;qty:number;amountCents:number};
+type ItemInput={id:string;title:string;sku:string;size:string;qty:number;amountCents:number;purchaseCourierCompany:string;purchaseCourierNo:string};
 const parseItems=(value:unknown):ItemInput[]=>(Array.isArray(value)?value:[]).slice(0,20).map(item=>{
   const record=item&&typeof item==="object"?item as Record<string,unknown>:{};
-  return {id:string(record.id),title:string(record.title),sku:string(record.sku),size:string(record.size),qty:positiveInt(record.qty),amountCents:cents(record.amount)};
+  return {id:string(record.id),title:string(record.title),sku:string(record.sku),size:string(record.size),qty:positiveInt(record.qty),amountCents:cents(record.amount),purchaseCourierCompany:string(record.purchaseCourierCompany),purchaseCourierNo:string(record.purchaseCourierNo)};
 });
-const invalidItems=(items:ItemInput[])=>!items.length||items.some(item=>!item.title||!item.sku||!item.size||item.amountCents<=0);
+const invalidItems=(items:ItemInput[])=>!items.length||items.some(item=>!item.title||!item.sku||!item.size||item.amountCents<=0||!item.purchaseCourierCompany||!item.purchaseCourierNo);
+const buyerEditableStatuses=["待审核","在途","已驳回"] as const;
 
 async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
   const db=getDb();
@@ -41,14 +42,15 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
     const rawItems=itemRows.filter(item=>item.orderId===row.id);
     const allShipped=rawItems.length>0&&rawItems.every(item=>item.shippedAt);
     const derived=row.status==="已入库"?(allShipped?"已发货":"待发货"):row.status;
-    const status=!isAdmin&&(derived==="待发货"||derived==="已发货")?"已入库":derived;
+    const status=!isAdmin&&derived==="待发货"?"已入库":derived;
     const items=rawItems.map(item=>({
       id:item.id,title:item.title,sku:item.sku,size:item.size,qty:item.qty,amount:item.amountCents/100,
+      purchaseCourierCompany:item.purchaseCourierCompany||row.courierCompany,purchaseCourierNo:item.purchaseCourierNo||row.courierNo,
+      shipped:Boolean(item.shippedAt),
       ...(isAdmin?{
-        shipped:Boolean(item.shippedAt),
         resalePlatform:item.resalePlatform??undefined,resaleNo:item.resaleOrderNo??undefined,
         salePrice:item.salePriceCents==null?undefined:item.salePriceCents/100,
-        outboundCompany:item.outboundCompany??undefined,outboundCourier:item.outboundCourierNo??undefined,
+        outboundCompany:item.outboundCompany??undefined,outboundCourier:item.outboundCourierNo??undefined,shippedAt:item.shippedAt??undefined,
       }:{}),
     }));
     return {
@@ -83,14 +85,14 @@ export async function POST(request:Request){
 
     if(action==="create-order"){
       const platform=string(body.platform),platformNo=string(body.platformNo);
-      const courierCompany=string(body.courierCompany),courierNo=string(body.courierNo);
       const items=parseItems(body.items);
-      if(!platform||!courierNo||!courierCompany)return Response.json({error:"请填写采购渠道、快递公司与快递单号"},{status:400});
-      if(invalidItems(items))return Response.json({error:"请完整填写每个商品的名称、货号、尺码与实付金额"},{status:400});
+      if(!platform)return Response.json({error:"请填写采购渠道"},{status:400});
+      if(invalidItems(items))return Response.json({error:"请完整填写每个商品的信息、采购快递公司与采购快递单号"},{status:400});
+      const courierCompany=items[0].purchaseCourierCompany,courierNo=items[0].purchaseCourierNo;
       const id=orderId(),timestamp=now();
       await db.transaction(async tx=>{
         await tx.insert(purchaseOrders).values({id,platform,platformOrderNo:platformNo,courierCompany,courierNo,purchaserId:user.id,createdAt:timestamp,updatedAt:timestamp});
-        await tx.insert(orderItems).values(items.map(item=>({id:uid("item"),orderId:id,title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents,createdAt:timestamp,updatedAt:timestamp})));
+        await tx.insert(orderItems).values(items.map(item=>({id:uid("item"),orderId:id,title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents,purchaseCourierCompany:item.purchaseCourierCompany,purchaseCourierNo:item.purchaseCourierNo,createdAt:timestamp,updatedAt:timestamp})));
         await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"create",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({itemCount:items.length})});
       });
       return Response.json({data:await snapshot(user),createdOrderId:id},{status:201});
@@ -98,19 +100,20 @@ export async function POST(request:Request){
 
     if(action==="resubmit-order"){
       const id=string(body.orderId),platform=string(body.platform),platformNo=string(body.platformNo);
-      const courierCompany=string(body.courierCompany),courierNo=string(body.courierNo);
       const items=parseItems(body.items);
-      if(!id||!platform||!courierNo||!courierCompany)return Response.json({error:"请填写采购渠道、快递公司与快递单号"},{status:400});
-      if(invalidItems(items))return Response.json({error:"请完整填写每个商品的名称、货号、尺码与实付金额"},{status:400});
+      if(!id||!platform)return Response.json({error:"请填写采购渠道"},{status:400});
+      if(invalidItems(items))return Response.json({error:"请完整填写每个商品的信息、采购快递公司与采购快递单号"},{status:400});
+      const courierCompany=items[0].purchaseCourierCompany,courierNo=items[0].purchaseCourierNo;
       await db.transaction(async tx=>{
-        const editableOrder=user.role==="admin"
-          ?and(eq(purchaseOrders.id,id),eq(purchaseOrders.status,"已驳回"))
-          :and(eq(purchaseOrders.id,id),eq(purchaseOrders.purchaserId,user.id),eq(purchaseOrders.status,"已驳回"));
-        const changed=await tx.update(purchaseOrders).set({platform,platformOrderNo:platformNo,courierCompany,courierNo,status:"待审核",rejectReason:null,updatedAt:now()}).where(editableOrder).returning({id:purchaseOrders.id});
-        if(!changed.length)throw conflict("订单不可修改或状态已变化");
+        const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,id)).for("update").limit(1);
+        if(!order)throw notFound("订单不存在");
+        if(user.role!=="admin"&&order.purchaserId!==user.id)throw conflict("只能修改本人创建的采购订单");
+        if(!buyerEditableStatuses.some(status=>status===order.status))throw conflict("订单已入库，采购员不能再修改");
+        const nextStatus=order.status==="已驳回"?"待审核":order.status;
+        await tx.update(purchaseOrders).set({platform,platformOrderNo:platformNo,courierCompany,courierNo,status:nextStatus,rejectReason:nextStatus==="待审核"?null:order.rejectReason,updatedAt:now()}).where(eq(purchaseOrders.id,id));
         await tx.delete(orderItems).where(eq(orderItems.orderId,id));
-        await tx.insert(orderItems).values(items.map(item=>({id:uid("item"),orderId:id,title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents,createdAt:now(),updatedAt:now()})));
-        await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"resubmit",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({itemCount:items.length})});
+        await tx.insert(orderItems).values(items.map(item=>({id:uid("item"),orderId:id,title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents,purchaseCourierCompany:item.purchaseCourierCompany,purchaseCourierNo:item.purchaseCourierNo,createdAt:now(),updatedAt:now()})));
+        await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:order.status==="已驳回"?"resubmit":"buyer_update",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({previousStatus:order.status,status:nextStatus,itemCount:items.length})});
       });
       return Response.json({data:await snapshot(user),createdOrderId:id});
     }
@@ -118,16 +121,16 @@ export async function POST(request:Request){
     if(action==="update-order"){
       requireAdmin(user);
       const id=string(body.orderId),platform=string(body.platform),platformNo=string(body.platformNo);
-      const courierCompany=string(body.courierCompany),courierNo=string(body.courierNo);
       const items=parseItems(body.items);
-      if(!id||!platform||!courierNo||!courierCompany)return Response.json({error:"请填写采购渠道、快递公司与快递单号"},{status:400});
-      if(invalidItems(items))return Response.json({error:"请完整填写每个商品的名称、货号、尺码与实付金额"},{status:400});
+      if(!id||!platform)return Response.json({error:"请填写采购渠道"},{status:400});
+      if(invalidItems(items))return Response.json({error:"请完整填写每个商品的信息、采购快递公司与采购快递单号"},{status:400});
+      const courierCompany=items[0].purchaseCourierCompany,courierNo=items[0].purchaseCourierNo;
       await db.transaction(async tx=>{
         const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,id)).for("update").limit(1);
         if(!order)throw notFound("订单不存在");
         if(platformNo){
-          const [duplicate]=await tx.select({id:purchaseOrders.id}).from(purchaseOrders).where(and(eq(purchaseOrders.platform,platform),eq(purchaseOrders.platformOrderNo,platformNo))).limit(1);
-          if(duplicate&&duplicate.id!==id)throw conflict("该平台订单号已存在");
+          const [duplicate]=await tx.select({id:purchaseOrders.id}).from(purchaseOrders).where(and(eq(purchaseOrders.platform,platform),eq(purchaseOrders.platformOrderNo,platformNo),ne(purchaseOrders.id,id),ne(purchaseOrders.status,"已驳回"))).limit(1);
+          if(duplicate)throw conflict("该采购渠道下的订单号已有未驳回采购单，请勿重复提交");
         }
         const [existingItems,existingLots]=await Promise.all([
           tx.select().from(orderItems).where(eq(orderItems.orderId,id)).for("update"),
@@ -152,10 +155,10 @@ export async function POST(request:Request){
           if(old){
             if(old.shippedAt){
               if(old.sku!==item.sku||old.size!==item.size||old.qty!==item.qty)throw conflict("已发货的商品只能修改金额");
-              await tx.update(orderItems).set({title:item.title,amountCents:item.amountCents,updatedAt:timestamp}).where(eq(orderItems.id,old.id));
+              await tx.update(orderItems).set({title:item.title,amountCents:item.amountCents,purchaseCourierCompany:item.purchaseCourierCompany,purchaseCourierNo:item.purchaseCourierNo,updatedAt:timestamp}).where(eq(orderItems.id,old.id));
               continue;
             }
-            await tx.update(orderItems).set({title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents,updatedAt:timestamp}).where(eq(orderItems.id,old.id));
+            await tx.update(orderItems).set({title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents,purchaseCourierCompany:item.purchaseCourierCompany,purchaseCourierNo:item.purchaseCourierNo,updatedAt:timestamp}).where(eq(orderItems.id,old.id));
             const lot=lotByItem.get(old.id);
             if(lot){
               await tx.update(inventory).set({quantity:sql`greatest(0,${inventory.quantity}-${lot.qty})`,updatedAt:timestamp}).where(and(eq(inventory.sku,lot.sku),eq(inventory.size,lot.size)));
@@ -165,7 +168,7 @@ export async function POST(request:Request){
             }
           }else{
             const itemId=uid("item");
-            await tx.insert(orderItems).values({id:itemId,orderId:id,title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents,createdAt:timestamp,updatedAt:timestamp});
+            await tx.insert(orderItems).values({id:itemId,orderId:id,title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents,purchaseCourierCompany:item.purchaseCourierCompany,purchaseCourierNo:item.purchaseCourierNo,createdAt:timestamp,updatedAt:timestamp});
             if(received){
               await tx.insert(inventory).values({sku:item.sku,size:item.size,title:item.title,quantity:item.qty,updatedAt:timestamp}).onConflictDoUpdate({target:[inventory.sku,inventory.size],set:{title:item.title,quantity:sql`${inventory.quantity}+${item.qty}`,updatedAt:timestamp}});
               await tx.insert(inventoryLots).values({itemId,orderId:id,sku:item.sku,size:item.size,qty:item.qty,location:order.location??"",receivedAt:order.receivedAt??timestamp});
@@ -211,9 +214,25 @@ export async function POST(request:Request){
       if(!id)return Response.json({error:"缺少订单 ID"},{status:400});
       if(action==="reject"&&!reason)return Response.json({error:"驳回原因不能为空"},{status:400});
       await db.transaction(async tx=>{
-        const changed=await tx.update(purchaseOrders).set({status:action==="approve"?"在途":"已驳回",rejectReason:action==="reject"?reason:null,auditorId:user.id,updatedAt:now()}).where(and(eq(purchaseOrders.id,id),eq(purchaseOrders.status,"待审核"))).returning({id:purchaseOrders.id});
-        if(!changed.length)throw conflict("订单状态已变化，请刷新后重试");
-        await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action,entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({reason})});
+        const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,id)).for("update").limit(1);
+        if(!order)throw notFound("订单不存在");
+        if(action==="approve"&&order.status!=="待审核")throw conflict("只有待审核订单可以通过审核");
+        const timestamp=now();
+        if(action==="reject"){
+          if(!["待审核","在途","已入库","待发货"].includes(order.status))throw conflict("当前订单不能驳回");
+          const items=await tx.select().from(orderItems).where(eq(orderItems.orderId,id)).for("update");
+          if(items.some(item=>item.shippedAt))throw conflict("订单已有商品发货，不能整单驳回");
+          const lots=await tx.select().from(inventoryLots).where(eq(inventoryLots.orderId,id)).for("update");
+          if(lots.some(lot=>lot.shippedAt))throw conflict("订单已有商品发货，不能整单驳回");
+          for(const lot of lots){
+            const changed=await tx.update(inventory).set({quantity:sql`${inventory.quantity}-${lot.qty}`,updatedAt:timestamp}).where(and(eq(inventory.sku,lot.sku),eq(inventory.size,lot.size),sql`${inventory.quantity} >= ${lot.qty}`)).returning({sku:inventory.sku});
+            if(!changed.length)throw conflict("库存不足以回退，请检查库存后重试");
+            await tx.insert(inventoryMovements).values({id:uid("move"),orderId:id,sku:lot.sku,size:lot.size,changeQty:-lot.qty,type:"adjust",location:lot.location,actorId:user.id,createdAt:timestamp});
+          }
+          await tx.delete(inventoryLots).where(eq(inventoryLots.orderId,id));
+        }
+        await tx.update(purchaseOrders).set({status:action==="approve"?"在途":"已驳回",rejectReason:action==="reject"?reason:null,auditorId:user.id,...(action==="reject"?{receivedAt:null,location:null}:{}),updatedAt:timestamp}).where(eq(purchaseOrders.id,id));
+        await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action,entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({reason,previousStatus:order.status,previousLocation:order.location}),createdAt:timestamp});
       });
       return Response.json({data:await snapshot(user)});
     }
@@ -265,10 +284,12 @@ export async function POST(request:Request){
       requireAdmin(user);const itemId=string(body.itemId),resaleNo=string(body.resaleNo),courier=string(body.courier),company=string(body.company),sale=cents(body.salePrice);
       if(!itemId||!courier||!company)return Response.json({error:"请完整填写发货物流公司和运单号"},{status:400});
       await db.transaction(async tx=>{
+        const [target]=await tx.select({orderId:orderItems.orderId}).from(orderItems).where(eq(orderItems.id,itemId)).limit(1);
+        if(!target)throw notFound("商品不存在");
+        const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,target.orderId)).for("update").limit(1);
+        if(!order||order.status!=="已入库")throw conflict("订单未入库，不能发货");
         const [item]=await tx.select().from(orderItems).where(eq(orderItems.id,itemId)).for("update").limit(1);
         if(!item)throw notFound("商品不存在");
-        const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,item.orderId)).limit(1);
-        if(!order||order.status!=="已入库")throw conflict("订单未入库，不能发货");
         if(item.shippedAt)throw conflict("该商品已发货，请勿重复操作");
         const timestamp=now();
         await tx.update(orderItems).set({resalePlatform:string(body.resalePlatform)||"得物",resaleOrderNo:resaleNo||null,salePriceCents:sale>0?sale:null,outboundCompany:company,outboundCourierNo:courier,shippedAt:timestamp,updatedAt:timestamp}).where(eq(orderItems.id,itemId));
@@ -369,6 +390,28 @@ export async function POST(request:Request){
       const changed=await db.update(users).set({active,updatedAt:now()}).where(eq(users.id,targetId)).returning({id:users.id});
       if(!changed.length)return Response.json({error:"成员不存在"},{status:404});
       return Response.json({data:await snapshot(user)});
+    }
+
+    if(action==="delete-user"){
+      requireAdmin(user);const targetId=string(body.userId);
+      if(!targetId)return Response.json({error:"缺少成员 ID"},{status:400});
+      if(targetId===user.id)return Response.json({error:"不能删除自己的账号"},{status:409});
+      const deleted=await db.transaction(async tx=>{
+        const [target]=await tx.select().from(users).where(eq(users.id,targetId)).for("update").limit(1);
+        if(!target)throw notFound("成员不存在");
+        if(target.role!=="buyer")throw conflict("只能删除采购员账号，管理员请先调整为采购员");
+        const [[orderCount],[imageCount],[auditCount]]=await Promise.all([
+          tx.select({count:sql<number>`count(*)::int`}).from(purchaseOrders).where(eq(purchaseOrders.purchaserId,targetId)),
+          tx.select({count:sql<number>`count(*)::int`}).from(orderImages).where(eq(orderImages.uploadedBy,targetId)),
+          tx.select({count:sql<number>`count(*)::int`}).from(auditLogs).where(eq(auditLogs.actorId,targetId)),
+        ]);
+        if(orderCount.count>0||imageCount.count>0||auditCount.count>0)throw conflict("该采购员已有订单或操作记录，无法删除；如需禁止登录请使用「停用」");
+        const timestamp=now();
+        await tx.delete(users).where(eq(users.id,targetId));
+        await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"delete_user",entityType:"user",entityId:targetId,detailJson:JSON.stringify({name:target.name,wechatId:target.wechatId,phone:target.phone,approvalStatus:target.approvalStatus}),createdAt:timestamp});
+        return target;
+      });
+      return Response.json({data:await snapshot(user),deletedUserName:deleted.name});
     }
 
     if(action==="reset-user-password"){

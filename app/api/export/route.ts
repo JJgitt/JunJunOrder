@@ -28,7 +28,7 @@ export async function GET(request:Request){
       const lines=itemsByOrder.get(order.id)??[];
       return lines.map(item=>{
         const status=order.status==="已入库"?(item.shippedAt?"已发货":"待发货"):order.status;
-        return [order.id,order.platform,order.platformOrderNo,item.title,item.sku,item.size,item.qty,(item.amountCents/100).toFixed(2),order.courierCompany,order.courierNo,status,names.get(order.purchaserId),order.location,item.resaleOrderNo,item.salePriceCents==null?"":(item.salePriceCents/100).toFixed(2),item.outboundCourierNo,order.createdAt];
+        return [order.id,order.platform,order.platformOrderNo,item.title,item.sku,item.size,item.qty,(item.amountCents/100).toFixed(2),item.purchaseCourierCompany||order.courierCompany,item.purchaseCourierNo||order.courierNo,status,names.get(order.purchaserId),order.location,item.resaleOrderNo,item.salePriceCents==null?"":(item.salePriceCents/100).toFixed(2),item.outboundCourierNo,order.createdAt];
       });
     });
     const content="\uFEFF"+[header,...rows].map(row=>row.map(csv).join(",")).join("\r\n");
