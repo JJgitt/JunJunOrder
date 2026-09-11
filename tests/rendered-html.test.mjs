@@ -21,6 +21,14 @@ test("form grids shrink and touch buyer filters match native select text", async
   assert.match(css, /\.select-row \.buyer-filter-trigger\s*\{\s*font-size: 16px/);
 });
 
+test("purchase quantity can be cleared while entering a new value", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /qty:number\|""/);
+  assert.match(page, /qty:value===""\?"":Math\.max\(1,Math\.trunc\(Number\(value\)\)\)/);
+  assert.match(page, /if\(item\.qty===""\)updateItem\(index,\{qty:1\}\)/);
+  assert.doesNotMatch(page, /qty:Math\.max\(1,Number\(e\.target\.value\)\)/);
+});
+
 test("produces a standalone Next.js server",async()=>{
   await access(new URL("../.next/standalone/server.js",import.meta.url));
   await access(new URL("../.next/static/",import.meta.url));

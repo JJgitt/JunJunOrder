@@ -7,3 +7,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Delivery workflow
+
+- After completing a code change and its relevant local checks pass, commit the scoped changes, push them to `main`, and monitor the existing CI/CD workflow until the production deployment succeeds.
+- Do not include unrelated or pre-existing working-tree changes in the commit.
+- If the user explicitly asks for a local-only change, a review, or says not to deploy yet, do not commit or push.
+- If CI/CD fails, keep the current production version running, diagnose the failure, and report or fix it within the requested scope.
