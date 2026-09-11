@@ -23,7 +23,7 @@ export type RecognizedOrder = {
   notes: string[];
 };
 
-export const visionPrompt = `你是采购订单录入助手。用户会上传一张电商平台（京东、拼多多、淘宝/天猫、唯品会、抖音等）的订单详情或物流页截图，请从图中抽取采购订单信息。
+export const visionPrompt = `你是采购订单录入助手。用户会上传一张或多张电商平台（京东、拼多多、淘宝/天猫、唯品会、抖音等）的订单详情、商品列表或物流页截图，这些图片通常属于同一笔订单，请综合所有图片抽取一份采购订单信息。
 
 只输出一个 JSON 对象，不要输出 markdown 代码块或任何解释文字。字段说明：
 {
@@ -44,9 +44,11 @@ export const visionPrompt = `你是采购订单录入助手。用户会上传一
 }
 
 规则：
-1. 一张截图里有多个商品时 items 输出多个元素，一个商品一个元素。
+1. 一张或多张截图里有多个商品时 items 输出多个元素，一个商品一个元素；同一商品在多张图里重复出现时只保留一条。
 2. 数字字段输出数字类型，不要带货币符号或引号。
-3. 看不清或没有的字段按上面说明填空字符串 / null，不要猜。`;
+3. 看不清或没有的字段按上面说明填空字符串 / null，不要猜。
+4. 多张图请合并成一份订单：渠道、订单号、快递信息取最完整的一份，商品行去重后全部保留。
+5. 若截图只有物流页、快递面单或运单号，没有商品名称/货号/尺码，items 必须输出空数组，不要编造商品；只填写能看到的快递公司和快递单号，以及能看到的平台、订单号。`;
 
 /** 从模型返回的文本里提取第一个完整的 JSON 对象，容忍 markdown 代码块与前后废话。 */
 export function extractJson(text: string): unknown {
@@ -113,14 +115,21 @@ export function visionConfigured() {
   return Boolean(process.env.VISION_API_BASE && process.env.VISION_API_KEY && process.env.VISION_MODEL);
 }
 
-/** 调用视觉模型识别订单截图；抛出的 Error.message 可直接展示给用户。 */
-export async function recognizeOrderImage(image: File): Promise<RecognizedOrder> {
+/** 调用视觉模型识别一张或多张订单截图；抛出的 Error.message 可直接展示给用户。 */
+export async function recognizeOrderImages(images: File[]): Promise<RecognizedOrder> {
+  const files = images.slice(0, 3);
+  if (!files.length) throw new Error("请选择订单截图");
   const base = process.env.VISION_API_BASE?.replace(/\/+$/, "");
   const key = process.env.VISION_API_KEY;
   const model = process.env.VISION_MODEL;
   if (!base || !key || !model) throw new Error("尚未配置智能识图服务，请联系管理员在服务器设置 VISION_API_BASE / VISION_API_KEY / VISION_MODEL");
-  const bytes = Buffer.from(await image.arrayBuffer());
-  const dataUrl = `data:${image.type || "image/jpeg"};base64,${bytes.toString("base64")}`;
+  const imageParts = [];
+  for (const image of files) {
+    const bytes = Buffer.from(await image.arrayBuffer());
+    const dataUrl = `data:${image.type || "image/jpeg"};base64,${bytes.toString("base64")}`;
+    imageParts.push({ type: "image_url", image_url: { url: dataUrl } });
+  }
+  const timeout = Number(process.env.VISION_TIMEOUT_MS) || (files.length > 1 ? 75000 : 45000);
   const response = await fetch(`${base}/chat/completions`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
@@ -129,10 +138,10 @@ export async function recognizeOrderImage(image: File): Promise<RecognizedOrder>
       temperature: 0,
       messages: [
         { role: "system", content: visionPrompt },
-        { role: "user", content: [{ type: "image_url", image_url: { url: dataUrl } }, { type: "text", text: "请识别这张订单截图并按要求输出 JSON。" }] },
+        { role: "user", content: [...imageParts, { type: "text", text: files.length > 1 ? `以上是同一笔订单的 ${files.length} 张截图，请综合识别后按要求输出一份 JSON。` : "请识别这张订单截图并按要求输出 JSON。" }] },
       ],
     }),
-    signal: AbortSignal.timeout(Number(process.env.VISION_TIMEOUT_MS) || 45000),
+    signal: AbortSignal.timeout(timeout),
   });
   const body = await response.json().catch(() => ({})) as { choices?: Array<{ message?: { content?: unknown } }>; error?: { message?: string } };
   if (!response.ok) {
@@ -143,4 +152,8 @@ export async function recognizeOrderImage(image: File): Promise<RecognizedOrder>
   const text = typeof content === "string" ? content : Array.isArray(content) ? content.map(part => (part && typeof part === "object" && "text" in part ? String((part as { text?: unknown }).text ?? "") : "")).join("") : "";
   if (!text) throw new Error("识图服务没有返回内容，请重试");
   return normalizeRecognition(extractJson(text));
+}
+
+export async function recognizeOrderImage(image: File): Promise<RecognizedOrder> {
+  return recognizeOrderImages([image]);
 }

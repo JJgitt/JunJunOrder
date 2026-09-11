@@ -19,3 +19,16 @@ test("missing names and SKUs are not invented", () => {
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].sku, "");
 });
+
+test("courier-only screenshots keep items empty and preserve tracking fields", () => {
+  const result = normalizeRecognition({
+    platform: "",
+    platformNo: "",
+    courierCompany: "中通快递",
+    courierNo: "7720 1234 5678",
+    items: [],
+  });
+  assert.deepEqual(result.items, []);
+  assert.equal(result.courierCompany, "中通快递");
+  assert.equal(result.courierNo, "772012345678");
+});

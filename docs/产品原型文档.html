@@ -324,7 +324,7 @@
       <td>登录</td><td>手机号/账号 + 密码登录</td><td><span class="badge b-red">P0</span></td></tr>
   <tr><td>上传订单</td><td>表单录入：渠道、平台单号（选填）、快递单号（必填：管理员收货时凭此匹配入库）；<strong>支持一单多商品</strong>：每个商品行单独填写商品名、货号、尺码、数量、实付金额，可动态增删</td><td><span class="badge b-red">P0</span></td></tr>
   <tr><td>上传订单</td><td>订单截图上传（每单最多 3 张）</td><td><span class="badge b-orange">P1</span></td></tr>
-  <tr><td>智能识图</td><td>上传平台订单详情截图（京东 / 拼多多 / 淘宝 / 唯品会 / 抖音），视觉大模型抽取渠道、订单号、快递公司、快递单号及每个商品的名称 / 货号 / 尺码 / 数量 / 实付金额，自动填表并把截图加入附件；结果为草稿，提交前需核对。服务端通过 OpenAI 兼容协议接入，环境变量 <code>VISION_API_BASE / VISION_API_KEY / VISION_MODEL</code></td><td><span class="badge b-orange">P1</span></td></tr>
+  <tr><td>智能识图</td><td>一次最多上传 3 张平台订单详情截图（京东 / 拼多多 / 淘宝 / 唯品会 / 抖音，与普通附件上限相同），视觉大模型综合多图抽取一份渠道、订单号、快递公司、快递单号及每个商品的名称 / 货号 / 尺码 / 数量 / 实付金额，自动填表并把截图加入附件（附件合计仍最多 3 张）。只有物流/快递信息时只填快递公司和单号，不编造商品。结果为草稿，提交前需核对。服务端通过 OpenAI 兼容协议接入，环境变量 <code>VISION_API_BASE / VISION_API_KEY / VISION_MODEL</code></td><td><span class="badge b-orange">P1</span></td></tr>
   <tr><td>我的订单</td><td>按状态筛选（<strong>可多选</strong>：全部/待审核/在途/已入库/已驳回）；未选或点「全部」显示全部订单；被驳回置顶提示</td><td><span class="badge b-red">P0</span></td></tr>
   <tr><td>我的统计</td><td>本月采购单数、总金额</td><td><span class="badge b-orange">P2</span></td></tr>
 

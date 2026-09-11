@@ -65,6 +65,18 @@ const emptyOrderItemDraft = (): OrderItemDraft => ({
     purchaseCourierNo: ""
 });
 const resolvedPurchaseCourierCompany = (item: OrderItemDraft) => item.purchaseCourierCompany === "其他" ? item.customPurchaseCourierCompany.trim() : item.purchaseCourierCompany;
+/** 识图结果写到商品行的采购物流；没有商品时只改快递，不新增商品行。 */
+const applyRecognizedCourier = (item: OrderItemDraft, company: string, courierNo: string): OrderItemDraft => {
+    const recognizedCompany = company ? courierCompanyChoice(company) : item.purchaseCourierCompany;
+    return {
+        ...item,
+        ...(company ? {
+            purchaseCourierCompany: recognizedCompany,
+            customPurchaseCourierCompany: recognizedCompany === "其他" ? company : ""
+        } : {}),
+        ...(courierNo ? {purchaseCourierNo: courierNo} : {})
+    };
+};
 
 async function copyText(value: string) {
     if (navigator.clipboard && window.isSecureContext) {
@@ -839,13 +851,14 @@ function UploadPage({
     const updateItem = (index: number, patch: Partial<OrderItemDraft>) => setItems(current => current.map((item, i) => i === index ? {...item, ...patch} : item));
     const [recognizing, setRecognizing] = useState(false), [recognition, setRecognition] = useState<{ filled: string[]; missing: string[]; notes: string[]; error?: string } | null>(null);
 
-    async function recognize(file?: File) {
-        if (!file || recognizing) return;
+    async function recognize(incoming?: FileList | null) {
+        const selected = Array.from(incoming ?? []).filter(file => file.type.startsWith("image/")).slice(0, 3);
+        if (!selected.length || recognizing) return;
         setRecognizing(true);
         setRecognition(null);
         try {
             const form = new FormData();
-            form.set("image", file);
+            selected.forEach(file => form.append("images", file));
             const response = await fetch("/api/orders/recognize", {method: "POST", body: form});
             const json = await response.json() as { data?: RecognizedOrder; error?: string };
             if (!response.ok || !json.data) throw new Error(json.error || "识别失败，请重试");
@@ -861,22 +874,39 @@ function UploadPage({
             if (data.courierCompany) filled.push("快递公司"); else missing.push("快递公司");
             if (data.courierNo) filled.push("快递单号"); else missing.push("快递单号");
             if (data.items.length) {
-                const recognizedCompany = courierCompanyChoice(data.courierCompany);
-                const drafts = data.items.map(item => ({
+                const drafts = data.items.map(item => applyRecognizedCourier({
                     id: "",
                     title: item.title,
                     sku: item.sku,
                     size: item.size,
                     qty: item.qty,
                     amount: item.amount != null && item.amount > 0 ? String(item.amount) : "",
-                    purchaseCourierCompany: recognizedCompany,
-                    customPurchaseCourierCompany: recognizedCompany === "其他" ? data.courierCompany : "",
-                    purchaseCourierNo: data.courierNo
-                }));
-                setItems(current => current.every(item => !item.title.trim() && !item.sku.trim() && !item.size.trim() && !item.amount.trim()) ? drafts : [...current, ...drafts]);
+                    purchaseCourierCompany: "顺丰速运",
+                    customPurchaseCourierCompany: "",
+                    purchaseCourierNo: ""
+                }, data.courierCompany, data.courierNo));
+                setItems(current => {
+                    const blank = current.every(item => !item.title.trim() && !item.sku.trim() && !item.size.trim() && !item.amount.trim());
+                    if (!blank) return [...current, ...drafts];
+                    return drafts.map((draft, index) => {
+                        const previous = current[index] ?? current[0];
+                        return previous && !draft.purchaseCourierNo.trim() && previous.purchaseCourierNo.trim() ? applyRecognizedCourier(draft, previous.purchaseCourierCompany === "其他" ? previous.customPurchaseCourierCompany : previous.purchaseCourierCompany, previous.purchaseCourierNo) : draft;
+                    });
+                });
                 filled.push(`${data.items.length} 个商品`);
-            } else missing.push("商品信息");
-            setFiles(current => current.length >= 3 || current.some(existing => existing.name === file.name && existing.size === file.size) ? current : [...current, file]);
+            } else {
+                if (data.courierCompany || data.courierNo) setItems(current => current.map(item => applyRecognizedCourier(item, data.courierCompany, data.courierNo)));
+                missing.push("商品信息");
+            }
+            setFiles(current => {
+                const next = [...current];
+                for (const file of selected) {
+                    if (next.length >= 3) break;
+                    if (next.some(existing => existing.name === file.name && existing.size === file.size)) continue;
+                    next.push(file);
+                }
+                return next;
+            });
             setRecognition({filled, missing, notes: data.notes});
         } catch (error) {
             setRecognition({
@@ -937,12 +967,12 @@ function UploadPage({
             {onCancel && <button className="form-back-button" type="button" onClick={onCancel}>返回订单</button>}</div>
         {editing?.rejectReason && <div className="inline-warning"><b>驳回原因</b><span>{editing.rejectReason}</span></div>}
         <form className="purchase-form" autoComplete="off" onSubmit={submit}>
-            <label className={`recognize-zone ${recognizing ? "busy" : ""}`}><input type="file" accept="image/*"
+            <label className={`recognize-zone ${recognizing ? "busy" : ""}`}><input type="file" accept="image/*" multiple
                                                                                     disabled={recognizing}
                                                                                     onChange={e => {
-                                                                                        void recognize(e.target.files?.[0]);
+                                                                                        void recognize(e.target.files);
                                                                                         e.target.value = "";
-                                                                                    }}/><i>{recognizing ? "…" : "✦"}</i><span><b>{recognizing ? "正在识别订单截图，请稍候" : "智能识图：上传订单截图自动填写"}</b><small>支持京东 / 拼多多 / 淘宝 / 唯品会 / 抖音的订单详情截图</small><em>此为辅助功能，识图后需核对！</em></span></label>
+                                                                                    }}/><i>{recognizing ? "…" : "✦"}</i><span><b>{recognizing ? "正在识别订单截图，请稍候" : "智能识图：上传订单截图自动填写"}</b><small>最多 3 张，支持京东 / 拼多多 / 淘宝 / 唯品会 / 抖音；同一订单可分段截图</small><em>此为辅助功能，识图后需核对！</em></span></label>
             {recognition && (recognition.error ?
                 <div className="recognize-result failed"><b>识别失败</b><span>{recognition.error}</span></div> :
                 <div className="recognize-result">
