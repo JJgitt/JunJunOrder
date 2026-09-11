@@ -1,0 +1,10 @@
+/* Keep focused form controls readable without iOS focus zoom, including iPads
+   with an attached mouse. Do not disable the user's pinch-to-zoom gesture. */
+@media (any-pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  textarea,
+  select {
+    /* Override compact component styles across login, filters and dialogs. */
+    font-size: 16px !important;
+  }
+}

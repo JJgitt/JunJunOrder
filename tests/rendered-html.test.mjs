@@ -2,6 +2,17 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
+test("touch forms prevent small-font focus zoom without blocking pinch zoom", async () => {
+  const css = await readFile(new URL("../app/touch-forms.css", import.meta.url), "utf8");
+  const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
+  assert.match(layout, /import "\.\/touch-forms\.css"/);
+  assert.match(css, /@media \(any-pointer: coarse\)/);
+  assert.match(css, /input:not\(/);
+  assert.match(css, /textarea,\s*select\s*\{/);
+  assert.match(css, /font-size: 16px !important/);
+  assert.doesNotMatch(layout, /userScalable:\s*false|maximumScale:\s*1\b/);
+});
+
 test("produces a standalone Next.js server",async()=>{
   await access(new URL("../.next/standalone/server.js",import.meta.url));
   await access(new URL("../.next/static/",import.meta.url));

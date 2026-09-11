@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./touch-forms.css";
 
 const configuredOrigin = process.env.SITE_ORIGIN?.trim().replace(/\/$/, "");
 const siteOrigin = configuredOrigin && /^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(configuredOrigin)
