@@ -1,0 +1,25 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { findOrdersByCourierNo, findTransitCandidatesByCourierTail, normalizeCourierNo, orderMatchesCourierNo } from "../lib/courier.ts";
+
+test("courier numbers compare without spaces, dashes or letter case", () => {
+  assert.equal(normalizeCourierNo("sf 1234-5678"), "SF12345678");
+  assert.equal(orderMatchesCourierNo({
+    courierNo: "SF-1234 5678",
+    items: [{ purchaseCourierNo: "772012345678" }],
+  }, "sf12345678"), true);
+  assert.equal(orderMatchesCourierNo({
+    courierNo: "",
+    items: [{ purchaseCourierNo: "7720 1234 5678" }],
+  }, "772012345678"), true);
+});
+
+test("lookup prefers exact tracking matches and tails only for transit candidates", () => {
+  const orders = [
+    { id: "a", status: "在途", courierNo: "11112222", items: [{ purchaseCourierNo: "11112222" }] },
+    { id: "b", status: "在途", courierNo: "", items: [{ purchaseCourierNo: "99992222" }] },
+    { id: "c", status: "已入库", courierNo: "11112222", items: [{ purchaseCourierNo: "11112222" }] },
+  ];
+  assert.deepEqual(findOrdersByCourierNo(orders, "1111-2222").map(order => order.id), ["a", "c"]);
+  assert.deepEqual(findTransitCandidatesByCourierTail(orders, "xx2222").map(order => order.id), ["a", "b"]);
+});

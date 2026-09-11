@@ -231,7 +231,7 @@
   <tr><td>查看订单列表</td><td>✅（仅自己的）</td><td>✅（全部 + 全维度筛选）</td><td>—</td></tr>
   <tr><td>审核订单（通过/驳回）</td><td>❌</td><td>✅</td><td>驳回需填写原因</td></tr>
   <tr><td>📷 快递拍照识别 + 关联查询</td><td>❌</td><td>✅（核心功能）</td><td>拍照 OCR 识别快递单号，反查关联的货品与采购订单号</td></tr>
-  <tr><td>收货入库（拍照识别/扫码/手输）</td><td>❌</td><td>✅</td><td>记录库位；手动入库时可从最近使用的历史库位一键选择，也可手输新库位；未关联包裹可手动绑定订单；重复入库拦截</td></tr>
+  <tr><td>收货入库（拍照识别/扫码/手输）</td><td>❌</td><td>✅</td><td>记录库位；拍照识别关联订单后、扫码/手输匹配后与手动入库一样，可从最近使用的历史库位一键选择，也可手输新库位；未关联包裹可手动绑定订单；重复入库拦截</td></tr>
   <tr><td>撤销入库（已入库 → 在途）</td><td>❌</td><td>✅</td><td>入库误操作时可退回在途：库存同步扣回、清空库位与入库时间并留调整流水；<strong>订单内已有商品发货时禁止退回</strong></td></tr>
   <tr><td>标记发货 / 填快递单号</td><td>❌</td><td>✅</td><td>按商品行逐个发货</td></tr>
   <tr><td>库存查询</td><td>❌（仅可见「该单是否已入库」状态）</td><td>✅</td><td>—</td></tr>
@@ -332,7 +332,7 @@
       <td>数据看板</td><td>今日入库/出库/待发货/在途单数；待办事项（待审核 N、待收包裹 N、待发货 N）</td><td><span class="badge b-red">P0</span></td></tr>
   <tr><td>订单查询</td><td>全维度筛选：状态（<strong>可多选</strong>，标签可同时点亮，未选或点「全部」显示全部）、渠道、采购员（<strong>可多选</strong>，按钮上显示已选摘要，面板内展示每人订单数）、日期区间、关键词（单号/货号/商品名）</td><td><span class="badge b-red">P0</span></td></tr>
   <tr><td>订单审核</td><td>通过 / 驳回（驳回必填原因）</td><td><span class="badge b-red">P0</span></td></tr>
-  <tr><td>📷 快递拍照识别</td><td>H5 调相机/相册 → 上传 → 后端 OCR 识别物流单号 → 自动回填（可手动修正）</td><td><span class="badge b-red">P0</span></td></tr>
+  <tr><td>📷 快递拍照识别</td><td>H5 调相机/相册 → 上传 → 后端用与采购截图相同的 VISION_* 智能识图识别物流单号 → 自动回填（可手动修正）→ 按运单号反查采购单</td><td><span class="badge b-red">P0</span></td></tr>
   <tr><td>关联查询</td><td>按识别/输入的单号反查：货品、货号/尺码、采购渠道、采购订单号、采购员、状态；无匹配时给出引导与补救入口</td><td><span class="badge b-red">P0</span></td></tr>
   <tr><td>收货入库</td><td>核对实物后确认入库（必填库位），状态 在途→已入库，库存 +1；未关联包裹可手动绑定订单；重复入库拦截</td><td><span class="badge b-red">P0</span></td></tr>
   <tr><td>待收包裹</td><td>在途订单清单（按快递公司/单号倒序）、今日已收/待收统计、入库记录</td><td><span class="badge b-orange">P1</span></td></tr>
@@ -551,7 +551,7 @@
   </div>
 </div>
 
-<div class="callout tip">📷 <strong>OCR 技术方案：</strong>识别使用腾讯云「快递面单识别」或快递100 面单 OCR 接口；H5 通过 <code>getUserMedia</code> 调起相机（不支持时回退相册选图），图片上传到 <code>/api/receipt/ocr</code> 返回单号。准确率兜底：按各快递公司单号规则校验（顺丰 SF+15 位、京东 JD+14 位、中通 12 位数字…），不通过则提示人工修正。</div>
+<div class="callout tip">📷 <strong>识图技术方案：</strong>收货面单与采购截图共用 <code>VISION_API_BASE / VISION_API_KEY / VISION_MODEL</code>；未配置时才回退 <code>OCR_ENDPOINT</code>。H5 调起相机（不支持时回退相册选图），图片上传到 <code>/api/receipt/ocr</code> 返回运单号，并按订单头/商品行快递单号反查采购单。识别结果可手动修正后重新查询。</div>
 
 <h3>7.2 常规管理页面</h3>
 

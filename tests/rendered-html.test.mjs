@@ -611,6 +611,25 @@ test("order entry recognizes screenshots through a vision model and prefills the
   }
 });
 
+test("receipt photos use the vision model and look up purchase orders by tracking number",async()=>{
+  const [page,vision,route]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../lib/vision.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/receipt/ocr/route.ts",import.meta.url),"utf8"),
+  ]);
+  assert.match(vision,/export const waybillPrompt/);
+  assert.match(vision,/export async function recognizeWaybillImage/);
+  assert.match(route,/recognizeWaybillImage/);
+  assert.match(route,/lookupOrdersByCourierNo/);
+  assert.match(route,/visionConfigured\(\)/);
+  assert.match(route,/export async function GET/);
+  assertJsMatch(page,/fetch\("\/api\/receipt\/ocr",\{method:"POST",body:form\}\)/);
+  assertJsMatch(page,/\/api\/receipt\/ocr\?courierNo=/);
+  assertJsMatch(page,/findOrdersByCourierNo\(orders, courier\)/);
+  assertJsMatch(page,/图片发送到已配置的智能识图服务，识别后按运单号反查采购单/);
+  assertJsMatch(page,/关联到 \{receivable\.length\} 笔在途采购订单/);
+});
+
 test("administrator can delete buyer accounts only, with confirmation and history protection",async()=>{
   const [page,appRoute,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
@@ -688,10 +707,14 @@ test("manual receipt offers recently used locations as one-tap choices",async()=
   assertJsMatch(page,/\.sort\(\(a, b\) => \(b\.receivedAt \?\? ""\)\.localeCompare\(a\.receivedAt \?\? ""\)\)/);
   assertJsMatch(page,/\.slice\(0, 12\), \[orders\]\)/);
   assertJsMatch(page,/<ManualReceiveSheet order=\{selected\} recentLocations=\{recentLocations\}/);
+  assertJsMatch(page,/<ReceiptSheet orders=\{orders\} recentLocations=\{recentLocations\}/);
+  assertJsMatch(page,/<ScanSheet orders=\{orders\} recentLocations=\{recentLocations\}/);
+  assertJsMatch(page,/function LocationPicker\(\{ location, recentLocations, onChange \}/);
   assertJsMatch(page,/function ManualReceiveSheet\(\{order,recentLocations,onClose,onSubmit\}/);
   assertJsMatch(page,/recentLocations\.length>0&&<div className="location-history">/);
   assertJsMatch(page,/<div className="location-history-head"><i>📍<\/i><b>历史库位<\/b>/);
-  assertJsMatch(page,/className=\{item===activeLocation\?"active":""\} aria-pressed=\{item===activeLocation\} onClick=\{\(\)=>setLocation\(item\)\}>\{index===0&&<em>最近<\/em>\}<span>\{item\}<\/span>/);
+  assertJsMatch(page,/className=\{item===activeLocation\?"active":""\} aria-pressed=\{item===activeLocation\} onClick=\{\(\)=>onChange\(item\)\}>\{index===0&&<em>最近<\/em>\}<span>\{item\}<\/span>/);
+  assertJsMatch(page,/<LocationPicker location=\{location\} recentLocations=\{recentLocations\} onChange=\{setLocation\}\/>/);
   assertCssMatch(styles,/\.location-history\{/);
   assertCssMatch(styles,/\.location-history-head\{/);
   assertCssMatch(styles,/\.location-chips button:before\{/);

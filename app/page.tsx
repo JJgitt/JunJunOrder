@@ -3,6 +3,7 @@
 import {FormEvent, useCallback, useEffect, useMemo, useState} from "react";
 import {useRouter} from "next/navigation";
 import Image from "next/image";
+import {findOrdersByCourierNo, findTransitCandidatesByCourierTail, normalizeCourierNo} from "@/lib/courier";
 
 type Role = "admin" | "buyer";
 type AdminTab = "dashboard" | "stock" | "orders" | "upload" | "profile";
@@ -411,10 +412,10 @@ export default function Home() {
             }}/>}
 
         {role === "admin" && overlay === "receipt" &&
-            <ReceiptSheet orders={orders} onClose={() => setOverlay(null)} onReceive={receive}
+            <ReceiptSheet orders={orders} recentLocations={recentLocations} onClose={() => setOverlay(null)} onReceive={receive}
                           onManual={() => setOverlay("scan")} onNotify={notify}/>}
         {role === "admin" && overlay === "scan" &&
-            <ScanSheet orders={orders} onClose={() => setOverlay(null)} onReceive={receive} onNotify={notify}/>}
+            <ScanSheet orders={orders} recentLocations={recentLocations} onClose={() => setOverlay(null)} onReceive={receive} onNotify={notify}/>}
         {role === "admin" && overlay === "manual-receive" && selected &&
             <ManualReceiveSheet order={selected} recentLocations={recentLocations} onClose={() => setOverlay(null)}
                                 onSubmit={receive}/>}
@@ -1226,15 +1227,42 @@ function ResetPasswordSheet({
     </Modal>;
 }
 
+function LocationPicker({ location, recentLocations, onChange }: { location: string; recentLocations: string[]; onChange: (value: string) => void }) {
+    const activeLocation = location.trim();
+    return <>
+        <label className="location-field"><span>入库库位（必填）</span><input
+            value={location} onChange={e => onChange(e.target.value)}
+            placeholder="如 A-02-5，或从下方历史库位中选择"/></label>
+        {recentLocations.length > 0 && <div className="location-history">
+            <div className="location-history-head">
+                <i>📍</i><b>历史库位</b><span>{activeLocation && recentLocations.includes(activeLocation) ? `已选 ${activeLocation}` : "点选即可填入，按最近入库排序"}</span>
+            </div>
+            <div className="location-chips">{recentLocations.map((item, index) => <button key={item} type="button"
+                                                                                          className={item === activeLocation ? "active" : ""}
+                                                                                          aria-pressed={item === activeLocation}
+                                                                                          onClick={() => onChange(item)}>{index === 0 &&
+                <em>最近</em>}<span>{item}</span></button>)}</div>
+        </div>}
+    </>;
+}
+
 function ReceiptSheet({
                           orders,
+                          recentLocations,
                           onClose,
                           onReceive,
                           onManual,
                           onNotify
-                      }: { orders: PurchaseOrder[]; onClose: () => void; onReceive: (id: string, loc: string) => void; onManual: () => void; onNotify: (t: string) => void }) {
+                      }: { orders: PurchaseOrder[]; recentLocations: string[]; onClose: () => void; onReceive: (id: string, loc: string) => void; onManual: () => void; onNotify: (t: string) => void }) {
     const [stage, setStage] = useState<"capture" | "result">("capture"), [courier, setCourier] = useState(""), [location, setLocation] = useState(""), [busy, setBusy] = useState(false);
-    const match = orders.find(order => order.items.some(item => item.purchaseCourierNo === courier) && order.status === "在途");
+    const [lookedUp, setLookedUp] = useState<PurchaseOrder[]>([]), [pickedId, setPickedId] = useState("");
+    const matches = useMemo(() => {
+        const local = findOrdersByCourierNo(orders, courier);
+        const extra = findOrdersByCourierNo(lookedUp, courier).filter(order => !local.some(item => item.id === order.id));
+        return [...local, ...extra];
+    }, [orders, lookedUp, courier]);
+    const receivable = matches.filter(order => order.status === "在途");
+    const match = receivable.find(order => order.id === pickedId) ?? (receivable.length === 1 ? receivable[0] : undefined);
 
     async function recognize(file?: File) {
         if (!file) return;
@@ -1243,11 +1271,13 @@ function ReceiptSheet({
             const form = new FormData();
             form.set("image", file);
             const response = await fetch("/api/receipt/ocr", {method: "POST", body: form});
-            const json = await response.json() as { courierNo: string; error?: string };
+            const json = await response.json() as { courierNo: string; matches?: PurchaseOrder[]; error?: string };
             if (!response.ok) throw new Error(json.error || "识别失败");
             setCourier(json.courierNo);
+            setLookedUp(json.matches ?? []);
+            setPickedId("");
             setStage("result");
-            onNotify("面单识别完成");
+            onNotify(json.matches?.length ? `面单识别完成，反查到 ${json.matches.length} 笔采购单` : "面单识别完成");
         } catch (error) {
             onNotify(error instanceof Error ? error.message : "识别失败");
         } finally {
@@ -1255,9 +1285,20 @@ function ReceiptSheet({
         }
     }
 
-    if (stage === "capture") return <Modal title="拍照识别收货" subtitle="OCR RECEIPT" onClose={onClose}><label
+    useEffect(() => {
+        if (stage !== "result" || normalizeCourierNo(courier).length < 8) return;
+        const timer = window.setTimeout(() => {
+            void fetch(`/api/receipt/ocr?courierNo=${encodeURIComponent(courier)}`).then(async response => {
+                const json = await response.json() as { matches?: PurchaseOrder[]; error?: string };
+                if (response.ok) setLookedUp(json.matches ?? []);
+            }).catch(() => undefined);
+        }, 400);
+        return () => window.clearTimeout(timer);
+    }, [courier, stage]);
+
+    if (stage === "capture") return <Modal title="拍照识别收货" subtitle="VISION RECEIPT" onClose={onClose}><label
         className="camera-zone"><input type="file" accept="image/*" capture="environment" disabled={busy}
-                                       onChange={e => void recognize(e.target.files?.[0])}/><i>📷</i><b>{busy ? "正在安全识别…" : "对准快递面单拍摄"}</b><span>图片仅发送到已配置的服务端 OCR 接口</span></label><label
+                                       onChange={e => void recognize(e.target.files?.[0])}/><i>📷</i><b>{busy ? "正在识别面单…" : "对准快递面单拍摄"}</b><span>图片发送到已配置的智能识图服务，识别后按运单号反查采购单</span></label><label
         className="secondary-upload"><input type="file" accept="image/*" disabled={busy}
                                             onChange={e => void recognize(e.target.files?.[0])}/>从相册选择</label>
         <button className="text-button" onClick={onManual}>或手动输入快递单号查询</button>
@@ -1265,8 +1306,15 @@ function ReceiptSheet({
     return <Modal title="识别结果" subtitle="MATCH RESULT" onClose={onClose}>
         <div className="recognized-card">
             <div><b>📷 面单已识别</b><Badge tone={match ? "green" : "orange"}>{match ? "识别成功" : "识别完成"}</Badge></div>
-            <label><span>快递单号</span><input value={courier} onChange={e => setCourier(e.target.value)}/></label></div>
-        {match ? <div className="match-card"><h3>✓ 关联到 1 笔采购订单</h3><KeyValue label="货品"
+            <label><span>快递单号</span><input value={courier} onChange={e => {
+                setCourier(e.target.value);
+                setPickedId("");
+            }}/></label></div>
+        {receivable.length > 1 && !pickedId && <div className="candidate-card"><h3>关联到 {receivable.length} 笔在途采购订单，请选择要入库的一笔</h3>{receivable.map(order =>
+            <div key={order.id}><span><b>{order.itemCount > 1 ? `${order.title} 等${order.itemCount}件` : `${order.title} ${order.items[0]?.size}码`}</b><small>{order.platform} · {order.purchaser} · {money(order.amount)}</small></span>
+                <button onClick={() => setPickedId(order.id)}>选择此单</button>
+            </div>)}</div>}
+        {match ? <div className="match-card"><h3>✓ 关联到 {receivable.length > 1 ? "所选" : "1 笔"}采购订单</h3><KeyValue label="货品"
                                                                              value={match.itemCount > 1 ? `${match.title} 等${match.itemCount}件商品` : `${match.title} ${match.items[0]?.size}码`}/><KeyValue
             label="商品清单" value={<SkuList items={match.items}/>}/><KeyValue label="采购订单号" value={match.id}
                                                                            copyValue={match.id}/><KeyValue label="渠道"
@@ -1274,14 +1322,16 @@ function ReceiptSheet({
                                                                                                            copyValue={match.platformNo || undefined}/><KeyValue
             label="采购物流" value={<PurchaseCourierList items={match.items} showItem/>}/><KeyValue label="采购员 / 时间"
                                                                                                 value={`${match.purchaser} · ${match.createdAt}`}/><KeyValue
-            label="采购金额" value={money(match.amount)}/><label className="location-field"><span>库位（必填）</span><input
-            value={location} onChange={e => setLocation(e.target.value)} placeholder="如 A-02-5"/></label>
-            <button className="primary-button" onClick={() => location && onReceive(match.id, location)}>核对无误，确认入库
+            label="采购金额" value={money(match.amount)}/><LocationPicker location={location} recentLocations={recentLocations} onChange={setLocation}/>
+            <button className="primary-button" disabled={!location.trim()} onClick={() => location.trim() && onReceive(match.id, location.trim())}>核对无误，确认入库
             </button>
+        </div> : matches.length > 0 && receivable.length === 0 ? <div className="unmatched"><h3>! 已反查到采购订单，但当前不是在途状态</h3>
+            <p>{matches.map(order => `${order.id}（${order.status} · ${order.purchaser}）`).join("、")}。只有在途订单可以入库。</p>
         </div> : <Unmatched orders={orders} courier={courier} onBind={id => {
-            const order = orders.find(item => item.id === id);
+            const order = [...orders, ...lookedUp].find(item => item.id === id);
             if (order) {
-                setCourier(order.items[0]?.purchaseCourierNo || courier);
+                setCourier(order.items[0]?.purchaseCourierNo || order.courierNo || courier);
+                setPickedId(id);
                 onNotify("已绑定候选订单");
             }
         }} onAbnormal={() => onNotify("已标记为异常包裹")}/>}</Modal>;
@@ -1293,22 +1343,25 @@ function Unmatched({
                        onBind,
                        onAbnormal
                    }: { orders: PurchaseOrder[]; courier: string; onBind: (id: string) => void; onAbnormal: () => void }) {
-    const candidates = orders.filter(o => o.status === "在途").slice(0, 2);
+    const candidates = findTransitCandidatesByCourierTail(orders, courier);
+    const fallback = candidates.length ? candidates : orders.filter(o => o.status === "在途").slice(0, 2);
+    const tail = normalizeCourierNo(courier).slice(-4);
     return <>
         <div className="unmatched"><h3>! 未找到关联采购订单</h3><p>可能原因：采购员未填快递单号，或单号识别有误。</p></div>
-        <div className="candidate-card"><h3>尾号 {courier.slice(-4)} 的在途订单</h3>{candidates.map(o => <div key={o.id}><span><b>{o.itemCount > 1 ? `${o.title} 等${o.itemCount}件` : `${o.title} ${o.items[0]?.size}码`}</b><small>{o.platform} · {o.purchaser} · {money(o.amount)}</small></span>
+        {fallback.length > 0 && <div className="candidate-card"><h3>{candidates.length ? `尾号 ${tail} 的在途订单` : "可绑定的在途订单"}</h3>{fallback.map(o => <div key={o.id}><span><b>{o.itemCount > 1 ? `${o.title} 等${o.itemCount}件` : `${o.title} ${o.items[0]?.size}码`}</b><small>{o.platform} · {o.purchaser} · {money(o.amount)}</small></span>
             <button onClick={() => onBind(o.id)}>绑定此单</button>
-        </div>)}</div>
+        </div>)}</div>}
         <button className="secondary-button" onClick={onAbnormal}>标记为异常包裹</button>
     </>;
 }
 
 function ScanSheet({
                        orders,
+                       recentLocations,
                        onClose,
                        onReceive,
                        onNotify
-                   }: { orders: PurchaseOrder[]; onClose: () => void; onReceive: (id: string, loc: string) => void; onNotify: (t: string) => void }) {
+                   }: { orders: PurchaseOrder[]; recentLocations: string[]; onClose: () => void; onReceive: (id: string, loc: string) => void; onNotify: (t: string) => void }) {
     const [value, setValue] = useState("");
     const [location, setLocation] = useState("");
     const match = orders.find(o => o.status === "在途" && (o.items.some(item => item.purchaseCourierNo.includes(value)) || o.id.includes(value) || o.items.some(item => item.sku.toLowerCase().includes(value.toLowerCase()))) && value.length >= 4);
@@ -1327,11 +1380,8 @@ function ScanSheet({
                                                                            value={`${match.platform} · ${match.platformNo || "未填写"}`}
                                                                            copyValue={match.platformNo || undefined}/><KeyValue
             label="采购物流" value={<PurchaseCourierList items={match.items} showItem/>}/><KeyValue label="采购员"
-                                                                                                value={match.purchaser}/><label
-            className="location-field"><span>库位（必填）</span><input value={location}
-                                                                 onChange={e => setLocation(e.target.value)}
-                                                                 placeholder="如 A-02-5"/></label>
-            <button className="primary-button" onClick={() => location && onReceive(match.id, location)}>确认入库</button>
+                                                                                                value={match.purchaser}/><LocationPicker location={location} recentLocations={recentLocations} onChange={setLocation}/>
+            <button className="primary-button" disabled={!location.trim()} onClick={() => location.trim() && onReceive(match.id, location.trim())}>确认入库</button>
         </div>}{value.length >= 4 && !match &&
         <div className="inline-warning"><b>未匹配到在途订单</b><span>请检查输入，或使用拍照识别功能。</span></div>}
         <button className="text-button" onClick={() => onNotify("扫码枪已进入等待状态")}>连接扫码枪</button>
@@ -1356,7 +1406,6 @@ function ManualReceiveSheet({
                                 onSubmit
                             }: { order: PurchaseOrder; recentLocations: string[]; onClose: () => void; onSubmit: (id: string, location: string, files: File[]) => Promise<void> }) {
     const [location, setLocation] = useState(""), [files, setFiles] = useState<File[]>([]), [busy, setBusy] = useState(false);
-    const activeLocation = location.trim();
 
     async function confirm() {
         if (!location.trim() || busy) return;
@@ -1379,18 +1428,7 @@ function ManualReceiveSheet({
                                                                                              value={<PurchaseCourierList
                                                                                                  items={order.items}
                                                                                                  showItem/>}/></div>
-        <OrderImages images={order.images}/><label className="location-field"><span>入库库位（必填）</span><input
-        value={location} onChange={e => setLocation(e.target.value)}
-        placeholder="如 A-02-5，或从下方历史库位中选择"/></label>{recentLocations.length > 0 && <div className="location-history">
-        <div className="location-history-head">
-            <i>📍</i><b>历史库位</b><span>{activeLocation && recentLocations.includes(activeLocation) ? `已选 ${activeLocation}` : "点选即可填入，按最近入库排序"}</span>
-        </div>
-        <div className="location-chips">{recentLocations.map((item, index) => <button key={item} type="button"
-                                                                                      className={item === activeLocation ? "active" : ""}
-                                                                                      aria-pressed={item === activeLocation}
-                                                                                      onClick={() => setLocation(item)}>{index === 0 &&
-            <em>最近</em>}<span>{item}</span></button>)}</div>
-    </div>}<label className="receipt-upload"><input type="file" accept="image/*" multiple
+        <OrderImages images={order.images}/><LocationPicker location={location} recentLocations={recentLocations} onChange={setLocation}/><label className="receipt-upload"><input type="file" accept="image/*" multiple
                                                     onChange={e => setFiles(Array.from(e.target.files ?? []).slice(0, 3))}/><i>＋</i><span><b>{files.length ? `已选择 ${files.length} 张入库截图` : "入库截图（选填）"}</b><small>最多 3 张、单张不超过 5MB</small></span></label>
         <button className="primary-button receive-confirm-button" disabled={!location.trim() || busy}
                 onClick={() => void confirm()}>{busy ? "正在入库…" : "确认入库并增加库存"}</button>

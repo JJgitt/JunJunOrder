@@ -20,6 +20,12 @@ test("missing names and SKUs are not invented", () => {
   assert.equal(result.items[0].sku, "");
 });
 
+test("waybill prompt asks the model for courier fields only", async () => {
+  const { waybillPrompt } = await import("../lib/vision.ts");
+  assert.match(waybillPrompt, /只认面单上的运单号/);
+  assert.match(waybillPrompt, /不要把手机号、订单号/);
+});
+
 test("courier-only screenshots keep items empty and preserve tracking fields", () => {
   const result = normalizeRecognition({
     platform: "",
