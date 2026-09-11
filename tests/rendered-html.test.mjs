@@ -13,6 +13,14 @@ test("touch forms prevent small-font focus zoom without blocking pinch zoom", as
   assert.doesNotMatch(layout, /userScalable:\s*false|maximumScale:\s*1\b/);
 });
 
+test("form grids shrink and touch buyer filters match native select text", async () => {
+  const css = await readFile(new URL("../app/touch-forms.css", import.meta.url), "utf8");
+  assert.match(css, /\.field-grid\s*\{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.field-grid > label\s*\{\s*min-width: 0/);
+  assert.match(css, /\.field-grid select\s*\{\s*width: 100%;\s*min-width: 0/);
+  assert.match(css, /\.select-row \.buyer-filter-trigger\s*\{\s*font-size: 16px/);
+});
+
 test("produces a standalone Next.js server",async()=>{
   await access(new URL("../.next/standalone/server.js",import.meta.url));
   await access(new URL("../.next/static/",import.meta.url));

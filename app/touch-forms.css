@@ -1,3 +1,18 @@
+.field-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field-grid > label {
+  min-width: 0;
+}
+
+.field-grid input,
+.field-grid select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
 /* Keep focused form controls readable without iOS focus zoom, including iPads
    with an attached mouse. Do not disable the user's pinch-to-zoom gesture. */
 @media (any-pointer: coarse) {
@@ -6,5 +21,28 @@
   select {
     /* Override compact component styles across login, filters and dialogs. */
     font-size: 16px !important;
+  }
+
+  .select-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, .85fr);
+  }
+
+  .select-row .buyer-filter-trigger {
+    font-size: 16px;
+  }
+
+  .select-row > select,
+  .select-row > .buyer-filter-trigger {
+    height: 42px;
+  }
+}
+
+@media (any-pointer: coarse) and (max-width: 360px) {
+  .select-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .select-row > select:last-child {
+    grid-column: 1 / -1;
   }
 }
