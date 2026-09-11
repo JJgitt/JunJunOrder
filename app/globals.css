@@ -3024,6 +3024,22 @@ button:active {
     box-shadow: 0 4px 14px #0f172a09
 }
 
+.items-editor input,
+.items-editor select {
+    height: 36px;
+    padding: 0 9px;
+    font-size: 8.5px
+}
+
+.items-editor .money-input i {
+    top: 10px;
+    font-size: 9px
+}
+
+.items-editor .money-input input {
+    padding-left: 24px
+}
+
 .item-card-head {
     display: flex;
     align-items: center;

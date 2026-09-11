@@ -31,6 +31,19 @@
     font-size: 16px;
   }
 
+  /* 商品明细字段更密，字号略小于整页 16px；聚焦时回到 16px，降低 iOS 放大。 */
+  .items-editor input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  .items-editor textarea,
+  .items-editor select {
+    font-size: 13px !important;
+  }
+
+  .items-editor input:focus,
+  .items-editor textarea:focus,
+  .items-editor select:focus {
+    font-size: 16px !important;
+  }
+
   .select-row > select,
   .select-row > .buyer-filter-trigger {
     height: 42px;
