@@ -37,13 +37,9 @@ test("touch forms prevent small-font focus zoom without blocking pinch zoom", as
   assert.match(css, /input:not\(/);
   assert.match(css, /textarea,\s*select\s*\{/);
   assert.match(css, /font-size: 16px !important/);
+  assert.match(css, /:focus\s*\{\s*font-size: 16px !important/);
   assert.match(css, /\.member-list select,\s*\.member-role-select\s*\{/);
-  assert.match(css, /\.member-role-select:focus/);
-  assert.match(css, /font-size: 12px !important/);
-  assert.match(css, /\.purchase-form input\.long-no-input:not\(\[type="checkbox"\]\)/);
-  assert.match(css, /\.items-editor input\.long-no-input:not\(\[type="checkbox"\]\)/);
-  assert.match(css, /font-size: 8px !important/);
-  assert.match(css, /\.purchase-form input\.long-no-input:focus,\s*\.items-editor input\.long-no-input:focus/);
+  assert.doesNotMatch(css, /font-size: (8|12|13)px !important/);
   assert.doesNotMatch(layout, /userScalable:\s*false|maximumScale:\s*1\b/);
 });
 
