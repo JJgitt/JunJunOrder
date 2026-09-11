@@ -2,6 +2,33 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
+/** 结构测试只关心代码是否还在，不绑死格式化空白。 */
+function compactJs(source) {
+  return source.replace(/\s+/g, "");
+}
+
+function compactCss(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\s*([{};:,>+~])\s*/g, "$1");
+}
+
+function compactPattern(pattern) {
+  const source = pattern instanceof RegExp ? pattern.source : String(pattern);
+  const flags = pattern instanceof RegExp ? pattern.flags : "";
+  return new RegExp(source.replace(/\\s(?:[*+?]|\{\d+(?:,\d*)?\})?/g, "").replace(/\s+/g, ""), flags);
+}
+
+function assertJsMatch(source, pattern) {
+  assert.match(compactJs(source), compactPattern(pattern));
+}
+
+function assertJsNotMatch(source, pattern) {
+  assert.doesNotMatch(compactJs(source), compactPattern(pattern));
+}
+
+function assertCssMatch(source, pattern) {
+  assert.match(compactCss(source), pattern);
+}
+
 test("touch forms prevent small-font focus zoom without blocking pinch zoom", async () => {
   const css = await readFile(new URL("../app/touch-forms.css", import.meta.url), "utf8");
   const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
@@ -23,10 +50,10 @@ test("form grids shrink and touch buyer filters match native select text", async
 
 test("purchase quantity can be cleared while entering a new value", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /qty:number\|""/);
-  assert.match(page, /qty:value===""\?"":Math\.max\(1,Math\.trunc\(Number\(value\)\)\)/);
-  assert.match(page, /if\(item\.qty===""\)updateItem\(index,\{qty:1\}\)/);
-  assert.doesNotMatch(page, /qty:Math\.max\(1,Number\(e\.target\.value\)\)/);
+  assertJsMatch(page, /qty:number\|""/);
+  assertJsMatch(page, /qty:value===""\?"":Math\.max\(1,Math\.trunc\(Number\(value\)\)\)/);
+  assertJsMatch(page, /if\(item\.qty===""\)updateItem\(index,\{qty:1\}\)/);
+  assertJsNotMatch(page, /qty:Math\.max\(1,Number\(e\.target\.value\)\)/);
 });
 
 test("produces a standalone Next.js server",async()=>{
@@ -97,21 +124,21 @@ test("administrator inherits purchase-order entry capabilities",async()=>{
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/type AdminTab = [^;]+"upload"/);
-  assert.match(page,/role === "admin" && adminTab === "upload"/);
-  assert.match(page,/mode="admin"/);
-  assert.match(page,/新增采购订单/);
+  assertJsMatch(page,/type AdminTab = [^;]+"upload"/);
+  assertJsMatch(page,/role === "admin" && adminTab === "upload"/);
+  assertJsMatch(page,/mode="admin"/);
+  assertJsMatch(page,/新增采购订单/);
   assert.match(appRoute,/if\(action==="create-order"\)/);
   assert.match(appRoute,/if\(action==="update-order"\)\{\s+requireAdmin\(user\)/);
 });
 
 test("administrator can manually receive in-transit orders from order management",async()=>{
   const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
-  assert.match(page,/type Overlay = [^;]+"manual-receive"/);
-  assert.match(page,/order\.status === "在途" \? <button[^\n]+手动入库<\/button>/);
-  assert.match(page,/function ManualReceiveSheet/);
-  assert.match(page,/确认入库并增加库存/);
-  assert.match(page,/onSubmit=\{receive\}/);
+  assertJsMatch(page,/type Overlay = [^;]+"manual-receive"/);
+  assertJsMatch(page,/order\.status === "在途" \? <button[^\n]+手动入库<\/button>/);
+  assertJsMatch(page,/function ManualReceiveSheet/);
+  assertJsMatch(page,/确认入库并增加库存/);
+  assertJsMatch(page,/onSubmit=\{receive\}/);
 });
 
 test("order details show persisted images and manual receipt accepts optional screenshots",async()=>{
@@ -123,15 +150,15 @@ test("order details show persisted images and manual receipt accepts optional sc
   ]);
   assert.match(appRoute,/const imageRows=rows\.length\?await db\.select/);
   assert.match(appRoute,/url:`\/api\/files\/\$\{image\.id\}`/);
-  assert.match(page,/type OrderImage =/);
-  assert.match(page,/function OrderImages/);
-  assert.match(page,/<OrderImages images=\{order\.images\}\/>/);
-  assert.match(page,/入库截图（选填）/);
-  assert.match(page,/onSubmit\(order\.id,location\.trim\(\),files\)/);
-  assert.match(page,/uploadOrderFiles\(id,files\)/);
+  assertJsMatch(page,/type OrderImage =/);
+  assertJsMatch(page,/function OrderImages/);
+  assertJsMatch(page,/<OrderImages images=\{order\.images\}\/>/);
+  assertJsMatch(page,/入库截图（选填）/);
+  assertJsMatch(page,/onSubmit\(order\.id,location\.trim\(\),files\)/);
+  assertJsMatch(page,/uploadOrderFiles\(id,files\)/);
   assert.match(imageRoute,/user\.role!=="admin"&&order\.purchaserId!==user\.id/);
-  assert.match(styles,/\.order-images-grid\{/);
-  assert.match(styles,/\.receipt-upload\{/);
+  assertCssMatch(styles,/\.order-images-grid\{/);
+  assertCssMatch(styles,/\.receipt-upload\{/);
 });
 
 test("administrator can edit orders and batch delete with inventory-safe backend handling",async()=>{
@@ -140,14 +167,14 @@ test("administrator can edit orders and batch delete with inventory-safe backend
     readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/onDelete=\{deleteOrders\}/);
-  assert.match(page,/editing=\{orders\.find\(item=>item\.id===selectedId\)\}/);
-  assert.match(page,/currentUser\?\.role==="admin"\?"update-order":"resubmit-order"/);
-  assert.match(page,/>编辑<\/button>/);
-  assert.match(page,/全选当前结果/);
-  assert.match(page,/批量删除/);
-  assert.match(page,/function DeleteOrdersSheet/);
-  assert.match(page,/此操作不可撤销/);
+  assertJsMatch(page,/onDelete=\{deleteOrders\}/);
+  assertJsMatch(page,/editing=\{orders\.find\(item=>item\.id===selectedId\)\}/);
+  assertJsMatch(page,/currentUser\?\.role==="admin"\?"update-order":"resubmit-order"/);
+  assertJsMatch(page,/>编辑<\/button>/);
+  assertJsMatch(page,/全选当前结果/);
+  assertJsMatch(page,/批量删除/);
+  assertJsMatch(page,/function DeleteOrdersSheet/);
+  assertJsMatch(page,/此操作不可撤销/);
   assert.match(appRoute,/if\(action==="update-order"\)/);
   assert.match(appRoute,/if\(action==="delete-orders"\)/);
   assert.match(appRoute,/requireAdmin\(user\)/);
@@ -156,9 +183,9 @@ test("administrator can edit orders and batch delete with inventory-safe backend
   assert.match(appRoute,/tx\.delete\(orderImages\)/);
   assert.match(appRoute,/greatest\(0,\$\{inventory\.quantity\}-\$\{lot\.qty\}\)/);
   assert.match(appRoute,/action:"delete_batch"/);
-  assert.match(styles,/\.batch-toolbar\{/);
-  assert.match(styles,/\.order-card\.selected\{/);
-  assert.match(styles,/\.delete-warning\{/);
+  assertCssMatch(styles,/\.batch-toolbar\{/);
+  assertCssMatch(styles,/\.order-card\.selected\{/);
+  assertCssMatch(styles,/\.delete-warning\{/);
 });
 
 test("buyers can edit their own purchase orders until receipt",async()=>{
@@ -166,10 +193,10 @@ test("buyers can edit their own purchase orders until receipt",async()=>{
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/const buyerCanEditOrder = \(status:OrderStatus\) => status === "待审核" \|\| status === "在途" \|\| status === "已驳回"/);
-  assert.match(page,/<BuyerOrders orders=\{orders\} onOpen=\{openOrder\} onEdit=/);
-  assert.match(page,/编辑采购单/);
-  assert.match(page,/入库前均可修改并保存/);
+  assertJsMatch(page,/const buyerCanEditOrder = \(status:OrderStatus\) => status === "待审核" \|\| status === "在途" \|\| status === "已驳回"/);
+  assertJsMatch(page,/<BuyerOrders orders=\{orders\} onOpen=\{openOrder\} onEdit=/);
+  assertJsMatch(page,/编辑采购单/);
+  assertJsMatch(page,/入库前均可修改并保存/);
   assert.match(appRoute,/const buyerEditableStatuses=\["待审核","在途","已驳回"\] as const/);
   assert.match(appRoute,/order\.purchaserId!==user\.id/);
   assert.match(appRoute,/订单已入库，采购员不能再修改/);
@@ -178,14 +205,14 @@ test("buyers can edit their own purchase orders until receipt",async()=>{
 
 test("new purchase upload form remounts empty after each create",async()=>{
   const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
-  assert.match(page,/const \[uploadNonce, setUploadNonce\] = useState\(0\)/);
-  assert.match(page,/const startNewUpload = \(\) => \{ setSelectedId\(""\); setUploadNonce\(value => value \+ 1\); \}/);
-  assert.match(page,/onCreate=\{\(\) => \{startNewUpload\(\);setAdminTab\("upload"\);\}\}/);
-  assert.match(page,/onUpload=\{\(\) => \{startNewUpload\(\);setBuyerTab\("upload"\);\}\}/);
-  assert.match(page,/if\(tab==="upload"\) startNewUpload\(\); setBuyerTab\(tab\)/);
-  assert.match(page,/key=\{`upload-\$\{selectedId \|\| "new"\}-\$\{uploadNonce\}`\}/);
-  assert.match(page,/if\(!editing\)\{setSelectedId\(""\);setUploadNonce\(value=>value\+1\);\}/);
-  assert.match(page,/className="purchase-form" autoComplete="off"/);
+  assertJsMatch(page,/const \[uploadNonce, setUploadNonce\] = useState\(0\)/);
+  assertJsMatch(page,/const startNewUpload = \(\) => \{ setSelectedId\(""\); setUploadNonce\(value => value \+ 1\); \}/);
+  assertJsMatch(page,/onCreate=\{\(\) => \{startNewUpload\(\);setAdminTab\("upload"\);\}\}/);
+  assertJsMatch(page,/onUpload=\{\(\) => \{startNewUpload\(\);setBuyerTab\("upload"\);\}\}/);
+  assertJsMatch(page,/if\(tab==="upload"\) startNewUpload\(\); setBuyerTab\(tab\)/);
+  assertJsMatch(page,/key=\{`upload-\$\{selectedId \|\| "new"\}-\$\{uploadNonce\}`\}/);
+  assertJsMatch(page,/if\(!editing\)\{setSelectedId\(""\);setUploadNonce\(value=>value\+1\);\}/);
+  assertJsMatch(page,/className="purchase-form" autoComplete="off"/);
 });
 
 test("order lists show purchase logistics while outbound logistics stay administrator-only",async()=>{
@@ -193,22 +220,22 @@ test("order lists show purchase logistics while outbound logistics stay administ
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/function PurchaseCourierList/);
-  assert.match(page,/<span>采购快递信息<\/span>/);
-  assert.match(page,/item\.purchaseCourierCompany/);
-  assert.match(page,/value=\{item\.purchaseCourierNo\} label="采购快递单号"/);
-  assert.match(page,/\$\{item\.purchaseCourierCompany\}\$\{item\.purchaseCourierNo\}/);
-  assert.match(page,/showOutbound&&\(readyToShip\(order\.status\)\|\|order\.status==="已发货"\)&&<OutboundOrderInfo order=\{order\}\/>/);
-  assert.match(page,/order\.status!=="已发货"\)return <div className=\{`order-courier outbound/);
-  assert.match(page,/<span>发货进度<\/span>/);
-  assert.match(page,/件已发货<\/span>/);
-  assert.match(page,/function BuyerOrderCard/);
-  assert.match(page,/<OrderCard order=\{order\} onOpen=\{onOpen\} showOutbound=\{false\} normalizeStatus=\{false\} actions=/);
-  assert.match(page,/<b>\{count\("已入库"\)\}<\/b><span>已入库<\/span>/);
-  assert.match(page,/\$\{item\.outboundCourier\?\?""\}/);
-  assert.doesNotMatch(page,/\$\{o\.outboundCourier\?\?""\}/);
-  assert.match(styles,/\.order-courier\{/);
-  assert.match(styles,/\.order-courier\.outbound\{/);
+  assertJsMatch(page,/function PurchaseCourierList/);
+  assertJsMatch(page,/<span>采购快递信息<\/span>/);
+  assertJsMatch(page,/item\.purchaseCourierCompany/);
+  assertJsMatch(page,/value=\{item\.purchaseCourierNo\} label="采购快递单号"/);
+  assertJsMatch(page,/\$\{item\.purchaseCourierCompany\}\$\{item\.purchaseCourierNo\}/);
+  assertJsMatch(page,/showOutbound&&\(readyToShip\(order\.status\)\|\|order\.status==="已发货"\)&&<OutboundOrderInfo order=\{order\}\/>/);
+  assertJsMatch(page,/order\.status!=="已发货"\)return <div className=\{`order-courier outbound/);
+  assertJsMatch(page,/<span>发货进度<\/span>/);
+  assertJsMatch(page,/件已发货<\/span>/);
+  assertJsMatch(page,/function BuyerOrderCard/);
+  assertJsMatch(page,/<OrderCard order=\{order\} onOpen=\{onOpen\} showOutbound=\{false\} normalizeStatus=\{false\} actions=/);
+  assertJsMatch(page,/<b>\{count\("已入库"\)\}<\/b><span>已入库<\/span>/);
+  assertJsMatch(page,/\$\{item\.outboundCourier\?\?""\}/);
+  assertJsNotMatch(page,/\$\{o\.outboundCourier\?\?""\}/);
+  assertCssMatch(styles,/\.order-courier\{/);
+  assertCssMatch(styles,/\.order-courier\.outbound\{/);
 });
 
 test("one purchase order supports separate purchase logistics for multiple items",async()=>{
@@ -220,10 +247,10 @@ test("one purchase order supports separate purchase logistics for multiple items
     readFile(new URL("../app/api/export/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/type OrderItemDraft = \{[^}]+purchaseCourierCompany:string[^}]+purchaseCourierNo:string\}/);
-  assert.match(page,/className="item-purchase-logistics"/);
-  assert.match(page,/每个商品可设置不同的采购快递公司与单号/);
-  assert.match(page,/items\.some\(item=>item\.purchaseCourierNo\.includes\(value\)\)/);
+  assertJsMatch(page,/type OrderItemDraft = \{[^}]+purchaseCourierCompany:string[^}]+purchaseCourierNo:string\}/);
+  assertJsMatch(page,/className="item-purchase-logistics"/);
+  assertJsMatch(page,/每个商品可设置不同的采购快递公司与单号/);
+  assertJsMatch(page,/items\.some\(item=>item\.purchaseCourierNo\.includes\(value\)\)/);
   assert.match(appRoute,/purchaseCourierCompany:string\(record\.purchaseCourierCompany\)/);
   assert.match(appRoute,/purchaseCourierNo:string\(record\.purchaseCourierNo\)/);
   assert.match(appRoute,/purchaseCourierCompany:item\.purchaseCourierCompany,purchaseCourierNo:item\.purchaseCourierNo/);
@@ -231,8 +258,8 @@ test("one purchase order supports separate purchase logistics for multiple items
   assert.match(schema,/purchaseCourierNo: text\("purchase_courier_no"\)/);
   assert.match(migration,/UPDATE "order_items" AS item[\s\S]+orders\."courier_company"[\s\S]+orders\."courier_no"/);
   assert.match(exportRoute,/item\.purchaseCourierCompany\|\|order\.courierCompany,item\.purchaseCourierNo\|\|order\.courierNo/);
-  assert.match(styles,/\.item-purchase-logistics\{/);
-  assert.match(styles,/\.purchase-courier-list\{/);
+  assertCssMatch(styles,/\.item-purchase-logistics\{/);
+  assertCssMatch(styles,/\.purchase-courier-list\{/);
 });
 
 test("shipped admin order cards show copyable outbound tracking and shipped time",async()=>{
@@ -241,15 +268,15 @@ test("shipped admin order cards show copyable outbound tracking and shipped time
     readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/shippedAt\?: string/);
-  assert.match(page,/function OutboundOrderInfo/);
-  assert.match(page,/item\.outboundCourier\?<CopyNumber value=\{item\.outboundCourier\} label="发货运单号"\/>/);
-  assert.match(page,/<span>发货时间<\/span><time>\{dateTime\(item\.shippedAt\)\}<\/time>/);
+  assertJsMatch(page,/shippedAt\?: string/);
+  assertJsMatch(page,/function OutboundOrderInfo/);
+  assertJsMatch(page,/item\.outboundCourier\?<CopyNumber value=\{item\.outboundCourier\} label="发货运单号"\/>/);
+  assertJsMatch(page,/<span>发货时间<\/span><time>\{dateTime\(item\.shippedAt\)\}<\/time>/);
   assert.match(appRoute,/shippedAt:item\.shippedAt\?\?undefined/);
-  assert.match(styles,/\.order-shipment-summary\{/);
-  assert.match(styles,/\.order-shipment-product\{/);
-  assert.match(styles,/\.order-shipment-detail\{/);
-  assert.match(styles,/grid-template-columns:58px minmax\(0,1fr\)/);
+  assertCssMatch(styles,/\.order-shipment-summary\{/);
+  assertCssMatch(styles,/\.order-shipment-product\{/);
+  assertCssMatch(styles,/\.order-shipment-detail\{/);
+  assertCssMatch(styles,/grid-template-columns:58px minmax\(0,1fr\)/);
 });
 
 test("displayed order and courier numbers provide direct copy actions",async()=>{
@@ -257,17 +284,17 @@ test("displayed order and courier numbers provide direct copy actions",async()=>
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/async function copyText\(value:string\)/);
-  assert.match(page,/navigator\.clipboard\.writeText\(value\)/);
-  assert.match(page,/function CopyButton/);
-  assert.match(page,/function CopyNumber/);
-  assert.match(page,/label="平台订单号"/);
-  assert.match(page,/label="采购快递单号"/);
-  assert.match(page,/label="发货运单号"/);
-  assert.match(page,/subtitleCopyValue=\{order\.id\}/);
-  assert.match(page,/<CopyButton value=\{item\.outboundCourier\} label="发货运单号"\/>/);
-  assert.match(styles,/\.copy-button\{/);
-  assert.match(styles,/\.copy-button\.copied\{/);
+  assertJsMatch(page,/async function copyText\(value:string\)/);
+  assertJsMatch(page,/navigator\.clipboard\.writeText\(value\)/);
+  assertJsMatch(page,/function CopyButton/);
+  assertJsMatch(page,/function CopyNumber/);
+  assertJsMatch(page,/label="平台订单号"/);
+  assertJsMatch(page,/label="采购快递单号"/);
+  assertJsMatch(page,/label="发货运单号"/);
+  assertJsMatch(page,/subtitleCopyValue=\{order\.id\}/);
+  assertJsMatch(page,/<CopyButton value=\{item\.outboundCourier\} label="发货运单号"\/>/);
+  assertCssMatch(styles,/\.copy-button\{/);
+  assertCssMatch(styles,/\.copy-button\.copied\{/);
 });
 
 test("displayed product SKUs provide direct copy actions",async()=>{
@@ -275,14 +302,14 @@ test("displayed product SKUs provide direct copy actions",async()=>{
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/function SkuList/);
-  assert.match(page,/value=\{item\.sku\} label="商品货号"/);
-  assert.match(page,/className="sku-title"/);
-  assert.match(page,/className="item-sku-meta"/);
-  assert.ok(page.includes("<SkuList items={match.items}/>"));
-  assert.ok(page.includes("<SkuList items={order.items}/>"));
-  assert.match(styles,/\.sku-copy-list\{/);
-  assert.match(styles,/\.item-sku-meta\{/);
+  assertJsMatch(page,/function SkuList/);
+  assertJsMatch(page,/value=\{item\.sku\} label="商品货号"/);
+  assertJsMatch(page,/className="sku-title"/);
+  assertJsMatch(page,/className="item-sku-meta"/);
+  assert.ok(compactJs(page).includes(compactJs("<SkuList items={match.items}/>")));
+  assert.ok(compactJs(page).includes(compactJs("<SkuList items={order.items}/>")));
+  assertCssMatch(styles,/\.sku-copy-list\{/);
+  assertCssMatch(styles,/\.item-sku-meta\{/);
 });
 
 test("order lists provide a floating smooth scroll-to-top action",async()=>{
@@ -290,15 +317,15 @@ test("order lists provide a floating smooth scroll-to-top action",async()=>{
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/function ScrollToTopButton/);
-  assert.match(page,/window\.scrollTo\(\{top:0,behavior:"smooth"\}\)/);
-  assert.equal(page.match(/<ScrollToTopButton\/>/g)?.length,1);
-  assert.match(page,/adminTab === "orders"/);
-  assert.match(page,/buyerTab === "mine"/);
-  assert.match(styles,/\.scroll-top-button\{/);
-  assert.match(styles,/position:fixed/);
-  assert.match(styles,/opacity:\.32/);
-  assert.match(styles,/backdrop-filter:blur\(4px\)/);
+  assertJsMatch(page,/function ScrollToTopButton/);
+  assertJsMatch(page,/window\.scrollTo\(\{top:0,behavior:"smooth"\}\)/);
+  assert.equal(compactJs(page).match(/<ScrollToTopButton\/>/g)?.length,1);
+  assertJsMatch(page,/adminTab === "orders"/);
+  assertJsMatch(page,/buyerTab === "mine"/);
+  assertCssMatch(styles,/\.scroll-top-button\{/);
+  assertCssMatch(styles,/position:fixed/);
+  assertCssMatch(styles,/opacity:\.32/);
+  assertCssMatch(styles,/backdrop-filter:blur\(4px\)/);
 });
 
 test("all signed-in roles have a persistent logout entry",async()=>{
@@ -306,7 +333,7 @@ test("all signed-in roles have a persistent logout entry",async()=>{
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/api/auth/logout/route.ts",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/className="identity-logout" href="\/api\/auth\/logout">退出<\/a>/);
+  assertJsMatch(page,/className="identity-logout" href="\/api\/auth\/logout">退出<\/a>/);
   assert.match(logoutRoute,/location:"\/login"/);
   assert.match(logoutRoute,/clearSessionCookie\(\)/);
 });
@@ -316,20 +343,20 @@ test("buyer snapshots show shipment status but hide outbound logistics",async()=
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/showLocation=\{role === "admin"\}/);
-  assert.match(page,/canManage=\{role === "admin"\}/);
-  assert.match(page,/showLocation && order\.location && <KeyValue label="库位"/);
-  assert.match(page,/showLocation && order\.location && <li>/);
-  assert.match(page,/!showLocation&&order\.status==="已入库"&&<li><b>已入库<\/b><span>仓库已完成入库<\/span><\/li>/);
-  assert.match(page,/normalizeStatus\?statusLabel\(order\.status\):order\.status/);
-  assert.match(page,/canManage\?statusLabel\(order\.status\):order\.status/);
-  assert.match(page,/canManage&&item\.shipped&&<div className="item-ship-block">/);
-  assert.match(page,/canManage&&readyToShip\(order\.status\)&&!item\.shipped&&<button className="item-ship-button"/);
-  assert.match(page,/canManage && order\.status === "待审核"/);
-  assert.match(page,/\["全部","待审核","在途","已入库","已发货","已驳回"\]/);
-  assert.doesNotMatch(page,/\["全部","待审核","在途","待发货","已发货"\]/);
+  assertJsMatch(page,/showLocation=\{role === "admin"\}/);
+  assertJsMatch(page,/canManage=\{role === "admin"\}/);
+  assertJsMatch(page,/showLocation && order\.location && <KeyValue label="库位"/);
+  assertJsMatch(page,/showLocation && order\.location && <li>/);
+  assertJsMatch(page,/!showLocation&&order\.status==="已入库"&&<li><b>已入库<\/b><span>仓库已完成入库<\/span><\/li>/);
+  assertJsMatch(page,/normalizeStatus\?statusLabel\(order\.status\):order\.status/);
+  assertJsMatch(page,/canManage\?statusLabel\(order\.status\):order\.status/);
+  assertJsMatch(page,/canManage&&item\.shipped&&<div className="item-ship-block">/);
+  assertJsMatch(page,/canManage&&readyToShip\(order\.status\)&&!item\.shipped&&<button className="item-ship-button"/);
+  assertJsMatch(page,/canManage && order\.status === "待审核"/);
+  assertJsMatch(page,/\["全部","待审核","在途","已入库","已发货","已驳回"\]/);
+  assertJsNotMatch(page,/\["全部","待审核","在途","待发货","已发货"\]/);
   for(const overlay of ["receipt","scan","manual-receive","reject","ship"]){
-    assert.match(page,new RegExp(`role === "admin" && overlay === "${overlay}"`));
+    assertJsMatch(page,new RegExp(`role === "admin" && overlay === "${overlay}"`));
   }
   assert.match(appRoute,/!isAdmin&&derived==="待发货"\?"已入库":derived/);
   assert.match(appRoute,/\.\.\.\(isAdmin\?\{/);
@@ -343,22 +370,22 @@ test("administrator ships each order item individually with resale details",asyn
     readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/const readyToShip = \(status:OrderStatus\) => status === "已入库" \|\| status === "待发货"/);
-  assert.match(page,/className="shipping-guide"/);
-  assert.match(page,/更新发货信息/);
-  assert.match(page,/readyToShip\(order\.status\) \? <button[^\n]+🚚 去发货<\/button>/);
-  assert.match(page,/title=\{editingShipping\?"编辑发货信息":"更新发货信息"\}/);
-  assert.match(page,/保存发货信息并扣减库存/);
-  assert.match(page,/value=\{resalePlatform\} onChange=\{e=>setResalePlatform\(e\.target\.value\)\}/);
-  assert.match(page,/<span>二级平台<\/span>/);
-  assert.match(page,/<span>二级平台单号（选填）<\/span>/);
-  assert.match(page,/<span>预估售价（选填）<\/span>/);
-  assert.match(page,/disabled=\{!courier\.trim\(\)\|\|!resolvedCompany\}/);
-  assert.doesNotMatch(page,/disabled=\{!price/);
-  assert.doesNotMatch(page,/二手平台/);
-  assert.match(page,/item\.outboundCourier\?\?""/);
-  assert.match(page,/onSubmit\(item\.id,Boolean\(item\.shipped\),resale,Number\(price\|\|0\),courier\.trim\(\),resolvedCompany,resalePlatform\)/);
-  assert.match(page,/onShipItem=\{\(itemId\)/);
+  assertJsMatch(page,/const readyToShip = \(status:OrderStatus\) => status === "已入库" \|\| status === "待发货"/);
+  assertJsMatch(page,/className="shipping-guide"/);
+  assertJsMatch(page,/更新发货信息/);
+  assertJsMatch(page,/readyToShip\(order\.status\) \? <button[^\n]+🚚 去发货<\/button>/);
+  assertJsMatch(page,/title=\{editingShipping\?"编辑发货信息":"更新发货信息"\}/);
+  assertJsMatch(page,/保存发货信息并扣减库存/);
+  assertJsMatch(page,/value=\{resalePlatform\} onChange=\{e=>setResalePlatform\(e\.target\.value\)\}/);
+  assertJsMatch(page,/<span>二级平台<\/span>/);
+  assertJsMatch(page,/<span>二级平台单号（选填）<\/span>/);
+  assertJsMatch(page,/<span>预估售价（选填）<\/span>/);
+  assertJsMatch(page,/disabled=\{!courier\.trim\(\)\|\|!resolvedCompany\}/);
+  assertJsNotMatch(page,/disabled=\{!price/);
+  assertJsNotMatch(page,/二手平台/);
+  assertJsMatch(page,/item\.outboundCourier\?\?""/);
+  assertJsMatch(page,/onSubmit\(item\.id,Boolean\(item\.shipped\),resale,Number\(price\|\|0\),courier\.trim\(\),resolvedCompany,resalePlatform\)/);
+  assertJsMatch(page,/onShipItem=\{\(itemId\)/);
   assert.match(appRoute,/resalePlatform:item\.resalePlatform\?\?undefined/);
   assert.match(appRoute,/outboundCompany:item\.outboundCompany\?\?undefined/);
   assert.match(appRoute,/if\(!order\|\|order\.status!=="已入库"\)throw conflict\("订单未入库，不能发货"\)/);
@@ -366,7 +393,7 @@ test("administrator ships each order item individually with resale details",asyn
   assert.match(appRoute,/if\(item\.shippedAt\)throw conflict\("该商品已发货，请勿重复操作"\)/);
   assert.match(appRoute,/resaleOrderNo:resaleNo\|\|null/);
   assert.match(appRoute,/salePriceCents:sale>0\?sale:null/);
-  assert.match(styles,/\.shipping-guide\{/);
+  assertCssMatch(styles,/\.shipping-guide\{/);
 });
 
 test("administrator can edit shipped logistics and batch ship ready orders atomically",async()=>{
@@ -375,24 +402,24 @@ test("administrator can edit shipped logistics and batch ship ready orders atomi
     readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/"update-shipping":"ship"/);
-  assert.match(page,/order\.status === "已发货" \? <button[^\n]+编辑发货信息<\/button>/);
-  assert.match(page,/function BatchShipSheet/);
-  assert.match(page,/统一物流公司，逐笔填写运单号/);
-  assert.match(page,/onBatchShip=\{batchShip\}/);
-  assert.match(page,/className="batch-ship-button"/);
+  assertJsMatch(page,/"update-shipping":"ship"/);
+  assertJsMatch(page,/order\.status === "已发货" \? <button[^\n]+编辑发货信息<\/button>/);
+  assertJsMatch(page,/function BatchShipSheet/);
+  assertJsMatch(page,/统一物流公司，逐笔填写运单号/);
+  assertJsMatch(page,/onBatchShip=\{batchShip\}/);
+  assertJsMatch(page,/className="batch-ship-button"/);
   assert.match(appRoute,/if\(action==="update-shipping"\)/);
   assert.match(appRoute,/if\(!item\.shippedAt\)throw conflict\("只有已发货商品可以修改发货物流"\)/);
   assert.match(appRoute,/action:"update_shipping"/);
   assert.match(appRoute,/salePriceCents:sale>0\?sale:null,outboundCompany:company/);
   assert.match(appRoute,/before:\{salePriceCents:item\.salePriceCents/);
-  assert.match(page,/保存预估售价与发货物流/);
+  assertJsMatch(page,/保存预估售价与发货物流/);
   assert.match(appRoute,/if\(action==="batch-ship"\)/);
   assert.match(appRoute,/await db\.transaction\(async tx=>\{/);
   assert.match(appRoute,/action:"batch_ship"/);
   assert.match(appRoute,/shippedCount:shipments\.length/);
-  assert.match(styles,/\.batch-shipment-list\{/);
-  assert.match(styles,/\.shipping-edit-action/);
+  assertCssMatch(styles,/\.batch-shipment-list\{/);
+  assertCssMatch(styles,/\.shipping-edit-action/);
 });
 
 test("purchase courier companies are selectable, persisted, and support custom values",async()=>{
@@ -403,11 +430,11 @@ test("purchase courier companies are selectable, persisted, and support custom v
     readFile(new URL("../app/api/export/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../drizzle/0002_add_purchase_courier_company.sql",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/const courierCompanies = \["顺丰速运","京东物流","中通快递"/);
-  assert.match(page,/<span>采购快递公司 \*<\/span>/);
-  assert.match(page,/<option>其他<\/option>/);
-  assert.match(page,/<span>其他快递公司/);
-  assert.match(page,/purchaseCourierCompany:item\.purchaseCourierCompany/);
+  assertJsMatch(page,/const courierCompanies = \["顺丰速运","京东物流","中通快递"/);
+  assertJsMatch(page,/<span>采购快递公司 \*<\/span>/);
+  assertJsMatch(page,/<option>其他<\/option>/);
+  assertJsMatch(page,/<span>其他快递公司/);
+  assertJsMatch(page,/purchaseCourierCompany:item\.purchaseCourierCompany/);
   assert.match(schema,/courierCompany: text\("courier_company"\)/);
   assert.match(appRoute,/courierCompany:row\.courierCompany/);
   assert.match(appRoute,/采购快递公司与采购快递单号/);
@@ -422,18 +449,18 @@ test("administrator can reset member passwords from the profile page",async()=>{
     readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/function ResetPasswordSheet/);
-  assert.match(page,/onResetPassword=\{resetPassword\}/);
-  assert.match(page,/mutate\("reset-user-password"/);
-  assert.match(page,/>改密<\/button>/);
-  assert.match(page,/重置成员密码/);
-  assert.match(page,/确认重置密码/);
-  assert.match(page,/两次输入不一致/);
+  assertJsMatch(page,/function ResetPasswordSheet/);
+  assertJsMatch(page,/onResetPassword=\{resetPassword\}/);
+  assertJsMatch(page,/mutate\("reset-user-password"/);
+  assertJsMatch(page,/>改密<\/button>/);
+  assertJsMatch(page,/重置成员密码/);
+  assertJsMatch(page,/确认重置密码/);
+  assertJsMatch(page,/两次输入不一致/);
   assert.match(appRoute,/if\(action==="reset-user-password"\)/);
   assert.match(appRoute,/password\.length<8/);
   assert.match(appRoute,/passwordHash:await hash\(password,12\)/);
   assert.match(appRoute,/action:"reset_password"/);
-  assert.match(styles,/\.field-error/);
+  assertCssMatch(styles,/\.field-error/);
 });
 
 test("platform order number is optional while purchase courier number is required",async()=>{
@@ -444,11 +471,11 @@ test("platform order number is optional while purchase courier number is require
     readFile(new URL("../drizzle/0003_platform_order_no_optional.sql",import.meta.url),"utf8"),
     readFile(new URL("../lib/auth.ts",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/平台订单号（选填）/);
-  assert.match(page,/<span>采购快递单号 \*<\/span>/);
-  assert.match(page,/item\.purchaseCourierNo\.trim\(\)/);
-  assert.match(page,/平台订单号选填；每个商品需分别填写采购快递公司与快递单号/);
-  assert.match(page,/order\.platformNo\|\|"未填写"/);
+  assertJsMatch(page,/平台订单号（选填）/);
+  assertJsMatch(page,/<span>采购快递单号 \*<\/span>/);
+  assertJsMatch(page,/item\.purchaseCourierNo\.trim\(\)/);
+  assertJsMatch(page,/平台订单号选填；每个商品需分别填写采购快递公司与快递单号/);
+  assertJsMatch(page,/order\.platformNo\|\|"未填写"/);
   assert.match(appRoute,/if\(!platform\)return Response\.json\(\{error:"请填写采购渠道"\}/);
   assert.doesNotMatch(appRoute,/!platformNo/);
   assert.match(appRoute,/if\(platformNo\)\{/);
@@ -478,14 +505,14 @@ test("one purchase order carries multiple item rows with per-item shipping",asyn
   assert.match(appRoute,/const allShipped=rawItems\.length>0&&rawItems\.every\(item=>item\.shippedAt\)/);
   assert.match(appRoute,/for\(const item of items\)\{[\s\S]*?inventoryLots\)\.values\(\{itemId:item\.id/);
   assert.match(appRoute,/eq\(inventoryLots\.itemId,itemId\)/);
-  assert.match(page,/type OrderItem =/);
-  assert.match(page,/className="items-editor"/);
-  assert.match(page,/className="item-add-button"/);
-  assert.match(page,/<b>添加商品<\/b>/);
-  assert.match(page,/`商品 \$\{index\+1\}`/);
-  assert.match(page,/className="items-total"/);
-  assert.match(page,/<h3>商品清单<\/h3>/);
-  assert.match(page,/\$\{order\.title\} 等\$\{order\.itemCount\}件商品/);
+  assertJsMatch(page,/type OrderItem =/);
+  assertJsMatch(page,/className="items-editor"/);
+  assertJsMatch(page,/className="item-add-button"/);
+  assertJsMatch(page,/<b>添加商品<\/b>/);
+  assertJsMatch(page,/`商品 \$\{index\+1\}`/);
+  assertJsMatch(page,/className="items-total"/);
+  assertJsMatch(page,/<h3>商品清单<\/h3>/);
+  assertJsMatch(page,/\$\{order\.title\} 等\$\{order\.itemCount\}件商品/);
   assert.match(exportRoute,/itemsByOrder/);
   assert.match(exportRoute,/order\.status==="已入库"\?\(item\.shippedAt\?"已发货":"待发货"\):order\.status/);
 });
@@ -495,41 +522,41 @@ test("search boxes remember up to ten recent keywords per list in local storage"
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/const searchHistoryLimit=10;/);
-  assert.match(page,/window\.localStorage\.getItem\(`junjun\.search\.\$\{key\}`\)/);
-  assert.match(page,/function Search\(\{ value,onChange,placeholder,historyKey \}/);
-  assert.match(page,/\[trimmed,\.\.\.current\.filter\(item=>item!==trimmed\)\]\.slice\(0,searchHistoryLimit\)/);
-  assert.match(page,/onBlur=\{\(\)=>\{remember\(value\);window\.setTimeout\(\(\)=>setFocused\(false\),120\);\}\}/);
-  assert.match(page,/if\(e\.key==="Enter"\)\{e\.preventDefault\(\);remember\(value\);e\.currentTarget\.blur\(\);\}/);
-  assert.match(page,/className="search-history" aria-label="搜索记录"/);
-  assert.match(page,/>清空记录<\/button>/);
-  assert.match(page,/className="search-history-pick" onMouseDown=\{keepFocus\} onClick=\{\(\)=>\{onChange\(term\);remember\(term\);setFocused\(false\);\}\}/);
-  assert.match(page,/aria-label=\{`删除记录 \$\{term\}`\}/);
-  for(const key of ["admin-orders","buyer-orders","stock"])assert.match(page,new RegExp(`historyKey="${key}"`));
-  assert.match(styles,/\.search-history\{position:absolute/);
-  assert.match(styles,/\.search-history-remove\{/);
+  assertJsMatch(page,/const searchHistoryLimit=10;/);
+  assertJsMatch(page,/window\.localStorage\.getItem\(`junjun\.search\.\$\{key\}`\)/);
+  assertJsMatch(page,/function Search\(\{ value,onChange,placeholder,historyKey \}/);
+  assertJsMatch(page,/\[trimmed,\.\.\.current\.filter\(item=>item!==trimmed\)\]\.slice\(0,searchHistoryLimit\)/);
+  assertJsMatch(page,/onBlur=\{\(\)=>\{remember\(value\);window\.setTimeout\(\(\)=>setFocused\(false\),120\);\}\}/);
+  assertJsMatch(page,/if\(e\.key==="Enter"\)\{e\.preventDefault\(\);remember\(value\);e\.currentTarget\.blur\(\);\}/);
+  assertJsMatch(page,/className="search-history" aria-label="搜索记录"/);
+  assertJsMatch(page,/>清空记录<\/button>/);
+  assertJsMatch(page,/className="search-history-pick" onMouseDown=\{keepFocus\} onClick=\{\(\)=>\{onChange\(term\);remember\(term\);setFocused\(false\);\}\}/);
+  assertJsMatch(page,/aria-label=\{`删除记录 \$\{term\}`\}/);
+  for(const key of ["admin-orders","buyer-orders","stock"])assertJsMatch(page,new RegExp(`historyKey="${key}"`));
+  assertCssMatch(styles,/\.search-history\{position:absolute/);
+  assertCssMatch(styles,/\.search-history-remove\{/);
 });
 
 test("order list headers summarize both order count and total item quantity",async()=>{
   const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
-  assert.match(page,/const orderListSummary = \(list:PurchaseOrder\[\]\) => `\$\{list\.length\} 笔 · \$\{list\.reduce\(\(sum,order\)=>sum\+order\.items\.reduce\(\(qty,item\)=>qty\+item\.qty,0\),0\)\} 件`/);
-  assert.match(page,/<SectionHead title="采购订单" note=\{orderListSummary\(visible\)\} \/>/);
-  assert.match(page,/<SectionHead title="我的采购订单" note=\{orderListSummary\(visible\)\} \/>/);
-  assert.doesNotMatch(page,/note=\{`\$\{visible\.length\} 笔`\}/);
+  assertJsMatch(page,/const orderListSummary = \(list:PurchaseOrder\[\]\) => `\$\{list\.length\} 笔 · \$\{list\.reduce\(\(sum,order\)=>sum\+order\.items\.reduce\(\(qty,item\)=>qty\+item\.qty,0\),0\)\} 件`/);
+  assertJsMatch(page,/<SectionHead title="采购订单" note=\{orderListSummary\(visible\)\} \/>/);
+  assertJsMatch(page,/<SectionHead title="我的采购订单" note=\{orderListSummary\(visible\)\} \/>/);
+  assertJsNotMatch(page,/note=\{`\$\{visible\.length\} 笔`\}/);
 });
 
 test("multi-product order card titles show styles and total quantity",async()=>{
   const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
-  assert.match(page,/const totalQuantity=order\.items\.reduce\(\(sum,item\)=>sum\+item\.qty,0\)/);
-  assert.match(page,/const listTitle=order\.itemCount>1/);
-  assert.match(page,/等\$\{order\.itemCount\}款 · 共\$\{totalQuantity\}件/);
-  assert.match(page,/<h4 title=\{listTitle\}>\{listTitle\}<\/h4>/);
+  assertJsMatch(page,/const totalQuantity=order\.items\.reduce\(\(sum,item\)=>sum\+item\.qty,0\)/);
+  assertJsMatch(page,/const listTitle=order\.itemCount>1/);
+  assertJsMatch(page,/等\$\{order\.itemCount\}款 · 共\$\{totalQuantity\}件/);
+  assertJsMatch(page,/<h4 title=\{listTitle\}>\{listTitle\}<\/h4>/);
 });
 
 test("admin batch selection summarizes selected orders and item quantity",async()=>{
   const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
-  assert.match(page,/selectedItemQuantity=selectedOrders\.reduce\(\(sum,order\)=>sum\+order\.items\.reduce\(\(qty,item\)=>qty\+item\.qty,0\),0\)/);
-  assert.match(page,/已选择 \$\{selectedIds\.length\} 笔 · 共 \$\{selectedItemQuantity\} 件/);
+  assertJsMatch(page,/selectedItemQuantity=selectedOrders\.reduce\(\(sum,order\)=>sum\+order\.items\.reduce\(\(qty,item\)=>qty\+item\.qty,0\),0\)/);
+  assertJsMatch(page,/已选择 \$\{selectedIds\.length\} 笔 · 共 \$\{selectedItemQuantity\} 件/);
 });
 
 test("order entry recognizes screenshots through a vision model and prefills the form",async()=>{
@@ -553,18 +580,18 @@ test("order entry recognizes screenshots through a vision model and prefills the
   assert.doesNotMatch(route,/requireAdmin/);
   assert.match(route,/if \(!visionConfigured\(\)\) return Response\.json\(\{ error: "尚未配置智能识图服务，请手动填写订单信息" \}, \{ status: 501 \}\)/);
   assert.match(route,/image\.size > 8 \* 1024 \* 1024/);
-  assert.match(page,/type RecognizedOrder =/);
-  assert.match(page,/fetch\("\/api\/orders\/recognize",\{method:"POST",body:form\}\)/);
-  assert.match(page,/className=\{`recognize-zone \$\{recognizing\?"busy":""\}`\}/);
-  assert.match(page,/智能识图：上传订单截图自动填写/);
-  assert.match(page,/<em>此为辅助功能，识图后需核对！<\/em>/);
-  assert.match(styles,/\.purchase-form \.recognize-zone em\{/);
-  assert.match(page,/setItems\(current=>current\.every\(item=>!item\.title\.trim\(\)&&!item\.sku\.trim\(\)&&!item\.size\.trim\(\)&&!item\.amount\.trim\(\)\)\?drafts:\[\.\.\.current,\.\.\.drafts\]\)/);
-  assert.match(page,/setFiles\(current=>current\.length>=3\|\|current\.some\(existing=>existing\.name===file\.name&&existing\.size===file\.size\)\?current:\[\.\.\.current,file\]\)/);
-  assert.match(page,/截图已加入订单附件/);
-  assert.match(page,/className="recognize-result failed"/);
-  assert.match(styles,/\.purchase-form \.recognize-zone\{/);
-  assert.match(styles,/\.recognize-result\.failed\{/);
+  assertJsMatch(page,/type RecognizedOrder =/);
+  assertJsMatch(page,/fetch\("\/api\/orders\/recognize",\{method:"POST",body:form\}\)/);
+  assertJsMatch(page,/className=\{`recognize-zone \$\{recognizing\?"busy":""\}`\}/);
+  assertJsMatch(page,/智能识图：上传订单截图自动填写/);
+  assertJsMatch(page,/<em>此为辅助功能，识图后需核对！<\/em>/);
+  assertCssMatch(styles,/\.purchase-form \.recognize-zone em\{/);
+  assertJsMatch(page,/setItems\(current=>current\.every\(item=>!item\.title\.trim\(\)&&!item\.sku\.trim\(\)&&!item\.size\.trim\(\)&&!item\.amount\.trim\(\)\)\?drafts:\[\.\.\.current,\.\.\.drafts\]\)/);
+  assertJsMatch(page,/setFiles\(current=>current\.length>=3\|\|current\.some\(existing=>existing\.name===file\.name&&existing\.size===file\.size\)\?current:\[\.\.\.current,file\]\)/);
+  assertJsMatch(page,/截图已加入订单附件/);
+  assertJsMatch(page,/className="recognize-result failed"/);
+  assertCssMatch(styles,/\.purchase-form \.recognize-zone\{/);
+  assertCssMatch(styles,/\.recognize-result\.failed\{/);
   for(const key of ["VISION_API_BASE","VISION_API_KEY","VISION_MODEL"]){
     assert.match(envExample,new RegExp(`^${key}=`,"m"));
     assert.match(compose,new RegExp(`${key}: \\$\\{${key}:-\\}`));
@@ -586,14 +613,14 @@ test("administrator can delete buyer accounts only, with confirmation and histor
   assert.match(appRoute,/throw conflict\("该采购员已有订单或操作记录，无法删除；如需禁止登录请使用「停用」"\)/);
   assert.match(appRoute,/await tx\.delete\(users\)\.where\(eq\(users\.id,targetId\)\)/);
   assert.match(appRoute,/action:"delete_user"/);
-  assert.match(page,/mutate\("delete-user",\{userId\}\)/);
-  assert.match(page,/onDeleteUser=\{deleteUser\}/);
-  assert.match(page,/function DeleteUserSheet/);
-  assert.match(page,/person\.role==="buyer"&&person\.id!==user\.id&&<button className="member-delete-button"/);
-  assert.match(page,/<DeleteUserSheet member=\{deleteTarget\}/);
-  assert.match(page,/确定删除该采购员账号？/);
-  assert.match(page,/确认删除/);
-  assert.match(styles,/\.member-delete-button\{/);
+  assertJsMatch(page,/mutate\("delete-user",\{userId\}\)/);
+  assertJsMatch(page,/onDeleteUser=\{deleteUser\}/);
+  assertJsMatch(page,/function DeleteUserSheet/);
+  assertJsMatch(page,/person\.role==="buyer"&&person\.id!==user\.id&&<button className="member-delete-button"/);
+  assertJsMatch(page,/<DeleteUserSheet member=\{deleteTarget\}/);
+  assertJsMatch(page,/确定删除该采购员账号？/);
+  assertJsMatch(page,/确认删除/);
+  assertCssMatch(styles,/\.member-delete-button\{/);
 });
 
 test("admin order list filters by multiple purchasers at once",async()=>{
@@ -601,19 +628,19 @@ test("admin order list filters by multiple purchasers at once",async()=>{
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/const \[buyers,setBuyers\] = useState<string\[\]>\(\[\]\)/);
-  assert.match(page,/\(buyers\.length === 0 \|\| buyers\.includes\(order\.purchaser\)\)/);
-  assert.match(page,/const toggleBuyer = \(name:string\) => setBuyers\(current => current\.includes\(name\) \? current\.filter\(item => item !== name\) : \[\.\.\.current, name\]\)/);
-  assert.match(page,/buyers\.length <= 2 \? buyers\.join\("、"\) : `\$\{buyers\[0\]\} 等 \$\{buyers\.length\} 人`/);
-  assert.match(page,/className=\{`buyer-filter-trigger \$\{buyers\.length \? "active" : ""\}/);
-  assert.match(page,/className="buyer-filter-panel" role="group"/);
-  assert.match(page,/<b>选择采购员<\/b>/);
-  assert.match(page,/className="buyer-filter-clear" onClick=\{\(\) => setBuyers\(\[\]\)\}/);
-  assert.match(page,/className="buyer-filter-done" onClick=\{\(\) => setBuyerOpen\(false\)\}/);
-  assert.match(page,/setStatuses\(\["待发货"\]\);setPlatform\("全部渠道"\);setBuyers\(\[\]\);/);
-  assert.doesNotMatch(page,/<option>全部采购员<\/option>/);
-  assert.match(styles,/\.buyer-filter-trigger\{/);
-  assert.match(styles,/\.buyer-filter-options button\.checked\{/);
+  assertJsMatch(page,/const \[buyers,setBuyers\] = useState<string\[\]>\(\[\]\)/);
+  assertJsMatch(page,/\(buyers\.length === 0 \|\| buyers\.includes\(order\.purchaser\)\)/);
+  assertJsMatch(page,/const toggleBuyer = \(name:string\) => setBuyers\(current => current\.includes\(name\) \? current\.filter\(item => item !== name\) : \[\.\.\.current, name\]\)/);
+  assertJsMatch(page,/buyers\.length <= 2 \? buyers\.join\("、"\) : `\$\{buyers\[0\]\} 等 \$\{buyers\.length\} 人`/);
+  assertJsMatch(page,/className=\{`buyer-filter-trigger \$\{buyers\.length \? "active" : ""\}/);
+  assertJsMatch(page,/className="buyer-filter-panel" role="group"/);
+  assertJsMatch(page,/<b>选择采购员<\/b>/);
+  assertJsMatch(page,/className="buyer-filter-clear" onClick=\{\(\) => setBuyers\(\[\]\)\}/);
+  assertJsMatch(page,/className="buyer-filter-done" onClick=\{\(\) => setBuyerOpen\(false\)\}/);
+  assertJsMatch(page,/setStatuses\(\["待发货"\]\);setPlatform\("全部渠道"\);setBuyers\(\[\]\);/);
+  assertJsNotMatch(page,/<option>全部采购员<\/option>/);
+  assertCssMatch(styles,/\.buyer-filter-trigger\{/);
+  assertCssMatch(styles,/\.buyer-filter-options button\.checked\{/);
 });
 
 test("admin and buyer order lists filter by multiple statuses at once",async()=>{
@@ -621,22 +648,22 @@ test("admin and buyer order lists filter by multiple statuses at once",async()=>
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/const matchesStatusFilter = \(order:PurchaseOrder, statuses:string\[\]\) => !statuses\.length \|\| statuses\.some\(/);
-  assert.match(page,/const toggleStatusFilter = \(current:string\[\], value:string\) => value === "全部" \? \[\] : current\.includes\(value\)/);
-  assert.match(page,/function StatusFilter\(/);
-  assert.match(page,/aria-label="按状态筛选，可多选"/);
-  assert.match(page,/const \[statuses,setStatuses\] = useState<string\[\]>\(\[\]\)/);
-  assert.match(page,/matchesStatusFilter\(order, statuses\)/);
-  assert.match(page,/matchesStatusFilter\(o, statuses\)/);
-  assert.match(page,/<StatusFilter options=\{\["全部","待审核","在途","待发货","已发货","已驳回"\]\} value=\{statuses\} onChange=\{setStatuses\} \/>/);
-  assert.match(page,/<StatusFilter options=\{\["全部","待审核","在途","已入库","已发货","已驳回"\]\} value=\{statuses\} onChange=\{setStatuses\} \/>/);
-  assert.match(page,/className="status-filter-clear" onClick=\{\(\) => onChange\(\[\]\)\}/);
-  assert.match(page,/className="status-filter-summary" role="status" aria-live="polite"/);
-  assert.match(page,/className="status-filter-values" aria-label="已选择的状态"/);
-  assert.match(styles,/\.status-filter-clear\{/);
-  assert.match(styles,/\.status-filter-summary\{/);
-  assert.match(styles,/\.status-filter-copy em\{/);
-  assert.match(styles,/\.status-filter-values>span\{/);
+  assertJsMatch(page,/const matchesStatusFilter = \(order:PurchaseOrder, statuses:string\[\]\) => !statuses\.length \|\| statuses\.some\(/);
+  assertJsMatch(page,/const toggleStatusFilter = \(current:string\[\], value:string\) => value === "全部" \? \[\] : current\.includes\(value\)/);
+  assertJsMatch(page,/function StatusFilter\(/);
+  assertJsMatch(page,/aria-label="按状态筛选，可多选"/);
+  assertJsMatch(page,/const \[statuses,setStatuses\] = useState<string\[\]>\(\[\]\)/);
+  assertJsMatch(page,/matchesStatusFilter\(order, statuses\)/);
+  assertJsMatch(page,/matchesStatusFilter\(o, statuses\)/);
+  assertJsMatch(page,/<StatusFilter options=\{\["全部","待审核","在途","待发货","已发货","已驳回"\]\} value=\{statuses\} onChange=\{setStatuses\} \/>/);
+  assertJsMatch(page,/<StatusFilter options=\{\["全部","待审核","在途","已入库","已发货","已驳回"\]\} value=\{statuses\} onChange=\{setStatuses\} \/>/);
+  assertJsMatch(page,/className="status-filter-clear" onClick=\{\(\) => onChange\(\[\]\)\}/);
+  assertJsMatch(page,/className="status-filter-summary" role="status" aria-live="polite"/);
+  assertJsMatch(page,/className="status-filter-values" aria-label="已选择的状态"/);
+  assertCssMatch(styles,/\.status-filter-clear\{/);
+  assertCssMatch(styles,/\.status-filter-summary\{/);
+  assertCssMatch(styles,/\.status-filter-copy em\{/);
+  assertCssMatch(styles,/\.status-filter-values>span\{/);
 });
 
 test("manual receipt offers recently used locations as one-tap choices",async()=>{
@@ -644,18 +671,18 @@ test("manual receipt offers recently used locations as one-tap choices",async()=
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/const recentLocations = useMemo\(/);
-  assert.match(page,/\.sort\(\(a, b\) => \(b\.receivedAt \?\? ""\)\.localeCompare\(a\.receivedAt \?\? ""\)\)/);
-  assert.match(page,/\.slice\(0, 12\), \[orders\]\)/);
-  assert.match(page,/<ManualReceiveSheet order=\{selected\} recentLocations=\{recentLocations\}/);
-  assert.match(page,/function ManualReceiveSheet\(\{order,recentLocations,onClose,onSubmit\}/);
-  assert.match(page,/recentLocations\.length>0&&<div className="location-history">/);
-  assert.match(page,/<div className="location-history-head"><i>📍<\/i><b>历史库位<\/b>/);
-  assert.match(page,/className=\{item===activeLocation\?"active":""\} aria-pressed=\{item===activeLocation\} onClick=\{\(\)=>setLocation\(item\)\}>\{index===0&&<em>最近<\/em>\}<span>\{item\}<\/span>/);
-  assert.match(styles,/\.location-history\{/);
-  assert.match(styles,/\.location-history-head\{/);
-  assert.match(styles,/\.location-chips button:before\{/);
-  assert.match(styles,/\.location-chips button\.active\{/);
+  assertJsMatch(page,/const recentLocations = useMemo\(/);
+  assertJsMatch(page,/\.sort\(\(a, b\) => \(b\.receivedAt \?\? ""\)\.localeCompare\(a\.receivedAt \?\? ""\)\)/);
+  assertJsMatch(page,/\.slice\(0, 12\), \[orders\]\)/);
+  assertJsMatch(page,/<ManualReceiveSheet order=\{selected\} recentLocations=\{recentLocations\}/);
+  assertJsMatch(page,/function ManualReceiveSheet\(\{order,recentLocations,onClose,onSubmit\}/);
+  assertJsMatch(page,/recentLocations\.length>0&&<div className="location-history">/);
+  assertJsMatch(page,/<div className="location-history-head"><i>📍<\/i><b>历史库位<\/b>/);
+  assertJsMatch(page,/className=\{item===activeLocation\?"active":""\} aria-pressed=\{item===activeLocation\} onClick=\{\(\)=>setLocation\(item\)\}>\{index===0&&<em>最近<\/em>\}<span>\{item\}<\/span>/);
+  assertCssMatch(styles,/\.location-history\{/);
+  assertCssMatch(styles,/\.location-history-head\{/);
+  assertCssMatch(styles,/\.location-chips button:before\{/);
+  assertCssMatch(styles,/\.location-chips button\.active\{/);
 });
 
 test("administrator can revert a received order back to in-transit and roll back inventory",async()=>{
@@ -673,32 +700,32 @@ test("administrator can revert a received order back to in-transit and roll back
   assert.match(appRoute,/tx\.delete\(inventoryLots\)\.where\(eq\(inventoryLots\.orderId,id\)\)/);
   assert.match(appRoute,/status:"在途",receivedAt:null,location:null/);
   assert.match(appRoute,/action:"revert_receive"/);
-  assert.match(page,/type Overlay = [^;]+"revert-receive"/);
-  assert.match(page,/mutate\("revert-receive",\{orderId:id\}\)/);
-  assert.match(page,/订单已退回在途，库存已回滚/);
-  assert.match(page,/function RevertReceiveSheet/);
-  assert.match(page,/role === "admin" && overlay === "revert-receive"/);
-  assert.match(page,/canManage && readyToShip\(order\.status\) && !order\.items\.some\(item=>item\.shipped\) && <button className="revert-receive-button"/);
-  assert.match(page,/确认退回在途/);
-  assert.match(styles,/\.revert-receive-button\{/);
-  assert.match(styles,/\.revert-warning\{/);
+  assertJsMatch(page,/type Overlay = [^;]+"revert-receive"/);
+  assertJsMatch(page,/mutate\("revert-receive",\{orderId:id\}\)/);
+  assertJsMatch(page,/订单已退回在途，库存已回滚/);
+  assertJsMatch(page,/function RevertReceiveSheet/);
+  assertJsMatch(page,/role === "admin" && overlay === "revert-receive"/);
+  assertJsMatch(page,/canManage && readyToShip\(order\.status\) && !order\.items\.some\(item=>item\.shipped\) && <button className="revert-receive-button"/);
+  assertJsMatch(page,/确认退回在途/);
+  assertCssMatch(styles,/\.revert-receive-button\{/);
+  assertCssMatch(styles,/\.revert-warning\{/);
 });
 
 test("multi-item entry and detail views carry dedicated visual styles",async()=>{
   const styles=await readFile(new URL("../app/globals.css",import.meta.url),"utf8");
   for(const rule of [".items-editor{",".items-editor-head{",".item-card{",".item-card-head i{",".item-remove{",".item-add-button{",".items-total{",".items-card-head{",".item-row{",".item-index{",".item-row-top{",".item-ship-button{",".item-edit-button{",".item-ship-block{",".item-ship-line{"]){
-    assert.ok(styles.includes(rule),`missing style rule ${rule}`);
+    assert.ok(compactCss(styles).includes(rule),`missing style rule ${rule}`);
   }
-  assert.match(styles,/\.item-row\.shipped \.item-index\{/);
-  assert.doesNotMatch(styles,/\.item-row-main b\{font-size:11\.5px\}/);
+  assertCssMatch(styles,/\.item-row\.shipped \.item-index\{/);
+  assert.doesNotMatch(compactCss(styles),/\.item-row-main b\{font-size:11\.5px\}/);
 });
 
 test("purchase channels are consistent across entry form, admin and buyer order filters",async()=>{
   const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
-  assert.match(page,/const purchaseChannels = \["京东","淘宝","抖音","唯品会","拼多多","其他"\]/);
-  assert.equal(page.match(/\{purchaseChannels\.map\(channel=><option key=\{channel\}>\{channel\}<\/option>\)\}/g)?.length,2);
-  assert.match(page,/\["全部渠道",\.\.\.purchaseChannels\]/);
-  assert.match(page,/\(platform === "全部渠道" \|\| o\.platform === platform\)/);
+  assertJsMatch(page,/const purchaseChannels = \["京东","淘宝","抖音","唯品会","拼多多","其他"\]/);
+  assert.equal(compactJs(page).match(/purchaseChannels\.map\(channel=>/g)?.length,2);
+  assertJsMatch(page,/\["全部渠道",\.\.\.purchaseChannels\]/);
+  assertJsMatch(page,/\(platform === "全部渠道" \|\| o\.platform === platform\)/);
 });
 
 test("uses secondary-platform terminology across UI, export, and product documentation",async()=>{
@@ -739,18 +766,18 @@ test("visitors can apply for buyer accounts and administrators approve them befo
   assert.match(appRoute,/if\(action==="review-user-application"\)/);
   assert.match(appRoute,/approve_user_application/);
   assert.match(appRoute,/reject_user_application/);
-  assert.match(page,/<SectionHead title="采购员申请"/);
-  assert.match(page,/onReview=\{\(userId,decision\)=>void run\("review-user-application"/);
-  assert.match(page,/\?"通过":"重新通过"/);
-  assert.match(page,/name="phone" type="tel" required/);
+  assertJsMatch(page,/<SectionHead title="采购员申请"/);
+  assertJsMatch(page,/onReview=\{\(userId,decision\)=>void run\("review-user-application"/);
+  assertJsMatch(page,/\?"通过":"重新通过"/);
+  assertJsMatch(page,/name="phone" type="tel" required/);
   assert.match(schema,/phone: text\("phone"\)/);
   assert.match(schema,/approvalStatus: text\("approval_status"/);
   assert.match(migration,/ADD COLUMN "approval_status" text DEFAULT 'approved' NOT NULL/);
   assert.match(migration,/CREATE UNIQUE INDEX "idx_users_phone"/);
-  assert.match(styles,/\.application-list\{/);
-  assert.match(styles,/\.register-success\{/);
-  assert.match(styles,/\.login-apply\{/);
-  assert.match(styles,/\.register-entry>i\{/);
+  assertCssMatch(styles,/\.application-list\{/);
+  assertCssMatch(styles,/\.register-success\{/);
+  assertCssMatch(styles,/\.login-apply\{/);
+  assertCssMatch(styles,/\.register-entry>i\{/);
 });
 
 test("wechat ID replaces email as the account login identifier",async()=>{
@@ -792,12 +819,12 @@ test("administrator order views show copyable purchaser phone and wechat ID",asy
   assert.match(appRoute,/purchaserPhone:phones\.get\(row\.purchaserId\)/);
   assert.match(appRoute,/purchaserWechatId:wechatIds\.get\(row\.purchaserId\)/);
   assert.match(appRoute,/\.\.\.\(isAdmin\?\{purchaserPhone:/);
-  assert.match(page,/showPurchaserContact/);
-  assert.match(page,/<span>采购员联系方式<\/span>/);
-  assert.match(page,/label="采购员微信号"/);
-  assert.match(page,/label="采购员手机号"/);
-  assert.match(page,/<KeyValue label="采购员微信号"[^>]+copyValue=\{order\.purchaserWechatId\}/);
-  assert.match(page,/<KeyValue label="采购员手机号"[^>]+copyValue=\{order\.purchaserPhone\}/);
-  assert.match(page,/canManage&&order\.purchaserWechatId/);
-  assert.match(styles,/\.order-contact\{/);
+  assertJsMatch(page,/showPurchaserContact/);
+  assertJsMatch(page,/<span>采购员联系方式<\/span>/);
+  assertJsMatch(page,/label="采购员微信号"/);
+  assertJsMatch(page,/label="采购员手机号"/);
+  assertJsMatch(page,/<KeyValue label="采购员微信号"[^>]+copyValue=\{order\.purchaserWechatId\}/);
+  assertJsMatch(page,/<KeyValue label="采购员手机号"[^>]+copyValue=\{order\.purchaserPhone\}/);
+  assertJsMatch(page,/canManage&&order\.purchaserWechatId/);
+  assertCssMatch(styles,/\.order-contact\{/);
 });
