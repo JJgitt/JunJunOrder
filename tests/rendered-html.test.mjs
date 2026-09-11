@@ -37,6 +37,13 @@ test("touch forms prevent small-font focus zoom without blocking pinch zoom", as
   assert.match(css, /input:not\(/);
   assert.match(css, /textarea,\s*select\s*\{/);
   assert.match(css, /font-size: 16px !important/);
+  assert.match(css, /\.member-list select,\s*\.member-role-select\s*\{/);
+  assert.match(css, /\.member-role-select:focus/);
+  assert.match(css, /font-size: 12px !important/);
+  assert.match(css, /\.purchase-form input\.long-no-input:not\(\[type="checkbox"\]\)/);
+  assert.match(css, /\.items-editor input\.long-no-input:not\(\[type="checkbox"\]\)/);
+  assert.match(css, /font-size: 8px !important/);
+  assert.match(css, /\.purchase-form input\.long-no-input:focus,\s*\.items-editor input\.long-no-input:focus/);
   assert.doesNotMatch(layout, /userScalable:\s*false|maximumScale:\s*1\b/);
 });
 
@@ -472,6 +479,7 @@ test("platform order number is optional while purchase courier number is require
     readFile(new URL("../lib/auth.ts",import.meta.url),"utf8"),
   ]);
   assertJsMatch(page,/平台订单号（选填）/);
+  assertJsMatch(page,/className="long-no-input"/);
   assertJsMatch(page,/<span>采购快递单号 \*<\/span>/);
   assertJsMatch(page,/item\.purchaseCourierNo\.trim\(\)/);
   assertJsMatch(page,/平台订单号选填；每个商品需分别填写采购快递公司与快递单号/);
@@ -648,6 +656,7 @@ test("administrator can delete buyer accounts only, with confirmation and histor
   assertJsMatch(page,/mutate\("delete-user",\{userId\}\)/);
   assertJsMatch(page,/onDeleteUser=\{deleteUser\}/);
   assertJsMatch(page,/function DeleteUserSheet/);
+  assertJsMatch(page,/className="member-role-select"/);
   assertJsMatch(page,/person\.role==="buyer"&&person\.id!==user\.id&&<button className="member-delete-button"/);
   assertJsMatch(page,/<DeleteUserSheet member=\{deleteTarget\}/);
   assertJsMatch(page,/确定删除该采购员账号？/);
@@ -753,6 +762,8 @@ test("multi-item entry and detail views carry dedicated visual styles",async()=>
     assert.ok(compactCss(styles).includes(rule),`missing style rule ${rule}`);
   }
   assertCssMatch(styles,/\.item-row\.shipped \.item-index\{/);
+  assertCssMatch(styles,/\.purchase-form input\.long-no-input\{font-size:5px/);
+  assertCssMatch(styles,/\.items-editor input\.long-no-input\{font-size:4\.5px/);
   assert.doesNotMatch(compactCss(styles),/\.item-row-main b\{font-size:11\.5px\}/);
 });
 
