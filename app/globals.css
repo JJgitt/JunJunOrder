@@ -1266,6 +1266,11 @@ button:active {
     box-shadow: 0 0 0 3px #1a6dff12
 }
 
+/* 录入/编辑采购单：平台单号约为旁侧 10px 字段的一半，长号更容易看全。 */
+.purchase-form input.long-no-input {
+    font-size: 5px
+}
+
 .field-grid {
     display: grid;
     grid-template-columns:1fr 1fr;
@@ -3029,6 +3034,10 @@ button:active {
     height: 36px;
     padding: 0 9px;
     font-size: 8.5px
+}
+
+.items-editor input.long-no-input {
+    font-size: 4.5px
 }
 
 .items-editor .money-input i {

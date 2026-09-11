@@ -44,6 +44,32 @@
     font-size: 16px !important;
   }
 
+  /* 平台订单号、采购快递单号比触摸默认 16px 小一半。选择器需带上同样的 :not()，否则会被整页 16px 盖住。 */
+  .purchase-form input.long-no-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  .items-editor input.long-no-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]) {
+    font-size: 8px !important;
+  }
+
+  .purchase-form input.long-no-input:focus,
+  .items-editor input.long-no-input:focus {
+    font-size: 16px !important;
+  }
+
+  /* 成员列表权限下拉是行内短控件，沿用整页 16px 会比姓名还大。 */
+  .member-list select,
+  .member-role-select {
+    font-size: 12px !important;
+    height: 30px;
+    width: auto;
+    min-width: 72px;
+    max-width: 92px;
+  }
+
+  .member-list select:focus,
+  .member-role-select:focus {
+    font-size: 16px !important;
+  }
+
   .select-row > select,
   .select-row > .buyer-filter-trigger {
     height: 42px;

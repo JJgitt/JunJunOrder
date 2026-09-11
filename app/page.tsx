@@ -983,7 +983,7 @@ function UploadPage({
             <div className="field-grid"><label><span>采购渠道 *</span><select value={platform}
                                                                           onChange={e => setPlatform(e.target.value)}>{purchaseChannels.map(channel =>
                 <option key={channel}>{channel}</option>)}</select></label><label><span>平台订单号（选填）</span><input
-                value={platformNo} onChange={e => setPlatformNo(e.target.value)} placeholder="请输入订单号"/></label></div>
+                className="long-no-input" value={platformNo} onChange={e => setPlatformNo(e.target.value)} placeholder="请输入订单号"/></label></div>
             <div className="items-editor">
                 <div className="items-editor-head"><b>商品明细</b><span>{items.length} 件商品</span></div>
                 {items.map((item, index) => <div className="item-card" key={index}>
@@ -1021,7 +1021,7 @@ function UploadPage({
                             customPurchaseCourierCompany: e.target.value === "其他" ? "" : item.customPurchaseCourierCompany
                         })}>{courierCompanies.map(company => <option key={company}>{company}</option>)}
                             <option>其他</option>
-                        </select></label><label><span>采购快递单号 *</span><input value={item.purchaseCourierNo}
+                        </select></label><label><span>采购快递单号 *</span><input className="long-no-input" value={item.purchaseCourierNo}
                                                                             onChange={e => updateItem(index, {purchaseCourierNo: e.target.value})}
                                                                             placeholder="请输入该商品快递单号"/></label></div>
                         {item.purchaseCourierCompany === "其他" &&
@@ -1135,6 +1135,7 @@ function AdminProfile({
         <div className="member-list">{members.map(person => <div key={person.id}
                                                                  className={!person.active ? "member-disabled" : ""}>
             <span><b>{person.name}</b><small>{person.wechatId}{person.phone ? ` · ${person.phone}` : ""}</small></span><select
+            className="member-role-select"
             value={person.role} disabled={person.id === user.id || !person.active}
             onChange={e => onRole(person.id, e.target.value as Role)}>
             <option value="buyer">采购员</option>
