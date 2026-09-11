@@ -29,7 +29,7 @@ function assertCssMatch(source, pattern) {
   assert.match(compactCss(source), pattern);
 }
 
-test("touch forms prevent small-font focus zoom without blocking pinch zoom", async () => {
+test("touch forms prevent iOS focus zoom while keeping field text compact", async () => {
   const css = await readFile(new URL("../app/touch-forms.css", import.meta.url), "utf8");
   const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
   assert.match(layout, /import "\.\/touch-forms\.css"/);
@@ -39,8 +39,14 @@ test("touch forms prevent small-font focus zoom without blocking pinch zoom", as
   assert.match(css, /font-size: 16px !important/);
   assert.match(css, /:focus\s*\{\s*font-size: 16px !important/);
   assert.match(css, /\.member-list select,\s*\.member-role-select\s*\{/);
-  assert.doesNotMatch(css, /font-size: (8|12|13)px !important/);
-  assert.doesNotMatch(layout, /userScalable:\s*false|maximumScale:\s*1\b/);
+  assert.match(css, /html\.ios-device[\s\S]*font-size: 13px !important/);
+  assert.match(css, /html\.ios-device input\.long-no-input[\s\S]*font-size: 12px !important/);
+  assert.match(layout, /import Script from "next\/script"/);
+  assert.match(layout, /navigator\.maxTouchPoints > 1/);
+  assert.match(layout, /classList\.add\("ios-device"\)/);
+  assert.match(layout, /content \+ ", maximum-scale=1"/);
+  assert.match(layout, /strategy="beforeInteractive"/);
+  assert.doesNotMatch(layout, /userScalable:\s*false/);
 });
 
 test("form grids shrink and touch buyer filters match native select text", async () => {
@@ -49,6 +55,7 @@ test("form grids shrink and touch buyer filters match native select text", async
   assert.match(css, /\.field-grid > label\s*\{\s*min-width: 0/);
   assert.match(css, /\.field-grid select\s*\{\s*width: 100%;\s*min-width: 0/);
   assert.match(css, /\.select-row \.buyer-filter-trigger\s*\{\s*font-size: 16px/);
+  assert.match(css, /html\.ios-device \.select-row \.buyer-filter-trigger[\s\S]*font-size: 13px/);
 });
 
 test("purchase quantity can be cleared while entering a new value", async () => {

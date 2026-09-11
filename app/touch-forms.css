@@ -50,6 +50,19 @@
   .select-row > .buyer-filter-trigger {
     height: 42px;
   }
+
+  /* iOS receives a focus-zoom guard in the root layout, so its form text can
+     stay compact without Safari enlarging the whole page on focus. */
+  html.ios-device input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  html.ios-device textarea,
+  html.ios-device select,
+  html.ios-device .select-row .buyer-filter-trigger {
+    font-size: 13px !important;
+  }
+
+  html.ios-device input.long-no-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]) {
+    font-size: 12px !important;
+  }
 }
 
 @media (any-pointer: coarse) and (max-width: 360px) {

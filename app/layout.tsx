@@ -1,6 +1,24 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 import "./touch-forms.css";
+
+const iosFocusZoomScript = `
+(() => {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (!isIOS) return;
+
+  document.documentElement.classList.add("ios-device");
+  const viewport = document.querySelector('meta[name="viewport"]');
+  if (!viewport) return;
+
+  const content = viewport.getAttribute("content") || "width=device-width, initial-scale=1";
+  if (!/maximum-scale=/.test(content.replace(/ /g, ""))) {
+    viewport.setAttribute("content", content + ", maximum-scale=1");
+  }
+})();
+`;
 
 const configuredOrigin = process.env.SITE_ORIGIN?.trim().replace(/\/$/, "");
 const siteOrigin = configuredOrigin && /^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(configuredOrigin)
@@ -24,7 +42,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        {children}
+        <Script id="ios-focus-zoom" strategy="beforeInteractive">
+          {iosFocusZoomScript}
+        </Script>
+      </body>
     </html>
   );
 }
