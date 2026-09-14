@@ -128,6 +128,11 @@ export async function POST(request:Request){
       await db.transaction(async tx=>{
         const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,id)).for("update").limit(1);
         if(!order)throw notFound("订单不存在");
+        const purchaserId=body.purchaserId===undefined?order.purchaserId:string(body.purchaserId);
+        if(purchaserId!==order.purchaserId){
+          const [purchaser]=await tx.select().from(users).where(eq(users.id,purchaserId)).for("share").limit(1);
+          if(!purchaser||!purchaser.active||purchaser.approvalStatus!=="approved")throw conflict("请选择已审批通过且启用的采购人");
+        }
         if(platformNo){
           const [duplicate]=await tx.select({id:purchaseOrders.id}).from(purchaseOrders).where(and(eq(purchaseOrders.platform,platform),eq(purchaseOrders.platformOrderNo,platformNo),ne(purchaseOrders.id,id),ne(purchaseOrders.status,"已驳回"))).limit(1);
           if(duplicate)throw conflict("该采购渠道下的订单号已有未驳回采购单，请勿重复提交");
@@ -176,7 +181,8 @@ export async function POST(request:Request){
             }
           }
         }
-        await tx.update(purchaseOrders).set({platform,platformOrderNo:platformNo,courierCompany,courierNo,status:order.status==="已驳回"?"待审核":order.status,rejectReason:order.status==="已驳回"?null:order.rejectReason,updatedAt:timestamp}).where(eq(purchaseOrders.id,id));
+        await tx.update(purchaseOrders).set({platform,platformOrderNo:platformNo,courierCompany,courierNo,purchaserId,status:order.status==="已驳回"?"待审核":order.status,rejectReason:order.status==="已驳回"?null:order.rejectReason,updatedAt:timestamp}).where(eq(purchaseOrders.id,id));
+        if(purchaserId!==order.purchaserId)await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"change-purchaser",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({before:{purchaserId:order.purchaserId},after:{purchaserId}}),createdAt:timestamp});
         await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"update",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({before:{platform:order.platform,platformNo:order.platformOrderNo,courierCompany:order.courierCompany,courierNo:order.courierNo,items:existingItems.map(item=>({title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents}))},after:{platform,platformNo,courierCompany,courierNo,items:items.map(item=>({title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents}))}}),createdAt:timestamp});
       });
       return Response.json({data:await snapshot(user),createdOrderId:id});

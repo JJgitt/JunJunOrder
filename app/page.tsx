@@ -22,7 +22,7 @@ type OrderItemDraft = { id: string; title: string; sku: string; size: string; qt
 
 type PurchaseOrder = {
     id: string; platform: string; platformNo: string; courierCompany: string; courierNo: string; status: OrderStatus;
-    purchaser: string; purchaserPhone?: string; purchaserWechatId?: string; createdAt: string; location?: string; receivedAt?: string; rejectReason?: string;
+    purchaser: string; purchaserId?: string; purchaserPhone?: string; purchaserWechatId?: string; createdAt: string; location?: string; receivedAt?: string; rejectReason?: string;
     title: string; itemCount: number; amount: number; items: OrderItem[];
     images: OrderImage[];
 };
@@ -291,6 +291,7 @@ export default function Home() {
             const action = editing ? (currentUser?.role === "admin" ? "update-order" : "resubmit-order") : "create-order";
             const result = await mutate(action, {
                 ...(editing ? {orderId: order.id} : {}),
+                ...(editing && currentUser?.role === "admin" ? {purchaserId: order.purchaserId} : {}),
                 platform: order.platform,
                 platformNo: order.platformNo,
                 courierCompany: order.courierCompany,
@@ -366,6 +367,7 @@ export default function Home() {
             }}/>}
             {role === "admin" && adminTab === "upload" &&
                 <UploadPage key={`upload-${selectedId || "new"}-${uploadNonce}`} mode="admin"
+                            people={people}
                             editing={orders.find(item => item.id === selectedId)} onCancel={() => setAdminTab("orders")}
                             onSubmit={upload}/>}
             {role === "admin" && adminTab === "profile" && <AdminProfile user={currentUser} people={people}
@@ -695,7 +697,7 @@ function AdminOrders({
                                                                      selected={selectedSet.has(order.id)}
                                                                      onSelect={() => toggle(order.id)}
                                                                      onOpen={() => onOpen(order.id)}
-                                                                     showPurchaserContact actions={<>
+                                                                     showPurchaserContact showLocation actions={<>
             <button className="edit-ghost" onClick={() => onEdit(order.id)}>编辑</button>
             {canRejectOrder(order) && <button className="danger-ghost"
                                               onClick={() => onReject(order.id)}>驳回</button>}{order.status === "待审核" ? <>
@@ -720,8 +722,9 @@ function OrderCard({
                        onSelect,
                        showOutbound = true,
                        normalizeStatus = true,
-                       showPurchaserContact = false
-                   }: { order: PurchaseOrder; onOpen: () => void; actions?: React.ReactNode; selectable?: boolean; selected?: boolean; onSelect?: () => void; showOutbound?: boolean; normalizeStatus?: boolean; showPurchaserContact?: boolean }) {
+                       showPurchaserContact = false,
+                       showLocation = false
+                   }: { order: PurchaseOrder; onOpen: () => void; actions?: React.ReactNode; selectable?: boolean; selected?: boolean; onSelect?: () => void; showOutbound?: boolean; normalizeStatus?: boolean; showPurchaserContact?: boolean; showLocation?: boolean }) {
     const totalQuantity = order.items.reduce((sum, item) => sum + item.qty, 0);
     const listTitle = order.itemCount > 1 ? `${order.title} 等${order.itemCount}款 · 共${totalQuantity}件` : `${order.title} · ${order.items[0]?.size}码`;
     return <article className={`order-card edge-${statusTone[order.status]} ${selected ? "selected" : ""}`}>
@@ -740,7 +743,7 @@ function OrderCard({
             {!showOutbound && <div className="order-courier">
                 <span>发货状态</span><b>{order.status === "已发货" ? "已全部发货" : order.items.some(item => item.shipped) ? "部分已发货" : "未发货"}</b>
             </div>}
-            <div className="order-meta"><span>{order.platform} · {order.purchaser}上传</span><b>{money(order.amount)}</b>
+            <div className="order-meta"><span>{order.platform} · 采购人：{order.purchaser}</span><b>{money(order.amount)}</b>
             </div>
             <div className="order-meta secondary">{order.platformNo ?
                 <CopyNumber value={order.platformNo} label="平台订单号"/> : <span>平台单号未填写</span>}
@@ -759,6 +762,9 @@ function OrderCard({
             </div>
             {showOutbound && (readyToShip(order.status) || order.status === "已发货") &&
                 <OutboundOrderInfo order={order}/>}
+            {showLocation && readyToShip(order.status) && <div className="order-courier order-location">
+                <span>库位</span><b>{order.location || "未填写"}</b>
+            </div>}
             {order.rejectReason && <p className="reject-note">原因：{order.rejectReason}</p>}
         </div>
         {actions && <div className="order-actions">{actions}</div>}
@@ -831,9 +837,12 @@ function BuyerHome({
 function UploadPage({
                         mode,
                         editing,
+                        people = [],
                         onCancel,
                         onSubmit
-                    }: { mode: "admin" | "buyer"; editing?: PurchaseOrder; onCancel?: () => void; onSubmit: (order: PurchaseOrder, files: File[]) => Promise<void> }) {
+                    }: { mode: "admin" | "buyer"; editing?: PurchaseOrder; people?: AppUser[]; onCancel?: () => void; onSubmit: (order: PurchaseOrder, files: File[]) => Promise<void> }) {
+    const [purchaserId, setPurchaserId] = useState(editing?.purchaserId ?? "");
+    const purchaserOptions = people.filter(person => person.id === editing?.purchaserId || (person.active && person.approvalStatus === "approved"));
     const [platform, setPlatform] = useState(editing?.platform ?? "京东"), [platformNo, setPlatformNo] = useState(editing?.platformNo ?? ""), [files, setFiles] = useState<File[]>([]), [submitting, setSubmitting] = useState(false);
     const [items, setItems] = useState<OrderItemDraft[]>(() => editing ? editing.items.map(item => {
         const company = item.purchaseCourierCompany || editing.courierCompany || "";
@@ -947,6 +956,7 @@ function UploadPage({
                 courierNo: normalizedItems[0].purchaseCourierNo,
                 status: "待审核",
                 purchaser: "",
+                ...(mode === "admin" && editing ? {purchaserId} : {}),
                 createdAt: "",
                 title: normalizedItems[0].title,
                 itemCount: normalizedItems.length,
@@ -969,6 +979,14 @@ function UploadPage({
             {onCancel && <button className="form-back-button" type="button" onClick={onCancel}>返回订单</button>}</div>
         {editing?.rejectReason && <div className="inline-warning"><b>驳回原因</b><span>{editing.rejectReason}</span></div>}
         <form className="purchase-form" autoComplete="off" onSubmit={submit}>
+            {mode === "admin" && editing && <label><span>采购人 *</span>
+                <select value={purchaserId} required onChange={event => setPurchaserId(event.target.value)}>
+                    {!purchaserOptions.some(person => person.id === purchaserId) && <option value={purchaserId}>{editing.purchaser}（当前采购人）</option>}
+                    {purchaserOptions.map(person => <option key={person.id} value={person.id}>
+                        {person.name} · {person.wechatId}{person.id === editing.purchaserId ? "（当前）" : ""}
+                    </option>)}
+                </select>
+            </label>}
             <label className={`recognize-zone ${recognizing ? "busy" : ""}`}><input type="file" accept="image/*" multiple
                                                                                     disabled={recognizing}
                                                                                     onChange={e => {
