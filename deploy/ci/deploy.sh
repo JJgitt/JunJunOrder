@@ -14,6 +14,50 @@ cd /home/junjun/hongyun-order
 compose=(docker compose --project-name hongyun-order --env-file .env -f compose.yaml -f deploy/compose.server.yaml -f /etc/hongyun-cicd/compose.image.yaml)
 export DEPLOY_IMAGE="$image"
 
+retain_rollbacks=3
+retain_backups=10
+minimum_free_kb=$((5 * 1024 * 1024))
+
+housekeeping() {
+  local tag id name path resolved index
+  local -a rollback_tags backup_paths stopped_builders
+
+  mapfile -t rollback_tags < <(docker image ls hongyun-order-app --format '{{.Tag}}' | grep -E '^rollback-[0-9]{14}$' | sort -r || true)
+  for ((index=retain_rollbacks; index<${#rollback_tags[@]}; index++)); do
+    tag=${rollback_tags[$index]}
+    docker image rm "hongyun-order-app:$tag" >/dev/null || echo "Warning: could not remove old rollback image $tag" >&2
+  done
+
+  mapfile -t backup_paths < <(find /home/junjun -maxdepth 1 -mindepth 1 -type d -name 'hongyun-ci-backup.*' -printf '%T@ %p\n' | sort -nr | cut -d' ' -f2-)
+  for ((index=retain_backups; index<${#backup_paths[@]}; index++)); do
+    path=${backup_paths[$index]}
+    resolved=$(readlink -f -- "$path")
+    if [[ "$resolved" =~ ^/home/junjun/hongyun-ci-backup\.[A-Za-z0-9]+$ ]]; then
+      rm -rf -- "$resolved"
+    else
+      echo "Warning: refused unexpected backup path $path" >&2
+    fi
+  done
+
+  mapfile -t stopped_builders < <(docker ps -aq --filter status=exited --filter name=hongyun-build-)
+  for id in "${stopped_builders[@]}"; do
+    name=$(docker inspect --format '{{.Name}}' "$id" 2>/dev/null || true)
+    name=${name#/}
+    [[ "$name" =~ ^hongyun-build-[A-Za-z0-9_.-]+$ ]] && docker rm "$id" >/dev/null || true
+  done
+
+  # Production pulls prebuilt images and never needs local build cache.
+  docker builder prune -af >/dev/null || echo 'Warning: Docker build cache cleanup failed' >&2
+}
+
+housekeeping
+available_kb=$(df --output=avail -k / | tail -n 1 | tr -d ' ')
+[[ "$available_kb" =~ ^[0-9]+$ ]] || { echo 'Unable to determine free disk space' >&2; exit 1; }
+(( available_kb >= minimum_free_kb )) || {
+  echo 'Deployment stopped: less than 5 GiB free after safe cleanup' >&2
+  exit 75
+}
+
 auth_dir=$(mktemp -d /tmp/hongyun-registry.XXXXXXXX)
 cleanup() { rm -f "$auth_dir/config.json"; rmdir "$auth_dir"; }
 trap cleanup EXIT
@@ -68,4 +112,5 @@ docker tag "$image" hongyun-order-app:latest
 install -d -m 700 /var/lib/hongyun-cicd
 printf '%s\n' "$image" > /var/lib/hongyun-cicd/current-image
 trap - ERR INT TERM HUP
+housekeeping
 echo 'Deployment healthy. Database and image uploads remain in existing volumes.'

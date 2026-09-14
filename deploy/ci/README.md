@@ -29,6 +29,8 @@
 - SSH 公钥使用 `restrict,command="/usr/local/bin/hongyun-ci-entry"`，禁止普通命令、PTY 和转发。
 - 备份：`/home/junjun/hongyun-ci-backup.*/database.dump`，目录仅 root 可读。
 - 当前部署摘要：`/var/lib/hongyun-cicd/current-image`。
+- 空间保护：每次部署前后保留最近 3 个 `rollback-*` 镜像和最近 10 份数据库备份，清理鸿运采购的已退出构建容器及服务器构建缓存。可用空间低于 5 GiB 时停止部署。
+- 日志轮转：服务器覆盖配置将应用与 PostgreSQL 的 Docker 日志限制为单文件 10MB、最多 3 份。
 
 流水线不会自动替换服务器 Compose、SSH 或 sudo 配置，这些属于基础设施变更，需管理员单独安装和检查。
 
