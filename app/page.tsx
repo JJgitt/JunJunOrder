@@ -1,6 +1,7 @@
 "use client";
 
-import {FormEvent, useCallback, useEffect, useMemo, useState} from "react";
+import {FormEvent, useCallback, useEffect, useMemo, useRef, useState} from "react";
+import {createPortal} from "react-dom";
 import {useRouter} from "next/navigation";
 import Image from "next/image";
 import {findOrdersByCourierNo, findTransitCandidatesByCourierTail, normalizeCourierNo} from "@/lib/courier";
@@ -1390,13 +1391,36 @@ function ScanSheet({
 }
 
 function OrderImages({images}: { images: OrderImage[] }) {
+    const [selected, setSelected] = useState<number | null>(null);
+    const [zoomed, setZoomed] = useState(false);
+    const dialog = useRef<HTMLDialogElement>(null);
+    useEffect(() => {
+        const element = dialog.current;
+        if (selected !== null && element && !element.open) element.showModal();
+        if (selected === null && element?.open) element.close();
+    }, [selected]);
     if (!images.length) return null;
     return <section className="order-images">
         <div className="order-images-head"><h3>订单图片</h3><span>{images.length} 张</span></div>
-        <div className="order-images-grid">{images.map(image => <a key={image.id} href={image.url} target="_blank"
-                                                                   rel="noreferrer" title={image.fileName}><Image
+        <div className="order-images-grid">{images.map((image, index) => <button type="button" key={image.id}
+            onClick={() => {setZoomed(false); setSelected(index);}} aria-label={`预览图片 ${index + 1}`} title={image.fileName}><Image
             src={image.url} alt={image.fileName} width={180} height={132}
-            unoptimized/><small>{image.uploadedBy}上传</small></a>)}</div>
+            unoptimized/><small>{image.uploadedBy}上传</small></button>)}</div>
+        <dialog ref={dialog} className="image-preview" aria-label="订单图片预览"
+            onCancel={() => setSelected(null)} onClose={() => setSelected(null)}>
+            {selected !== null && <div className="image-preview-layout">
+                <header><span>{selected + 1} / {images.length}</span>
+                    <button type="button" onClick={() => setZoomed(value => !value)}>{zoomed ? "适应屏幕" : "放大查看"}</button>
+                    <button type="button" onClick={() => setSelected(null)}>关闭图片 ×</button></header>
+                <div key={`${selected}-${zoomed}`} className={`image-preview-content ${zoomed ? "zoomed" : ""}`}>
+                    <Image src={images[selected].url} alt={images[selected].fileName} width={1179} height={2556} unoptimized/>
+                </div>
+                {images.length > 1 && <footer>
+                    <button type="button" disabled={selected === 0} onClick={() => {setZoomed(false); setSelected(selected - 1);}}>上一张</button>
+                    <button type="button" disabled={selected === images.length - 1} onClick={() => {setZoomed(false); setSelected(selected + 1);}}>下一张</button>
+                </footer>}
+            </div>}
+        </dialog>
     </section>;
 }
 
@@ -1838,16 +1862,22 @@ function Modal({
                    onClose,
                    children
                }: { title: string; subtitle: string; subtitleCopyValue?: string; onClose: () => void; children: React.ReactNode }) {
-    return <div className="modal-backdrop">
+    useEffect(() => {
+        const previous = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => {document.body.style.overflow = previous;};
+    }, []);
+    if (typeof document === "undefined") return null;
+    return createPortal(<div className="modal-backdrop">
         <section className="modal-sheet" role="dialog" aria-modal="true" aria-label={title}>
             <div className="sheet-handle"/>
             <header>
                 <div>{subtitleCopyValue ? <CopyNumber value={subtitleCopyValue} label="采购订单号"/> :
                     <span>{subtitle}</span>}<h2>{title}</h2></div>
-                <button aria-label="关闭" onClick={onClose}>×</button>
+                <button type="button" aria-label="关闭" onClick={onClose}>×</button>
             </header>
             {children}</section>
-    </div>;
+    </div>, document.body);
 }
 
 function AdminNav({

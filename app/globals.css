@@ -1584,7 +1584,10 @@ button:active {
 
 .modal-sheet {
     width: min(100%, 500px);
-    max-height: 93 dvh;
+    max-height: 93vh;
+    max-height: 93dvh;
+    min-height: 0;
+    overscroll-behavior: contain;
     overflow: auto;
     border-radius: 26px 26px 0 0;
     background: #fff;
@@ -1601,6 +1604,11 @@ button:active {
 }
 
 .modal-sheet > header {
+    position: sticky;
+    top: -14px;
+    z-index: 2;
+    background: #fff;
+    padding: 14px 0 10px;
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -1619,8 +1627,9 @@ button:active {
 }
 
 .modal-sheet > header button {
-    width: 32px;
-    height: 32px;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
     border: 0;
     border-radius: 50%;
     background: #eef1f4;
@@ -4475,7 +4484,9 @@ button:active {
     gap: 7px
 }
 
-.order-images-grid a {
+.order-images-grid button {
+    padding: 0;
+    text-align: left;
     min-width: 0;
     overflow: hidden;
     border: 1px solid #e4e9f0;
@@ -4501,6 +4512,32 @@ button:active {
     white-space: nowrap;
     font-size: 7.5px
 }
+
+.image-preview {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    border: 0;
+    padding: env(safe-area-inset-top) 12px env(safe-area-inset-bottom);
+    background: #101722;
+    color: #fff;
+    overflow: hidden;
+}
+.image-preview::backdrop { background: #101722e6; }
+.image-preview-layout { height: 100%; display: flex; flex-direction: column; }
+.image-preview header, .image-preview footer {
+    display: flex; align-items: center; justify-content: space-between;
+    flex: none; gap: 10px; padding: 10px 0; font-size: 14px;
+}
+.image-preview button { min-height: 44px; padding: 0 14px; border: 1px solid #64748b; border-radius: 10px; background: #263446; color: #fff; font-size: 14px; }
+.image-preview button:disabled { opacity: .4; }
+.image-preview-content { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.image-preview-content img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.image-preview-content.zoomed img { width: 200%; max-width: none; height: auto; }
 
 .receipt-upload {
     min-height: 64px;
