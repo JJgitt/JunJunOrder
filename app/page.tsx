@@ -1427,16 +1427,16 @@ function OrderImages({images}: { images: OrderImage[] }) {
         <dialog ref={dialog} className="image-preview" aria-label="订单图片预览"
             onCancel={() => setSelected(null)} onClose={() => setSelected(null)}>
             {selected !== null && <div className="image-preview-layout">
-                <header><span>{selected + 1} / {images.length}</span>
-                    <button type="button" onClick={() => setZoomed(value => !value)}>{zoomed ? "适应屏幕" : "放大查看"}</button>
-                    <button type="button" onClick={() => setSelected(null)}>关闭图片 ×</button></header>
+                <header><span>{selected + 1} / {images.length}</span></header>
                 <div key={`${selected}-${zoomed}`} className={`image-preview-content ${zoomed ? "zoomed" : ""}`}>
                     <Image src={images[selected].url} alt={images[selected].fileName} width={1179} height={2556} unoptimized/>
                 </div>
-                {images.length > 1 && <footer>
+                <footer>
                     <button type="button" disabled={selected === 0} onClick={() => {setZoomed(false); setSelected(selected - 1);}}>上一张</button>
+                    <button type="button" onClick={() => setZoomed(value => !value)}>{zoomed ? "适应屏幕" : "放大查看"}</button>
+                    <button type="button" onClick={() => setSelected(null)}>关闭图片 ×</button>
                     <button type="button" disabled={selected === images.length - 1} onClick={() => {setZoomed(false); setSelected(selected + 1);}}>下一张</button>
-                </footer>}
+                </footer>
             </div>}
         </dialog>
     </section>;
