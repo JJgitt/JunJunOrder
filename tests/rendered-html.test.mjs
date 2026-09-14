@@ -334,8 +334,11 @@ test("order lists provide a floating smooth scroll-to-top action",async()=>{
   assertJsMatch(page,/buyerTab === "mine"/);
   assertCssMatch(styles,/\.scroll-top-button\{/);
   assertCssMatch(styles,/position:fixed/);
+  assertCssMatch(styles,/width:52px;height:52px/);
   assertCssMatch(styles,/opacity:\.32/);
   assertCssMatch(styles,/backdrop-filter:blur\(4px\)/);
+  assertCssMatch(styles,/touch-action:manipulation/);
+  assertCssMatch(styles,/\.scroll-top-button:active\{transform:translateY\(-50%\) scale\(\.92\)/);
 });
 
 test("all signed-in roles have a persistent logout entry",async()=>{

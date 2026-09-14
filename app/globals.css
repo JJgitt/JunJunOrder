@@ -2132,8 +2132,8 @@ button:active {
     z-index: 19;
     top: calc(62% + 10px);
     right: max(8px, calc((100vw - 500px) / 2 + 8px));
-    width: 42px;
-    height: 42px;
+    width: 52px;
+    height: 52px;
     border: 1px solid #8fb2ee5c;
     border-radius: 50%;
     background: #ffffff45;
@@ -2146,14 +2146,22 @@ button:active {
     opacity: .32;
     box-shadow: 0 5px 16px #163b7e17;
     backdrop-filter: blur(4px);
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
     transform: translateY(-50%);
-    transition: opacity .18s ease, background .18s ease, box-shadow .18s ease
+    transition: opacity .18s ease, background .18s ease, box-shadow .18s ease, transform .12s ease
 }
 
 .scroll-top-button:hover, .scroll-top-button:focus-visible, .scroll-top-button:active {
     opacity: .72;
     background: #ffffffa3;
     box-shadow: 0 8px 22px #163b7e2b
+}
+
+.scroll-top-button:active {
+    transform: translateY(-50%) scale(.92);
+    opacity: .82
 }
 
 .scroll-top-button i {
