@@ -59,7 +59,13 @@ available_kb=$(df --output=avail -k / | tail -n 1 | tr -d ' ')
 }
 
 auth_dir=$(mktemp -d /tmp/hongyun-registry.XXXXXXXX)
-cleanup() { rm -f "$auth_dir/config.json"; rmdir "$auth_dir"; }
+cleanup() {
+  if [[ "$auth_dir" =~ ^/tmp/hongyun-registry\.[A-Za-z0-9]+$ ]]; then
+    rm -rf -- "$auth_dir"
+  else
+    echo "Warning: refused unexpected registry authentication path $auth_dir" >&2
+  fi
+}
 trap cleanup EXIT
 export DOCKER_CONFIG="$auth_dir"
 IFS= read -r registry_user
