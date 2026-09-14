@@ -33,20 +33,17 @@ test("touch forms prevent iOS focus zoom while keeping field text compact", asyn
   const css = await readFile(new URL("../app/touch-forms.css", import.meta.url), "utf8");
   const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
   assert.match(layout, /import "\.\/touch-forms\.css"/);
-  assert.match(css, /@media \(any-pointer: coarse\)/);
+  assert.match(css, /@media \(max-width: 720px\), \(any-pointer: coarse\)/);
   assert.match(css, /input:not\(/);
   assert.match(css, /textarea,\s*select\s*\{/);
   assert.match(css, /font-size: 16px !important/);
   assert.match(css, /:focus\s*\{\s*font-size: 16px !important/);
   assert.match(css, /\.member-list select,\s*\.member-role-select\s*\{/);
-  assert.match(css, /html\.ios-device[\s\S]*font-size: 13px !important/);
-  assert.match(css, /html\.ios-device input\.long-no-input[\s\S]*font-size: 12px !important/);
-  assert.match(layout, /import Script from "next\/script"/);
-  assert.match(layout, /navigator\.maxTouchPoints > 1/);
-  assert.match(layout, /classList\.add\("ios-device"\)/);
-  assert.match(layout, /content \+ ", maximum-scale=1"/);
-  assert.match(layout, /strategy="beforeInteractive"/);
-  assert.doesNotMatch(layout, /userScalable:\s*false/);
+  assert.doesNotMatch(css, /html\.ios-device|font-size: (?:12|13)px !important/);
+  assert.match(layout, /export const viewport: Viewport/);
+  assert.match(layout, /width: "device-width"/);
+  assert.match(layout, /initialScale: 1/);
+  assert.doesNotMatch(layout, /maximumScale|userScalable|maximum-scale|next\/script/);
 });
 
 test("form grids shrink and touch buyer filters match native select text", async () => {
@@ -55,7 +52,7 @@ test("form grids shrink and touch buyer filters match native select text", async
   assert.match(css, /\.field-grid > label\s*\{\s*min-width: 0/);
   assert.match(css, /\.field-grid select\s*\{\s*width: 100%;\s*min-width: 0/);
   assert.match(css, /\.select-row \.buyer-filter-trigger\s*\{\s*font-size: 16px/);
-  assert.match(css, /html\.ios-device \.select-row \.buyer-filter-trigger[\s\S]*font-size: 13px/);
+  assert.doesNotMatch(css, /html\.ios-device/);
 });
 
 test("purchase quantity can be cleared while entering a new value", async () => {

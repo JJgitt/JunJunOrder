@@ -13,10 +13,10 @@
   max-width: 100%;
 }
 
-/* Keep focused form controls readable without iOS focus zoom, including iPads
-   with an attached mouse. Do not disable the user's pinch-to-zoom gesture.
-   Any control below 16px — even only before focus — will make Safari zoom. */
-@media (any-pointer: coarse) {
+/* Mobile Safari zooms the page when a focused form control computes below
+   16px. Keep the real control font at that threshold instead of disabling
+   viewport zoom, so normal pinch-to-zoom remains available. */
+@media (max-width: 720px), (any-pointer: coarse) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
   textarea,
   select {
@@ -51,18 +51,6 @@
     height: 42px;
   }
 
-  /* iOS receives a focus-zoom guard in the root layout, so its form text can
-     stay compact without Safari enlarging the whole page on focus. */
-  html.ios-device input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
-  html.ios-device textarea,
-  html.ios-device select,
-  html.ios-device .select-row .buyer-filter-trigger {
-    font-size: 13px !important;
-  }
-
-  html.ios-device input.long-no-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]) {
-    font-size: 12px !important;
-  }
 }
 
 @media (any-pointer: coarse) and (max-width: 360px) {

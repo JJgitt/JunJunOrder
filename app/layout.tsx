@@ -1,24 +1,6 @@
-import type { Metadata } from "next";
-import Script from "next/script";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./touch-forms.css";
-
-const iosFocusZoomScript = `
-(() => {
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  if (!isIOS) return;
-
-  document.documentElement.classList.add("ios-device");
-  const viewport = document.querySelector('meta[name="viewport"]');
-  if (!viewport) return;
-
-  const content = viewport.getAttribute("content") || "width=device-width, initial-scale=1";
-  if (!/maximum-scale=/.test(content.replace(/ /g, ""))) {
-    viewport.setAttribute("content", content + ", maximum-scale=1");
-  }
-})();
-`;
 
 const configuredOrigin = process.env.SITE_ORIGIN?.trim().replace(/\/$/, "");
 const siteOrigin = configuredOrigin && /^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(configuredOrigin)
@@ -35,6 +17,11 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: "鸿运采购", description: "采购、入库、售出、利润，全链路一手掌握", images: socialImage ? [socialImage] : undefined },
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -44,9 +31,6 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body>
         {children}
-        <Script id="ios-focus-zoom" strategy="beforeInteractive">
-          {iosFocusZoomScript}
-        </Script>
       </body>
     </html>
   );
