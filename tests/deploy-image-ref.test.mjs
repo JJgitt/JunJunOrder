@@ -18,6 +18,10 @@ test("deploy script accepts the GHCR and Huawei SWR digest refs only", async () 
   assert.equal(swr.test(`swr.cn-north-4.myhuaweicloud.com/junjunorder/junjunorder@${digest}`), true);
   assert.equal(ghcr.test(`ghcr.io/other/repo@${digest}`), false);
   assert.equal(swr.test(`swr.cn-north-4.myhuaweicloud.com/other/junjunorder@${digest}`), false);
+  assert.match(deploy, /prune_unused_project_images/);
+  assert.match(deploy, /hongyun-order-app:latest/);
+  assert.match(deploy, /docker image ls --no-trunc --format '\{\{\.ID\}\} \{\{\.Repository\}\}'/);
+  assert.doesNotMatch(deploy, /docker image prune -/);
 });
 
 test("workflow keeps GHCR publish and optional SWR mirror", async () => {

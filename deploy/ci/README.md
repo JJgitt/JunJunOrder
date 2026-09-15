@@ -9,7 +9,7 @@
 - 构建在 GitHub 执行，服务器只拉取和启动。应用、PostgreSQL、上传卷仍在现有服务器。
 - GitHub 并发组 + 服务器 flock 双重串行保护。测试失败不会发布；镜像拉取失败不会切换线上应用。
 - 发布失败自动切换旧镜像，但**不自动恢复数据库**。数据库变更必须向后兼容，破坏性迁移需要人工维护窗口。
-- 不自动清理备份和旧镜像；需定期检查磁盘容量和配置异机备份。
+- 每次发布会清理过期回滚标签和未再引用的本项目 digest；仍需定期看磁盘，并做异机备份。
 
 ## 仓库 Secrets
 
@@ -42,7 +42,7 @@ Variables：
 - SSH 公钥使用 `restrict,command="/usr/local/bin/hongyun-ci-entry"`，禁止普通命令、PTY 和转发。
 - 备份：`/home/junjun/hongyun-ci-backup.*/database.dump`，目录仅 root 可读。
 - 当前部署摘要：`/var/lib/hongyun-cicd/current-image`。
-- 空间保护：每次部署前后保留最近 3 个 `rollback-*` 镜像和最近 10 份数据库备份，清理鸿运采购的已退出构建容器及服务器构建缓存。可用空间低于 5 GiB 时停止部署。
+- 空间保护：每次部署前后只保留「当前运行应用 + `hongyun-order-app:latest` + 最近 3 个 `rollback-*`」引用的本项目镜像，删除其余 GHCR/SWR digest；数据库备份保留最近 10 份；清理已退出的构建容器和服务器构建缓存。可用空间低于 5 GiB 时停止部署。仓库里的新脚本要再执行一次 `install-server-deploy.sh` 才会装到 `/usr/local/sbin/hongyun-deploy`。
 - 日志轮转：服务器覆盖配置将应用与 PostgreSQL 的 Docker 日志限制为单文件 10MB、最多 3 份。
 
 流水线不会自动替换服务器 Compose、SSH 或 sudo 配置，这些属于基础设施变更，需管理员单独安装和检查。

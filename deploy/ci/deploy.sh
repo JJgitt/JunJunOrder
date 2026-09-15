@@ -24,6 +24,46 @@ export DEPLOY_IMAGE="$image"
 retain_rollbacks=3
 retain_backups=10
 minimum_free_kb=$((5 * 1024 * 1024))
+declare -A keep_ids=()
+
+keep_project_image_id() {
+  local id=${1:-}
+  [[ "$id" =~ ^sha256:[a-f0-9]{64}$ ]] || return 0
+  keep_ids["$id"]=1
+}
+
+# Drop GHCR/SWR digest copies that are no longer the running app, latest, or a kept rollback.
+prune_unused_project_images() {
+  local cid id tag current_ref
+  local -a rollback_tags
+  keep_ids=()
+
+  cid=$("${compose[@]}" ps -q app 2>/dev/null || true)
+  if [[ -n "$cid" ]]; then
+    keep_project_image_id "$(docker inspect --format '{{.Image}}' "$cid" 2>/dev/null || true)"
+  fi
+  keep_project_image_id "$(docker image inspect --format '{{.Id}}' hongyun-order-app:latest 2>/dev/null || true)"
+  if [[ -s /var/lib/hongyun-cicd/current-image ]]; then
+    current_ref=$(tr -d '\n' </var/lib/hongyun-cicd/current-image)
+    if [[ "$current_ref" =~ ^(ghcr\.io/jjgitt/junjunorder|swr\.cn-north-4\.myhuaweicloud\.com/junjunorder/junjunorder)@sha256:[a-f0-9]{64}$ ]]; then
+      keep_project_image_id "$(docker image inspect --format '{{.Id}}' "$current_ref" 2>/dev/null || true)"
+    fi
+  fi
+  mapfile -t rollback_tags < <(docker image ls hongyun-order-app --format '{{.Tag}}' | grep -E '^rollback-[0-9]{14}$' | sort -r || true)
+  for tag in "${rollback_tags[@]}"; do
+    keep_project_image_id "$(docker image inspect --format '{{.Id}}' "hongyun-order-app:$tag" 2>/dev/null || true)"
+  done
+
+  while IFS= read -r id; do
+    [[ "$id" =~ ^sha256:[a-f0-9]{64}$ ]] || continue
+    [[ -n "${keep_ids[$id]:-}" ]] && continue
+    docker image rm "$id" >/dev/null || echo "Warning: could not remove unused project image $id" >&2
+  done < <(docker image ls --no-trunc --format '{{.ID}} {{.Repository}}' | awk '
+    $2 == "ghcr.io/jjgitt/junjunorder" ||
+    $2 == "swr.cn-north-4.myhuaweicloud.com/junjunorder/junjunorder" ||
+    $2 == "hongyun-order-app" { print $1 }
+  ' | sort -u)
+}
 
 housekeeping() {
   local tag id name path resolved index
@@ -34,6 +74,7 @@ housekeeping() {
     tag=${rollback_tags[$index]}
     docker image rm "hongyun-order-app:$tag" >/dev/null || echo "Warning: could not remove old rollback image $tag" >&2
   done
+  prune_unused_project_images
 
   mapfile -t backup_paths < <(find /home/junjun -maxdepth 1 -mindepth 1 -type d -name 'hongyun-ci-backup.*' -printf '%T@ %p\n' | sort -nr | cut -d' ' -f2-)
   for ((index=retain_backups; index<${#backup_paths[@]}; index++)); do
