@@ -46,10 +46,10 @@ jobs:
       - run: npm run lint
       - run: npm run build -- --webpack
       - run: npx tsc --noEmit
-      - run: node --experimental-strip-types --test tests/rendered-html.test.mjs tests/vision-normalization.test.mjs tests/courier-match.test.mjs tests/deploy-image-ref.test.mjs
+      - run: node --experimental-strip-types --test tests/rendered-html.test.mjs tests/vision-normalization.test.mjs tests/courier-match.test.mjs
       - run: node scripts/bootstrap.mjs
       - run: node tests/order-uniqueness.integration.mjs
-      - run: bash -n deploy/ci/deploy.sh deploy/ci/ssh-entry.sh deploy/ci/install-server-deploy.sh
+      - run: bash -n deploy/ci/deploy.sh deploy/ci/ssh-entry.sh
 
   publish:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -71,14 +71,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Login to Huawei SWR
-        if: ${{ vars.SWR_REPOSITORY != '' }}
-        continue-on-error: ${{ vars.IMAGE_REGISTRY != 'swr' }}
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
-          username: ${{ secrets.SWR_USERNAME }}
-          password: ${{ secrets.SWR_PASSWORD }}
       - id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
@@ -91,21 +83,6 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Mirror image to Huawei SWR
-        if: ${{ vars.SWR_REPOSITORY != '' }}
-        continue-on-error: ${{ vars.IMAGE_REGISTRY != 'swr' }}
-        env:
-          SWR_HOST: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
-          SWR_REPOSITORY: ${{ vars.SWR_REPOSITORY }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          set -euo pipefail
-          [[ "$SWR_HOST" =~ ^swr\.[a-z0-9-]+\.myhuaweicloud\.com$ ]] || exit 1
-          [[ "$SWR_REPOSITORY" =~ ^[a-z0-9._-]+/[a-z0-9._-]+$ ]] || exit 1
-          [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
-          docker buildx imagetools create \
-            --tag "$SWR_HOST/$SWR_REPOSITORY:sha-${{ github.sha }}" \
-            "ghcr.io/jjgitt/junjunorder@$IMAGE_DIGEST"
 
   deploy:
     needs: publish
@@ -120,10 +97,9 @@ jobs:
       DEPLOY_USER: junjun
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-      REGISTRY_USER: ${{ vars.IMAGE_REGISTRY == 'swr' && secrets.SWR_USERNAME || github.actor }}
-      REGISTRY_TOKEN: ${{ vars.IMAGE_REGISTRY == 'swr' && secrets.SWR_PASSWORD || secrets.GITHUB_TOKEN }}
+      REGISTRY_USER: ${{ github.actor }}
+      REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       IMAGE_DIGEST: ${{ needs.publish.outputs.digest }}
-      IMAGE_REPOSITORY: ${{ vars.IMAGE_REGISTRY == 'swr' && 'swr.cn-north-4.myhuaweicloud.com/junjunorder/junjunorder' || 'ghcr.io/jjgitt/junjunorder' }}
     steps:
       - name: Deploy immutable image through restricted SSH command
         shell: bash
@@ -132,7 +108,6 @@ jobs:
           test -n "$DEPLOY_SSH_KEY" || { echo 'Missing DEPLOY_SSH_KEY repository secret'; exit 1; }
           test -n "$DEPLOY_KNOWN_HOSTS" || { echo 'Missing DEPLOY_KNOWN_HOSTS repository secret'; exit 1; }
           [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
-          [[ "$IMAGE_REPOSITORY" =~ ^(ghcr\.io/jjgitt/junjunorder|swr\.cn-north-4\.myhuaweicloud\.com/junjunorder/junjunorder)$ ]] || exit 1
           ssh_dir=$(mktemp -d)
           trap 'rm -f "$ssh_dir/key" "$ssh_dir/known_hosts"; rmdir "$ssh_dir"' EXIT
           chmod 700 "$ssh_dir"
@@ -144,6 +119,6 @@ jobs:
             -i "$ssh_dir/key" -o IdentitiesOnly=yes -o BatchMode=yes \
             -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$ssh_dir/known_hosts" \
             -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
-            "$DEPLOY_USER@$DEPLOY_HOST" "$IMAGE_REPOSITORY@$IMAGE_DIGEST"
+            "$DEPLOY_USER@$DEPLOY_HOST" "ghcr.io/jjgitt/junjunorder@$IMAGE_DIGEST"
       - name: Check public health endpoint
         run: curl --fail --retry 5 --retry-delay 3 --max-time 15 http://113.46.133.47/api/health

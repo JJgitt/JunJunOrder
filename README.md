@@ -63,6 +63,10 @@ docker compose up -d --build
 
 数据库和图片分别保存在 Docker 命名卷 `postgres_data`、`app_uploads`，重新构建容器不会丢失。
 
+## 生产发布
+
+线上地址：`http://113.46.133.47`。推送到 `main` 后由 GitHub Actions 跑测试、构建镜像并发布。默认仍推送到 GitHub Container Registry（GHCR），服务器从 GHCR 按 digest 拉镜像。华为云 SWR（`swr.cn-north-4.myhuaweicloud.com/junjunorder/junjunorder`）已作为可选镜像仓库接好：凭证只放在 GitHub Secrets，默认不切换生产拉取源。未更新服务器发布脚本前，不要把 Variable `IMAGE_REGISTRY` 设为 `swr`。细节、启用顺序和回滚见 [deploy/ci/README.md](deploy/ci/README.md)。
+
 ## 备份与恢复
 
 备份数据库：
@@ -115,7 +119,7 @@ npm run dev
 
 ## 安全提示
 
-- 不要提交 `.env`。
+- 不要提交 `.env`，也不要把华为云 SWR 或 GitHub 的登录密码写进仓库。
 - PostgreSQL 不对公网暴露端口，默认只在 Compose 内部网络访问。
 - 图片接口经过登录和订单归属校验，不直接暴露上传目录。
 - 得物和 OCR 凭证只保存在服务器环境变量中。

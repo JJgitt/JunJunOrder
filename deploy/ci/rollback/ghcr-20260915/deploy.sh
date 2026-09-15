@@ -4,16 +4,9 @@ umask 077
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 
 image=${1:-}
-ghcr_image='^ghcr\.io/jjgitt/junjunorder@sha256:[a-f0-9]{64}$'
-swr_image='^swr\.cn-north-4\.myhuaweicloud\.com/junjunorder/junjunorder@sha256:[a-f0-9]{64}$'
-[[ $# == 1 && ( "$image" =~ $ghcr_image || "$image" =~ $swr_image ) ]] || {
+[[ $# == 1 && "$image" =~ ^ghcr\.io/jjgitt/junjunorder@sha256:[a-f0-9]{64}$ ]] || {
   echo 'Only this project image with a sha256 digest may be deployed' >&2; exit 64;
 }
-if [[ "$image" == ghcr.io/* ]]; then
-  registry_host=ghcr.io
-else
-  registry_host=swr.cn-north-4.myhuaweicloud.com
-fi
 [[ $EUID == 0 ]] || { echo 'Must run through the restricted sudo entry' >&2; exit 1; }
 exec 9>/var/lock/hongyun-deploy.lock
 flock -w 900 9 || { echo 'Another deployment is running'; exit 1; }
@@ -77,8 +70,8 @@ trap cleanup EXIT
 export DOCKER_CONFIG="$auth_dir"
 IFS= read -r registry_user
 IFS= read -r registry_token
-[[ "$registry_user" =~ ^[A-Za-z0-9_.-]+(@[A-Za-z0-9_.-]+)?$ && ${#registry_user} -le 128 && -n "$registry_token" ]] || exit 64
-printf '%s' "$registry_token" | docker login "$registry_host" -u "$registry_user" --password-stdin
+[[ "$registry_user" =~ ^[a-zA-Z0-9_-]+$ && -n "$registry_token" ]] || exit 64
+printf '%s' "$registry_token" | docker login ghcr.io -u "$registry_user" --password-stdin
 unset registry_token
 pulled=false
 for attempt in 1 2 3; do

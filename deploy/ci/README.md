@@ -1,6 +1,8 @@
 # 鸿运采购 CI/CD
 
-流程：推送 → 测试/数据库迁移验证 → main 构建镜像 → GHCR → SSH 拉取摘要镜像 → 数据库备份 → 切换 → 健康检查。
+流程：推送 → 测试/数据库迁移验证 → main 构建镜像 → GHCR（必推）→ 可选镜像到华为云 SWR → SSH 按 `IMAGE_REGISTRY` 拉取摘要镜像 → 数据库备份 → 切换 → 健康检查。
+
+当前生产发布默认仍走 GHCR，避免服务器脚本未更新时中断上线。SWR 凭证只放在 GitHub Secrets，仓库里只有 2026-09-15 的 GHCR 快照：`deploy/ci/rollback/ghcr-20260915/`。
 
 - `.github/workflows/ci-cd.yml`：所有分支 push 和 main PR 执行测试；只有 main push / main 手动运行可以发布。
 - Actions 固定到上游提交 SHA；镜像按 Git commit 标记，生产部署按 digest 固定版本。
@@ -17,13 +19,24 @@
 | --- | --- |
 | DEPLOY_SSH_KEY | 专用 Ed25519 私钥，不要输出或提交 |
 | DEPLOY_KNOWN_HOSTS | 已核验的服务器 SSH 主机公钥，不在运行时盲目信任 ssh-keyscan |
+| SWR_USERNAME | 华为云 SWR 登录用户，例如 `cn-north-4@AK` |
+| SWR_PASSWORD | 华为云 SWR 登录密码，不要写入仓库 |
 
-推送镜像用 GitHub 自动提供的 `GITHUB_TOKEN`（publish 作业 packages:write）；部署作业仅 packages:read。短期令牌通过 SSH 标准输入传入，在临时 Docker 配置目录中使用，结束后删除。无需长期 GHCR PAT。
+Variables：
+
+| 名称 | 内容 |
+| --- | --- |
+| SWR_REGISTRY | 默认 `swr.cn-north-4.myhuaweicloud.com` |
+| SWR_REPOSITORY | 例如 `junjunorder/junjunorder` |
+| IMAGE_REGISTRY | 空或 `ghcr`：服务器仍拉 GHCR；`swr`：服务器改拉 SWR（须先更新服务器脚本） |
+
+推送镜像用 GitHub 自动提供的 `GITHUB_TOKEN`（publish 作业 packages:write）；部署作业仅 packages:read。短期令牌通过 SSH 标准输入传入，在临时 Docker 配置目录中使用，结束后删除。无需长期 GHCR PAT。SWR 镜像是 GHCR 构建结果的副本，失败时默认不阻断 GHCR 发布。
 
 ## 服务器
 
 - `/usr/local/bin/hongyun-ci-entry`：root 所有的 SSH 强制入口。
-- `/usr/local/sbin/hongyun-deploy`：root 所有的发布脚本，仅接受 `ghcr.io/jjgitt/junjunorder@sha256:<64位摘要>`。
+- `/usr/local/sbin/hongyun-deploy`：root 所有的发布脚本。新版本同时接受 `ghcr.io/jjgitt/junjunorder@sha256:<64位摘要>` 和 `swr.cn-north-4.myhuaweicloud.com/junjunorder/junjunorder@sha256:<64位摘要>`。未执行 `deploy/ci/install-server-deploy.sh` 前，线上仍是 GHCR-only 旧脚本。
+- 回滚快照：`deploy/ci/rollback/ghcr-20260915/`。服务器安装新脚本时会先写成 `/usr/local/sbin/hongyun-deploy.bak-<时间戳>`。
 - `/etc/sudoers.d/hongyun-ci`：仅允许免密执行上述发布脚本。
 - `/etc/hongyun-cicd/compose.image.yaml`：覆盖应用镜像；沿用 `/home/junjun/hongyun-order` 的 Compose 和 `.env`。
 - SSH 公钥使用 `restrict,command="/usr/local/bin/hongyun-ci-entry"`，禁止普通命令、PTY 和转发。
@@ -40,9 +53,18 @@
 
 GHCR 包应保持私有，并关联本仓库及授予本仓库 Actions 访问权；首次创建镜像通过 OCI source 标签关联。不得为解决下载权限而把含私有代码的镜像改为公开。
 
-## 华为云备用方案
+## 华为云 SWR
 
-当前服务器 GHCR 入口可达；大镜像实际下载以首次流水线为准。若后续持续超时，可将发布仓库改为用户自己的华为云 SWR。需要指定区域、组织名、镜像地址，并配置受限凭证。同步修改工作流镜像地址/登录方式和服务器脚本的精确仓库白名单；两端一致后再启用。不会自动向未授权的镜像仓库上传代码。
+目标仓库：`swr.cn-north-4.myhuaweicloud.com/junjunorder/junjunorder`（私有）。
+
+启用服务器从 SWR 拉镜像的顺序：
+
+1. 在 GitHub 配置 `SWR_USERNAME`、`SWR_PASSWORD`、`SWR_REPOSITORY=junjunorder/junjunorder`。
+2. 推送本仓库后，在服务器用 root 执行 `bash /home/junjun/hongyun-order/deploy/ci/install-server-deploy.sh`（先备份再替换发布脚本）。
+3. 把 GitHub Variable `IMAGE_REGISTRY` 设为 `swr`。
+4. 再推一次 `main`，确认健康检查通过。
+
+回滚到 GHCR：`IMAGE_REGISTRY` 改回 `ghcr` 或不设；需要时把服务器脚本从 `hongyun-deploy.bak-*` 或 `deploy/ci/rollback/ghcr-20260915/deploy.sh` 装回去。线上正在跑的容器不会因为拉镜像失败而被替换。
 
 ## 参考
 
