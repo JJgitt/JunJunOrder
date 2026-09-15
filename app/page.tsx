@@ -199,11 +199,11 @@ export default function Home() {
 
     const approve = (id: string) => void run("approve", {orderId: id}, "订单审核通过，已进入在途状态");
     const reject = (id: string, reason: string) => void run("reject", {orderId: id, reason}, "订单已驳回，采购员将收到提醒");
-    async function settleOrder(id: string, amount: number, proof?: File) {
+    async function settleOrder(id: string, amount?: number, proof?: File) {
         try {
             const form = new FormData();
             form.set("orderId", id);
-            form.set("amount", String(amount));
+            if (amount != null) form.set("amount", String(amount));
             if (proof) {
                 form.set("proofSelected", "true");
                 form.append("proof", proof, proof.name);
@@ -1660,11 +1660,13 @@ function SettlementSheet({
                              order,
                              onClose,
                              onSubmit
-                         }: { order: PurchaseOrder; onClose: () => void; onSubmit: (id: string, amount: number, proof?: File) => Promise<boolean> }) {
+                         }: { order: PurchaseOrder; onClose: () => void; onSubmit: (id: string, amount?: number, proof?: File) => Promise<boolean> }) {
     const [busy, setBusy] = useState(false), [proof, setProof] = useState<File | null>(null);
     const [amount, setAmount] = useState(""), [recognizing, setRecognizing] = useState(false), [recognitionMessage, setRecognitionMessage] = useState("");
     const proofInput = useRef<HTMLInputElement>(null);
     const recognitionRequest = useRef(0);
+    const parsedAmount = amount.trim() ? Number(amount) : undefined;
+    const amountInvalid = parsedAmount != null && (!Number.isFinite(parsedAmount) || parsedAmount <= 0);
 
     async function recognizeProof(file: File) {
         const requestId = ++recognitionRequest.current;
@@ -1691,8 +1693,7 @@ function SettlementSheet({
     }
 
     async function confirm() {
-        const parsedAmount = Number(amount);
-        if (busy || recognizing || !Number.isFinite(parsedAmount) || parsedAmount <= 0) return;
+        if (busy || recognizing || amountInvalid) return;
         setBusy(true);
         try {
             await onSubmit(order.id, parsedAmount, proof ?? undefined);
@@ -1706,10 +1707,10 @@ function SettlementSheet({
             <p>本单采购金额为 {money(order.amount)}。结款状态独立记录，不会发货、扣减库存或改变当前发货状态。</p></div></div>
         <div className="settlement-summary"><span>采购员</span><b>{order.purchaser}</b><span>当前发货状态</span>
             <b>{order.status === "已发货" ? "已全部发货" : order.items.some(item => item.shipped) ? "部分已发货" : "未发货"}</b></div>
-        <label className="settlement-amount-field"><span>实际结款金额 <em>必填</em></span>
-            <div><i>¥</i><input value={amount} inputMode="decimal" placeholder="请输入结款金额"
+        <label className="settlement-amount-field"><span>实际结款金额 <em>选填</em></span>
+            <div><i>¥</i><input value={amount} inputMode="decimal" placeholder="请输入结款金额（选填）"
                                onChange={event => {setAmount(event.target.value.replace(/[^\d.]/g, "")); setRecognitionMessage("");}}/></div>
-            <small>上传截图后会自动识别并回填，也可以直接手动输入</small>
+            <small>{amountInvalid ? "请输入有效的正数金额，或留空后直接确认" : "上传截图后会自动识别并回填，也可以留空后直接确认"}</small>
         </label>
         <div className="settlement-proof-field">
             <label className={`receipt-upload settlement-proof-upload ${proof ? "selected" : ""}`}>
@@ -1724,7 +1725,7 @@ function SettlementSheet({
         {recognitionMessage && <p className={`settlement-recognition ${recognitionMessage.startsWith("已识别") ? "success" : "failed"}`}>{recognitionMessage}</p>}
         <div className="dual-actions settlement-confirm-actions">
             <button className="secondary-button" disabled={busy} onClick={onClose}>取消</button>
-            <button className="primary-button settlement-confirm-button" disabled={busy || recognizing || !(Number(amount) > 0)}
+            <button className="primary-button settlement-confirm-button" disabled={busy || recognizing || amountInvalid}
                     onClick={() => void confirm()}>{busy ? "正在结款…" : recognizing ? "正在识别金额…" : proof ? "确认结款并保存截图" : "确认已结款"}</button>
         </div>
     </Modal>;

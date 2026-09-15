@@ -823,7 +823,9 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assertJsMatch(page,/function SettlementSheet/);
   assertJsMatch(page,/结款状态独立记录，不会发货、扣减库存或改变当前发货状态/);
   assertJsMatch(page,/上传结款截图（选填）/);
-  assertJsMatch(page,/实际结款金额 <em>必填<\/em>/);
+  assertJsMatch(page,/实际结款金额 <em>选填<\/em>/);
+  assertJsMatch(page,/const parsedAmount = amount\.trim\(\) \? Number\(amount\) : undefined/);
+  assertJsMatch(page,/disabled=\{busy\|\|recognizing\|\|amountInvalid\}/);
   assertJsMatch(page,/fetch\("\/api\/settlements\/recognize",\{method:"POST",body:form\}\)/);
   assertJsMatch(page,/正在识别结款金额/);
   assertJsMatch(page,/order\.settled&&<OrderImages images=\{order\.settlementProofs\} title="结款截图" variant="settlement"/);
@@ -833,11 +835,16 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assert.match(settlementRoute,/form\.get\("proof"\)/);
   assert.match(settlementRoute,/form\.get\("proofSelected"\) === "true" && !proof/);
   assert.match(settlementRoute,/form\.get\("amount"\)/);
+  assert.match(settlementRoute,/const amount = amountText \? Number\(amountText\) : null/);
+  assert.match(settlementRoute,/amountCents == null \? null : amountCents \/ 100/);
   assert.match(settlementRoute,/settledAmountCents: amountCents/);
   assert.match(settlementRoute,/proof\.size > 5 \* 1024 \* 1024/);
   assert.match(settlementRoute,/kind: "settlement"/);
   assert.match(settlementRoute,/if \(!order\.receivedAt\) throw conflict\("采购单尚未入库，不能结款"\)/);
   assert.match(settlementRoute,/proofImageId: image\?\.id \?\? null/);
+  assert.match(appRoute,/const optionalPositiveCents=/);
+  assert.match(appRoute,/settledAmountCents=optionalPositiveCents\(body\.amount\)/);
+  assert.match(appRoute,/if\(settledAmountCents===undefined\)return Response\.json/);
   assert.match(recognizeRoute,/requireAdmin\(user\)/);
   assert.match(recognizeRoute,/recognizeSettlementImage\(image\)/);
   assert.match(vision,/export const settlementPrompt/);

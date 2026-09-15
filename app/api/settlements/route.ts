@@ -23,9 +23,10 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const orderId = String(form.get("orderId") ?? "").trim();
     if (!orderId) return Response.json({ error: "缺少订单 ID" }, { status: 400 });
-    const amount = Number(String(form.get("amount") ?? "").replace(/[¥￥,，\s]/g, ""));
-    const amountCents = Math.round(amount * 100);
-    if (!Number.isFinite(amount) || amountCents <= 0 || amountCents > 2_147_483_647) {
+    const amountText = String(form.get("amount") ?? "").replace(/[¥￥,，\s]/g, "");
+    const amount = amountText ? Number(amountText) : null;
+    const amountCents = amount == null ? null : Math.round(amount * 100);
+    if (amount != null && (!Number.isFinite(amount) || amountCents == null || amountCents <= 0 || amountCents > 2_147_483_647)) {
       return Response.json({ error: "请输入有效的实际结款金额" }, { status: 400 });
     }
 
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
       });
     });
     storedFile = null;
-    return Response.json({ settled: true, amount: amountCents / 100, proofUploaded: Boolean(image) });
+    return Response.json({ settled: true, amount: amountCents == null ? null : amountCents / 100, proofUploaded: Boolean(image) });
   } catch (error) {
     if (storedFile) await unlink(storedFile).catch(() => undefined);
     return routeError(error);

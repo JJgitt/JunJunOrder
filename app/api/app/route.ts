@@ -15,6 +15,7 @@ const orderId=()=>`PO${new Date().toISOString().slice(0,10).replaceAll("-","")}-
 const string=(value:unknown)=>typeof value==="string"?value.trim():"";
 const positiveInt=(value:unknown,fallback=1)=>Math.max(1,Math.floor(Number(value)||fallback));
 const cents=(value:unknown)=>Math.max(0,Math.round(Number(value)*100));
+const optionalPositiveCents=(value:unknown)=>{const text=string(value);if(!text)return null;const amount=Math.round(Number(text)*100);return Number.isFinite(amount)&&amount>0&&amount<=2_147_483_647?amount:undefined};
 const conflict=(message:string)=>new Response(JSON.stringify({error:message}),{status:409,headers:{"content-type":"application/json"}});
 const notFound=(message:string)=>new Response(JSON.stringify({error:message}),{status:404,headers:{"content-type":"application/json"}});
 
@@ -268,9 +269,9 @@ export async function POST(request:Request){
     }
 
     if(action==="settle-order"){
-      requireAdmin(user);const id=string(body.orderId),settledAmountCents=cents(body.amount);
+      requireAdmin(user);const id=string(body.orderId),settledAmountCents=optionalPositiveCents(body.amount);
       if(!id)return Response.json({error:"缺少订单 ID"},{status:400});
-      if(settledAmountCents<=0)return Response.json({error:"请输入有效的实际结款金额"},{status:400});
+      if(settledAmountCents===undefined)return Response.json({error:"请输入有效的实际结款金额"},{status:400});
       await db.transaction(async tx=>{
         const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,id)).for("update").limit(1);
         if(!order)throw notFound("订单不存在");
