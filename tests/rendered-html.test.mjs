@@ -710,6 +710,22 @@ test("admin and buyer order lists filter by multiple statuses at once",async()=>
   assertCssMatch(styles,/\.status-filter-values>span\{/);
 });
 
+test("admin order list filters by settlement status",async()=>{
+  const [page,styles,touchStyles]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
+    readFile(new URL("../app/touch-forms.css",import.meta.url),"utf8"),
+  ]);
+  assertJsMatch(page,/const \[settlement,setSettlement\] = useState\("全部结款状态"\)/);
+  assertJsMatch(page,/\(settlement === "全部结款状态" \|\| order\.settled === \(settlement === "已结款"\)\)/);
+  assertJsMatch(page,/\[orders,query,statuses,platform,settlement,buyers,dateStart,dateEnd\]/);
+  assertJsMatch(page,/<select aria-label="结款状态" value=\{settlement\}/);
+  assertJsMatch(page,/<option>全部结款状态<\/option><option>已结款<\/option><option>未结款<\/option>/);
+  assertJsMatch(page,/setSettlement\("全部结款状态"\)/);
+  assertCssMatch(styles,/\.select-row\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assertCssMatch(touchStyles,/\.select-row\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+});
+
 test("manual receipt offers recently used locations as one-tap choices",async()=>{
   const [page,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),

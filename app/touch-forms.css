@@ -31,7 +31,7 @@
   }
 
   .select-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, .85fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .select-row .buyer-filter-trigger {
@@ -51,14 +51,4 @@
     height: 42px;
   }
 
-}
-
-@media (any-pointer: coarse) and (max-width: 360px) {
-  .select-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .select-row > select:last-child {
-    grid-column: 1 / -1;
-  }
 }

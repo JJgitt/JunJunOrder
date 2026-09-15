@@ -668,6 +668,7 @@ function AdminOrders({
     const [query, setQuery] = useState("");
     const [statuses, setStatuses] = useState<string[]>([]);
     const [platform, setPlatform] = useState("全部渠道");
+    const [settlement, setSettlement] = useState("全部结款状态");
     const [buyers, setBuyers] = useState<string[]>([]);
     const [buyerOpen, setBuyerOpen] = useState(false);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -685,7 +686,7 @@ function AdminOrders({
     const purchasers = useMemo(() => Array.from(new Set(orders.map(order => order.purchaser))).sort((a, b) => a.localeCompare(b, "zh-CN")), [orders]);
     const buyerSummary = buyers.length === 0 ? "全部采购员" : buyers.length <= 2 ? buyers.join("、") : `${buyers[0]} 等 ${buyers.length} 人`;
     const toggleBuyer = (name: string) => setBuyers(current => current.includes(name) ? current.filter(item => item !== name) : [...current, name]);
-    const visible = useMemo(() => orders.filter(order => new Date(order.createdAt).getTime() >= dateStart && new Date(order.createdAt).getTime() < dateEnd && matchesStatusFilter(order, statuses) && (platform === "全部渠道" || order.platform === platform) && (buyers.length === 0 || buyers.includes(order.purchaser)) && `${order.id}${order.platformNo}${order.items.map(item => `${item.title}${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}${item.outboundCourier ?? ""}`).join("")}`.toLowerCase().includes(query.toLowerCase())), [orders, query, statuses, platform, buyers, dateStart, dateEnd]);
+    const visible = useMemo(() => orders.filter(order => new Date(order.createdAt).getTime() >= dateStart && new Date(order.createdAt).getTime() < dateEnd && matchesStatusFilter(order, statuses) && (platform === "全部渠道" || order.platform === platform) && (settlement === "全部结款状态" || order.settled === (settlement === "已结款")) && (buyers.length === 0 || buyers.includes(order.purchaser)) && `${order.id}${order.platformNo}${order.items.map(item => `${item.title}${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}${item.outboundCourier ?? ""}`).join("")}`.toLowerCase().includes(query.toLowerCase())), [orders, query, statuses, platform, settlement, buyers, dateStart, dateEnd]);
     const selectedSet = new Set(selectedIds), selectedOrders = orders.filter(order => selectedSet.has(order.id)),
         selectedReady = selectedOrders.filter(order => readyToShip(order.status)),
         selectedItemQuantity = selectedOrders.reduce((sum, order) => sum + order.items.reduce((qty, item) => qty + item.qty, 0), 0),
@@ -715,10 +716,11 @@ function AdminOrders({
             setStatuses(["待发货"]);
             setPlatform("全部渠道");
             setBuyers([]);
+            setSettlement("全部结款状态");
         }}><i>🚚</i><span><b>{readyCount} 笔订单等待更新发货信息</b><small>可单笔更新，或勾选多笔订单批量填写发货物流</small></span><em>查看 ›</em>
         </button>}
         <StatusFilter options={["全部", "待审核", "在途", "待发货", "已发货", "已驳回"]} value={statuses} onChange={setStatuses}/>
-        <div className="select-row"><select value={platform} onChange={e => setPlatform(e.target.value)}>
+        <div className="select-row order-filter-row"><select aria-label="采购渠道" value={platform} onChange={e => setPlatform(e.target.value)}>
             <option>全部渠道</option>
             {purchaseChannels.map(channel => <option key={channel}>{channel}</option>)}</select>
             <button type="button"
@@ -730,6 +732,11 @@ function AdminOrders({
                 <option value={7}>近7天</option>
                 <option value={1}>今天</option>
                 <option value={90}>近90天</option>
+            </select>
+            <select aria-label="结款状态" value={settlement} onChange={e => setSettlement(e.target.value)}>
+                <option>全部结款状态</option>
+                <option>已结款</option>
+                <option>未结款</option>
             </select></div>
         {buyerOpen && <div className="buyer-filter-panel" role="group" aria-label="按采购员筛选">
             <div className="buyer-filter-head">
