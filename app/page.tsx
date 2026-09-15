@@ -10,6 +10,8 @@ type Role = "admin" | "buyer";
 type AdminTab = "dashboard" | "stock" | "orders" | "upload" | "profile";
 type BuyerTab = "home" | "upload" | "mine";
 type OrderStatus = "待审核" | "在途" | "已入库" | "待发货" | "已发货" | "已驳回";
+type OrderSortKey = "createdAt" | "receivedAt" | "shippedAt";
+type OrderSort = { key: OrderSortKey; direction: "asc" | "desc" } | null;
 type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "detail" | "reject" | "ship" | "settle" | "settlement-amount" | "settlement-proof" | null;
 type OrderImage = { id: string; url: string; fileName: string; uploadedBy: string; createdAt: string };
 
@@ -50,6 +52,29 @@ const money = (value: number) => `¥${value.toLocaleString("zh-CN", {minimumFrac
 const dateTime = (value?: string) => value ? new Date(value).toLocaleString("zh-CN", {hour12: false}) : "未记录";
 /** 订单列表右上角的汇总文案：订单笔数 + 商品件数（各商品行数量之和）。 */
 const orderListSummary = (list: PurchaseOrder[]) => `${list.length} 笔 · ${list.reduce((sum, order) => sum + order.items.reduce((qty, item) => qty + item.qty, 0), 0)} 件`;
+const orderSortOptions: Array<{ key: OrderSortKey; label: string }> = [
+    {key: "createdAt", label: "上传时间"},
+    {key: "receivedAt", label: "入库时间"},
+    {key: "shippedAt", label: "发货时间"}
+];
+const validTimestamp = (value?: string) => {
+    const timestamp = value ? new Date(value).getTime() : Number.NaN;
+    return Number.isFinite(timestamp) ? timestamp : null;
+};
+const orderSortTimestamp = (order: PurchaseOrder, key: OrderSortKey) => {
+    if (key === "createdAt") return validTimestamp(order.createdAt);
+    if (key === "receivedAt") return validTimestamp(order.receivedAt);
+    const shippedTimes = order.items.map(item => validTimestamp(item.shippedAt)).filter((value): value is number => value !== null);
+    return shippedTimes.length ? Math.max(...shippedTimes) : null;
+};
+const sortPurchaseOrders = (orders: PurchaseOrder[], sort: OrderSort) => {
+    if (!sort) return orders;
+    return [...orders].sort((left, right) => {
+        const leftTime = orderSortTimestamp(left, sort.key), rightTime = orderSortTimestamp(right, sort.key);
+        if (leftTime === null || rightTime === null) return leftTime === rightTime ? 0 : leftTime === null ? 1 : -1;
+        return sort.direction === "asc" ? leftTime - rightTime : rightTime - leftTime;
+    });
+};
 /** 未选任何状态时显示全部；「待发货」同时匹配已入库与待发货。 */
 const matchesStatusFilter = (order: PurchaseOrder, statuses: string[]) => !statuses.length || statuses.some(status => status === "待发货" ? readyToShip(order.status) : order.status === status);
 const toggleStatusFilter = (current: string[], value: string) => value === "全部" ? [] : current.includes(value) ? current.filter(item => item !== value) : [...current, value];
@@ -703,6 +728,7 @@ function AdminOrders({
     const [batchShipOpen, setBatchShipOpen] = useState(false);
     const [batchSettleOpen, setBatchSettleOpen] = useState(false);
     const [dateDays, setDateDays] = useState(30);
+    const [sort, setSort] = useState<OrderSort>(null);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const rangeStart = new Date(today);
@@ -714,7 +740,8 @@ function AdminOrders({
     const purchasers = useMemo(() => Array.from(new Set(orders.map(order => order.purchaser))).sort((a, b) => a.localeCompare(b, "zh-CN")), [orders]);
     const buyerSummary = buyers.length === 0 ? "全部采购员" : buyers.length <= 2 ? buyers.join("、") : `${buyers[0]} 等 ${buyers.length} 人`;
     const toggleBuyer = (name: string) => setBuyers(current => current.includes(name) ? current.filter(item => item !== name) : [...current, name]);
-    const visible = useMemo(() => orders.filter(order => new Date(order.createdAt).getTime() >= dateStart && new Date(order.createdAt).getTime() < dateEnd && matchesStatusFilter(order, statuses) && (platform === "全部渠道" || order.platform === platform) && (settlement === "全部结款状态" || order.settled === (settlement === "已结款")) && (buyers.length === 0 || buyers.includes(order.purchaser)) && `${order.id}${order.platformNo}${order.items.map(item => `${item.title}${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}${item.outboundCourier ?? ""}`).join("")}`.toLowerCase().includes(query.toLowerCase())), [orders, query, statuses, platform, settlement, buyers, dateStart, dateEnd]);
+    const cycleSort = (key: OrderSortKey) => setSort(current => current?.key !== key ? {key, direction: "asc"} : current.direction === "asc" ? {key, direction: "desc"} : null);
+    const visible = useMemo(() => sortPurchaseOrders(orders.filter(order => new Date(order.createdAt).getTime() >= dateStart && new Date(order.createdAt).getTime() < dateEnd && matchesStatusFilter(order, statuses) && (platform === "全部渠道" || order.platform === platform) && (settlement === "全部结款状态" || order.settled === (settlement === "已结款")) && (buyers.length === 0 || buyers.includes(order.purchaser)) && `${order.id}${order.platformNo}${order.items.map(item => `${item.title}${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}${item.outboundCourier ?? ""}`).join("")}`.toLowerCase().includes(query.toLowerCase())), sort), [orders, query, statuses, platform, settlement, buyers, dateStart, dateEnd, sort]);
     const selectedSet = new Set(selectedIds), selectedOrders = orders.filter(order => selectedSet.has(order.id)),
         selectedReady = selectedOrders.filter(order => readyToShip(order.status)),
         selectedSettleReady = selectedOrders.filter(order => order.receivedAt && !order.settled),
@@ -788,6 +815,21 @@ function AdminOrders({
             })}</div>
             <button type="button" className="buyer-filter-done" onClick={() => setBuyerOpen(false)}>完成</button>
         </div>}
+        <div className="order-sort-controls" role="group" aria-label="订单时间排序">
+            <div className="order-sort-copy"><b>排序方式</b><span>点击按钮依次切换顺序、倒序和默认</span></div>
+            <div className="order-sort-buttons">{orderSortOptions.map(option => {
+                const direction = sort?.key === option.key ? sort.direction : null;
+                const active = direction !== null;
+                const stateLabel = direction === "asc" ? "顺序" : direction === "desc" ? "倒序" : "默认";
+                return <button type="button" key={option.key}
+                               className={`order-sort-button ${active ? `active ${direction}` : ""}`}
+                               aria-pressed={active} aria-label={`${option.label}：${stateLabel}`}
+                               onClick={() => cycleSort(option.key)}>
+                    <i>{direction === "asc" ? "↑" : direction === "desc" ? "↓" : "↕"}</i>
+                    <span><b>{option.label}</b><small>{stateLabel}</small></span>
+                </button>;
+            })}</div>
+        </div>
         <SectionHead title="采购订单" note={orderListSummary(visible)}/>
         <div className="batch-toolbar"><label><input type="checkbox" checked={allVisibleSelected} onChange={toggleAll}/><span>{allVisibleSelected ? "取消全选" : "全选当前结果"}</span></label><b>{selectedIds.length ? `已选择 ${selectedIds.length} 笔 · 共 ${selectedItemQuantity} 件` : "可批量选择订单"}</b>
             <button className="batch-settle-button" disabled={!selectedSettleReady.length}

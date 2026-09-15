@@ -726,7 +726,7 @@ test("admin and buyer order lists filter by settlement status",async()=>{
   ]);
   assertJsMatch(page,/const \[settlement,setSettlement\] = useState\("全部结款状态"\)/);
   assertJsMatch(page,/\(settlement === "全部结款状态" \|\| order\.settled === \(settlement === "已结款"\)\)/);
-  assertJsMatch(page,/\[orders,query,statuses,platform,settlement,buyers,dateStart,dateEnd\]/);
+  assertJsMatch(page,/\[orders,query,statuses,platform,settlement,buyers,dateStart,dateEnd,sort\]/);
   assertJsMatch(page,/<select aria-label="结款状态" value=\{settlement\}/);
   assertJsMatch(page,/<option>全部结款状态<\/option><option>已结款<\/option><option>未结款<\/option>/);
   assertJsMatch(page,/setSettlement\("全部结款状态"\)/);
@@ -735,6 +735,25 @@ test("admin and buyer order lists filter by settlement status",async()=>{
   assertCssMatch(styles,/\.select-row\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assertCssMatch(styles,/\.buyer-settlement-filter\{/);
   assertCssMatch(touchStyles,/\.select-row\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+});
+
+test("admin order list offers mutually exclusive three-state time sorting",async()=>{
+  const [page,styles]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
+  ]);
+  assertJsMatch(page,/type OrderSortKey = "createdAt" \| "receivedAt" \| "shippedAt"/);
+  assertJsMatch(page,/\{key:"createdAt",label:"上传时间"\},\{key:"receivedAt",label:"入库时间"\},\{key:"shippedAt",label:"发货时间"\}/);
+  assertJsMatch(page,/const \[sort,setSort\] = useState<OrderSort>\(null\)/);
+  assertJsMatch(page,/current\?\.key !== key \? \{key,direction:"asc"\} : current\.direction === "asc" \? \{key,direction:"desc"\} : null/);
+  assertJsMatch(page,/sortPurchaseOrders\(orders\.filter\(/);
+  assertJsMatch(page,/leftTime === null \? 1 : -1/);
+  assertJsMatch(page,/sort\.direction === "asc" \? leftTime - rightTime : rightTime - leftTime/);
+  assertJsMatch(page,/className="order-sort-controls" role="group" aria-label="订单时间排序"/);
+  assertJsMatch(page,/aria-pressed=\{active\} aria-label=\{`\$\{option\.label\}：\$\{stateLabel\}`\}/);
+  assertCssMatch(styles,/\.order-sort-buttons\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assertCssMatch(styles,/\.order-sort-button\.active\{/);
+  assertCssMatch(styles,/\.order-sort-button\.active\.desc\{/);
 });
 
 test("manual receipt offers recently used locations as one-tap choices",async()=>{

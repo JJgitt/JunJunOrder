@@ -3710,6 +3710,118 @@ button:active {
     box-shadow: 0 6px 14px #1a6dff30
 }
 
+.order-sort-controls {
+    margin: 10px 0 12px;
+    padding: 10px;
+    border: 1px solid #e2e7ee;
+    border-radius: 14px;
+    background: #fafbfd
+}
+
+.order-sort-copy {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px
+}
+
+.order-sort-copy b {
+    color: #344255;
+    font-size: 10px
+}
+
+.order-sort-copy span {
+    color: #98a2ae;
+    font-size: 8px
+}
+
+.order-sort-buttons {
+    display: grid;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    gap: 7px
+}
+
+.order-sort-button {
+    min-width: 0;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 7px;
+    border: 1px solid #dfe4eb;
+    border-radius: 10px;
+    background: #f2f4f7;
+    color: #9aa3ae;
+    text-align: left;
+    transition: border-color .15s, background .15s, color .15s, box-shadow .15s
+}
+
+.order-sort-button i {
+    width: 19px;
+    height: 19px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 7px;
+    background: #e3e7ec;
+    color: #8c96a2;
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 800
+}
+
+.order-sort-button span {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px
+}
+
+.order-sort-button b {
+    overflow: hidden;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.order-sort-button small {
+    color: #a5adb7;
+    font-size: 7.5px
+}
+
+.order-sort-button.active {
+    border-color: #8bb2fb;
+    background: #edf4ff;
+    color: #175fc4;
+    box-shadow: 0 4px 12px #1a6dff16
+}
+
+.order-sort-button.active i {
+    background: var(--primary);
+    color: #fff
+}
+
+.order-sort-button.active small {
+    color: #4f7fc4;
+    font-weight: 700
+}
+
+.order-sort-button.active.desc {
+    border-color: #9471dc;
+    background: #f4f0ff;
+    color: #6540b4
+}
+
+.order-sort-button.active.desc i {
+    background: #7652c6
+}
+
+.order-sort-button.active.desc small {
+    color: #7652c6
+}
+
 /* 手动入库：历史库位快捷选择 */
 .location-history {
     display: flex;
