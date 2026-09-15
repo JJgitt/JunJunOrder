@@ -745,7 +745,8 @@ test("admin order list offers mutually exclusive three-state time sorting",async
   assertJsMatch(page,/type OrderSortKey = "createdAt" \| "receivedAt" \| "shippedAt"/);
   assertJsMatch(page,/\{key:"createdAt",label:"上传时间"\},\{key:"receivedAt",label:"入库时间"\},\{key:"shippedAt",label:"发货时间"\}/);
   assertJsMatch(page,/const \[sort,setSort\] = useState<OrderSort>\(null\)/);
-  assertJsMatch(page,/current\?\.key !== key \? \{key,direction:"asc"\} : current\.direction === "asc" \? \{key,direction:"desc"\} : null/);
+  assertJsMatch(page,/current\?\.key !== key \? \{key,direction:"desc"\} : current\.direction === "desc" \? \{key,direction:"asc"\} : null/);
+  assertJsMatch(page,/点击按钮依次切换倒序、顺序和默认/);
   assertJsMatch(page,/sortPurchaseOrders\(orders\.filter\(/);
   assertJsMatch(page,/leftTime === null \? 1 : -1/);
   assertJsMatch(page,/sort\.direction === "asc" \? leftTime - rightTime : rightTime - leftTime/);

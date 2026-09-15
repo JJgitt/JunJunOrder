@@ -740,7 +740,7 @@ function AdminOrders({
     const purchasers = useMemo(() => Array.from(new Set(orders.map(order => order.purchaser))).sort((a, b) => a.localeCompare(b, "zh-CN")), [orders]);
     const buyerSummary = buyers.length === 0 ? "全部采购员" : buyers.length <= 2 ? buyers.join("、") : `${buyers[0]} 等 ${buyers.length} 人`;
     const toggleBuyer = (name: string) => setBuyers(current => current.includes(name) ? current.filter(item => item !== name) : [...current, name]);
-    const cycleSort = (key: OrderSortKey) => setSort(current => current?.key !== key ? {key, direction: "asc"} : current.direction === "asc" ? {key, direction: "desc"} : null);
+    const cycleSort = (key: OrderSortKey) => setSort(current => current?.key !== key ? {key, direction: "desc"} : current.direction === "desc" ? {key, direction: "asc"} : null);
     const visible = useMemo(() => sortPurchaseOrders(orders.filter(order => new Date(order.createdAt).getTime() >= dateStart && new Date(order.createdAt).getTime() < dateEnd && matchesStatusFilter(order, statuses) && (platform === "全部渠道" || order.platform === platform) && (settlement === "全部结款状态" || order.settled === (settlement === "已结款")) && (buyers.length === 0 || buyers.includes(order.purchaser)) && `${order.id}${order.platformNo}${order.items.map(item => `${item.title}${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}${item.outboundCourier ?? ""}`).join("")}`.toLowerCase().includes(query.toLowerCase())), sort), [orders, query, statuses, platform, settlement, buyers, dateStart, dateEnd, sort]);
     const selectedSet = new Set(selectedIds), selectedOrders = orders.filter(order => selectedSet.has(order.id)),
         selectedReady = selectedOrders.filter(order => readyToShip(order.status)),
@@ -816,7 +816,7 @@ function AdminOrders({
             <button type="button" className="buyer-filter-done" onClick={() => setBuyerOpen(false)}>完成</button>
         </div>}
         <div className="order-sort-controls" role="group" aria-label="订单时间排序">
-            <div className="order-sort-copy"><b>排序方式</b><span>点击按钮依次切换顺序、倒序和默认</span></div>
+            <div className="order-sort-copy"><b>排序方式</b><span>点击按钮依次切换倒序、顺序和默认</span></div>
             <div className="order-sort-buttons">{orderSortOptions.map(option => {
                 const direction = sort?.key === option.key ? sort.direction : null;
                 const active = direction !== null;
