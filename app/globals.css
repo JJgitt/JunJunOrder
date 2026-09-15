@@ -1682,15 +1682,27 @@ button:active {
     max-height: 93vh;
     max-height: 93dvh;
     min-height: 0;
-    overscroll-behavior: contain;
-    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     border-radius: 26px 26px 0 0;
     background: #fff;
     padding: 14px 20px calc(24px + env(safe-area-inset-bottom));
     animation: sheet .25s ease
 }
 
+.modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y pinch-zoom;
+    -webkit-overflow-scrolling: touch;
+}
+
 .sheet-handle {
+    flex-shrink: 0;
     width: 43px;
     height: 4px;
     border-radius: 3px;
@@ -1699,6 +1711,7 @@ button:active {
 }
 
 .modal-sheet > header {
+    flex-shrink: 0;
     position: sticky;
     top: -14px;
     z-index: 2;

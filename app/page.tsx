@@ -2252,7 +2252,7 @@ function Modal({
                     <span>{subtitle}</span>}<h2>{title}</h2></div>
                 <button type="button" aria-label="关闭" onClick={onClose}>×</button>
             </header>
-            {children}</section>
+            <div className="modal-body">{children}</div></section>
     </div>, document.body);
 }
 

@@ -170,7 +170,7 @@ button:disabled { cursor: not-allowed; }
 .modal-sheet > header > div { min-width: 0; }
 .modal-sheet > header h2 { font-size: 23px; }
 .modal-sheet > header button { background: #e9edf4; }
-.modal-sheet > button + button { margin-top: 10px; }
+.modal-body > button + button { margin-top: 10px; }
 .detail-card, .timeline-card, .match-card, .recognized-card, .modal-product { padding: 16px; border-radius: 16px; box-shadow: var(--surface-shadow); }
 .detail-title { align-items: flex-start; gap: 10px; }
 .detail-title h3 { min-width: 0; white-space: normal; overflow-wrap: anywhere; font-size: 16px; }
@@ -238,6 +238,13 @@ button:disabled { cursor: not-allowed; }
 .login-card .primary-button { min-height: 50px; }
 .login-back-link { min-height: 44px; }
 .register-entry { box-shadow: none; }
+
+/* Keep the native touch scroller off transformed/filtered layers in Android
+   embedded browsers. The header remains outside the scrollable body. */
+@media (max-width: 767px), (any-pointer: coarse) {
+    .modal-backdrop { backdrop-filter: none; animation: none; }
+    .modal-sheet { animation: none; }
+}
 
 @media (max-width: 420px) {
     .identity-pill > span { display: none; }

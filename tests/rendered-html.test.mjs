@@ -58,6 +58,16 @@ test("form grids shrink and touch buyer filters match native select text", async
   assert.doesNotMatch(css, /html\.ios-device/);
 });
 
+test("modal content scrolls independently while its close header stays outside", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const theme = await readFile(new URL("../app/workspace-ui.css", import.meta.url), "utf8");
+  assertJsMatch(page, /<\/header><div className="modal-body">\{children\}<\/div>/);
+  assert.match(css, /\.modal-sheet\s*\{[^}]*display: flex;[^}]*flex-direction: column;[^}]*overflow: hidden/);
+  assert.match(css, /\.modal-body\s*\{[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*touch-action: pan-y pinch-zoom/);
+  assert.match(theme, /\.modal-backdrop\s*\{\s*backdrop-filter: none;\s*animation: none/);
+});
+
 test("purchase quantity can be cleared while entering a new value", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   assertJsMatch(page, /qty:number\|""/);
