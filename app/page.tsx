@@ -834,6 +834,9 @@ function OrderCard({
                        showLocation = false
                    }: { order: PurchaseOrder; onOpen: () => void; actions?: React.ReactNode; selectable?: boolean; selected?: boolean; onSelect?: () => void; showOutbound?: boolean; normalizeStatus?: boolean; showPurchaserContact?: boolean; showLocation?: boolean }) {
     const totalQuantity = order.items.reduce((sum, item) => sum + item.qty, 0);
+    const shippedQuantity = order.items.reduce((sum, item) => sum + (item.shipped ? item.qty : 0), 0);
+    const shippingState = order.status === "已发货" ? "shipped" : shippedQuantity > 0 ? "partial" : "pending";
+    const shippingLabel = shippingState === "shipped" ? "已发货" : shippingState === "partial" ? "部分已发货" : "未发货";
     const listTitle = order.itemCount > 1 ? `${order.title} 等${order.itemCount}款 · 共${totalQuantity}件` : `${order.title} · ${order.items[0]?.size}码`;
     return <article className={`order-card edge-${statusTone[order.status]} ${selected ? "selected" : ""}`}>
         {selectable &&
@@ -848,8 +851,10 @@ function OrderCard({
             <div className="order-top"><h4 title={listTitle}>{listTitle}</h4><Badge
                 tone={statusTone[order.status]}>{normalizeStatus ? statusLabel(order.status) : order.status}</Badge>
             </div>
-            {!showOutbound && <div className="order-courier">
-                <span>发货状态</span><b>{order.status === "已发货" ? "已全部发货" : order.items.some(item => item.shipped) ? "部分已发货" : "未发货"}</b>
+            {!showOutbound && <div className={`buyer-shipping-status ${shippingState}`} role="status"
+                                   aria-label={`发货状态：${shippingLabel}`}>
+                <span>发货状态</span><b>{shippingLabel}</b>
+                <small>{shippingState === "shipped" ? `全部 ${totalQuantity} 件` : shippingState === "partial" ? `${shippedQuantity}/${totalQuantity} 件` : `共 ${totalQuantity} 件`}</small>
             </div>}
             <div className="order-meta"><span>{order.platform} · 采购人：{order.purchaser}</span><b>{money(order.amount)}</b>
             </div>
