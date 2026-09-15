@@ -834,9 +834,6 @@ function OrderCard({
                        showLocation = false
                    }: { order: PurchaseOrder; onOpen: () => void; actions?: React.ReactNode; selectable?: boolean; selected?: boolean; onSelect?: () => void; showOutbound?: boolean; normalizeStatus?: boolean; showPurchaserContact?: boolean; showLocation?: boolean }) {
     const totalQuantity = order.items.reduce((sum, item) => sum + item.qty, 0);
-    const shippedQuantity = order.items.reduce((sum, item) => sum + (item.shipped ? item.qty : 0), 0);
-    const shippingState = order.status === "已发货" ? "shipped" : shippedQuantity > 0 ? "partial" : "pending";
-    const shippingLabel = shippingState === "shipped" ? "已发货" : shippingState === "partial" ? "部分已发货" : "未发货";
     const listTitle = order.itemCount > 1 ? `${order.title} 等${order.itemCount}款 · 共${totalQuantity}件` : `${order.title} · ${order.items[0]?.size}码`;
     return <article className={`order-card edge-${statusTone[order.status]} ${selected ? "selected" : ""}`}>
         {selectable &&
@@ -851,11 +848,6 @@ function OrderCard({
             <div className="order-top"><h4 title={listTitle}>{listTitle}</h4><Badge
                 tone={statusTone[order.status]}>{normalizeStatus ? statusLabel(order.status) : order.status}</Badge>
             </div>
-            {!showOutbound && <div className={`buyer-shipping-status ${shippingState}`} role="status"
-                                   aria-label={`发货状态：${shippingLabel}`}>
-                <span>发货状态</span><b>{shippingLabel}</b>
-                <small>{shippingState === "shipped" ? `全部 ${totalQuantity} 件` : shippingState === "partial" ? `${shippedQuantity}/${totalQuantity} 件` : `共 ${totalQuantity} 件`}</small>
-            </div>}
             <div className="order-meta"><span>{order.platform} · 采购人：{order.purchaser}</span><b>{money(order.amount)}</b>
             </div>
             <div className="order-meta secondary">{order.platformNo ?
@@ -1200,7 +1192,7 @@ function BuyerOrders({
     const visible = orders.filter(o => matchesStatusFilter(o, statuses) && (platform === "全部渠道" || o.platform === platform) && (settlement === "全部结款状态" || o.settled === (settlement === "已结款")) && `${o.title}${o.items.map(item => `${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}`).join("")}${o.platformNo}`.toLowerCase().includes(query.toLowerCase()));
     return <section className="enter"><Search value={query} onChange={setQuery} placeholder="搜索商品 / 订单号 / 快递单号"
                                               historyKey="buyer-orders"/><StatusFilter
-        options={["全部", "待审核", "在途", "已入库", "已发货", "已驳回"]} value={statuses} onChange={setStatuses}/>
+        options={["全部", "待审核", "在途", "已入库", "已驳回"]} value={statuses} onChange={setStatuses}/>
         <div className="chip-row scroll">{["全部渠道", ...purchaseChannels].map(v => <button key={v}
                                                                                          className={platform === v ? "active" : ""}
                                                                                          onClick={() => setPlatform(v)}>{v}</button>)}</div>
@@ -1692,9 +1684,7 @@ function OrderDetail({
                 <li><b>08-24 17:40</b><span>二级平台售出</span></li>}{order.settled &&
                 <li><b>{dateTime(order.settledAt)}</b><span>{order.settledByName || "管理员"}完成采购结款{order.settledAmount != null ? ` · ${money(order.settledAmount)}` : ""}</span></li>}</ol>
         </div>
-        {!canManage && <div className="detail-card"><KeyValue label="发货状态"
-                                                              value={order.status === "已发货" ? "已全部发货" : order.items.some(item => item.shipped) ? "部分已发货" : "未发货"}/>
-        </div>}{canManage && canRejectOrder(order) && order.status !== "待审核" &&
+        {canManage && canRejectOrder(order) && order.status !== "待审核" &&
         <button className="primary-button danger-button"
                 onClick={onReject}>驳回采购单</button>}{canManage && order.status === "待审核" && <div className="dual-actions">
         <button className="secondary-danger" onClick={onReject}>驳回</button>

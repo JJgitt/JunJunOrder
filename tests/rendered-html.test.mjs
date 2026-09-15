@@ -348,11 +348,10 @@ test("all signed-in roles have a persistent logout entry",async()=>{
   assert.match(logoutRoute,/clearSessionCookie\(\)/);
 });
 
-test("buyer snapshots show shipment status but hide outbound logistics",async()=>{
-  const [page,appRoute,styles]=await Promise.all([
+test("buyer snapshots stop at receipt and hide all shipment state and logistics",async()=>{
+  const [page,appRoute]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
-    readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
   assertJsMatch(page,/showLocation=\{role === "admin"\}/);
   assertJsMatch(page,/canManage=\{role === "admin"\}/);
@@ -363,18 +362,16 @@ test("buyer snapshots show shipment status but hide outbound logistics",async()=
   assertJsMatch(page,/canManage&&item\.shipped&&<div className="item-ship-block">/);
   assertJsMatch(page,/canManage&&readyToShip\(order\.status\)&&!item\.shipped&&<button className="item-ship-button"/);
   assertJsMatch(page,/canManage && order\.status === "待审核"/);
-  assertJsMatch(page,/className=\{`buyer-shipping-status \$\{shippingState\}`\} role="status"/);
-  assertJsMatch(page,/const shippingLabel = shippingState === "shipped" \? "已发货" : shippingState === "partial" \? "部分已发货" : "未发货"/);
-  assertCssMatch(styles,/\.buyer-shipping-status\{/);
-  assertCssMatch(styles,/\.buyer-shipping-status\.partial\{/);
-  assertCssMatch(styles,/\.buyer-shipping-status\.shipped\{/);
-  assertJsMatch(page,/\["全部","待审核","在途","已入库","已发货","已驳回"\]/);
+  assertJsNotMatch(page,/!showOutbound&&<div className=\{`buyer-shipping-status/);
+  assertJsNotMatch(page,/!canManage&&<div className="detail-card"><KeyValue label="发货状态"/);
+  assertJsMatch(page,/\["全部","待审核","在途","已入库","已驳回"\]/);
   assertJsNotMatch(page,/\["全部","待审核","在途","待发货","已发货"\]/);
   for(const overlay of ["receipt","scan","manual-receive","reject","ship"]){
     assertJsMatch(page,new RegExp(`role === "admin" && overlay === "${overlay}"`));
   }
-  assert.match(appRoute,/!isAdmin&&derived==="待发货"\?"已入库":derived/);
+  assert.match(appRoute,/!isAdmin&&\["已入库","待发货","已发货"\]\.includes\(row\.status\)\?"已入库":derived/);
   assert.match(appRoute,/\.\.\.\(isAdmin\?\{/);
+  assert.match(appRoute,/\.\.\.\(isAdmin\?\{\s*shipped:Boolean\(item\.shippedAt\)/);
   assert.match(appRoute,/outboundCompany:item\.outboundCompany\?\?undefined,outboundCourier:item\.outboundCourierNo\?\?undefined/);
   assert.doesNotMatch(appRoute,/location:row\.location\?\?undefined/);
 });
@@ -705,7 +702,7 @@ test("admin and buyer order lists filter by multiple statuses at once",async()=>
   assertJsMatch(page,/matchesStatusFilter\(order, statuses\)/);
   assertJsMatch(page,/matchesStatusFilter\(o, statuses\)/);
   assertJsMatch(page,/<StatusFilter options=\{\["全部","待审核","在途","待发货","已发货","已驳回"\]\} value=\{statuses\} onChange=\{setStatuses\} \/>/);
-  assertJsMatch(page,/<StatusFilter options=\{\["全部","待审核","在途","已入库","已发货","已驳回"\]\} value=\{statuses\} onChange=\{setStatuses\} \/>/);
+  assertJsMatch(page,/<StatusFilter options=\{\["全部","待审核","在途","已入库","已驳回"\]\} value=\{statuses\} onChange=\{setStatuses\} \/>/);
   assertJsMatch(page,/className="status-filter-clear" onClick=\{\(\) => onChange\(\[\]\)\}/);
   assertJsMatch(page,/className="status-filter-summary" role="status" aria-live="polite"/);
   assertJsMatch(page,/className="status-filter-values" aria-label="已选择的状态"/);

@@ -43,12 +43,12 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
     const rawItems=itemRows.filter(item=>item.orderId===row.id);
     const allShipped=rawItems.length>0&&rawItems.every(item=>item.shippedAt);
     const derived=row.status==="已入库"?(allShipped?"已发货":"待发货"):row.status;
-    const status=!isAdmin&&derived==="待发货"?"已入库":derived;
+    const status=!isAdmin&&["已入库","待发货","已发货"].includes(row.status)?"已入库":derived;
     const items=rawItems.map(item=>({
       id:item.id,title:item.title,sku:item.sku,size:item.size,qty:item.qty,amount:item.amountCents/100,
       purchaseCourierCompany:item.purchaseCourierCompany||row.courierCompany,purchaseCourierNo:item.purchaseCourierNo||row.courierNo,
-      shipped:Boolean(item.shippedAt),
       ...(isAdmin?{
+        shipped:Boolean(item.shippedAt),
         resalePlatform:item.resalePlatform??undefined,resaleNo:item.resaleOrderNo??undefined,
         salePrice:item.salePriceCents==null?undefined:item.salePriceCents/100,
         outboundCompany:item.outboundCompany??undefined,outboundCourier:item.outboundCourierNo??undefined,shippedAt:item.shippedAt??undefined,
