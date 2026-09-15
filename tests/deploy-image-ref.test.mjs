@@ -29,5 +29,5 @@ test("workflow keeps GHCR publish and optional SWR mirror", async () => {
   assert.match(workflow, /swr\.cn-north-4\.myhuaweicloud\.com\/junjunorder\/junjunorder/);
   assert.match(workflow, /ghcr\.io\/jjgitt\/junjunorder/);
   assert.match(rollback, /"\$DEPLOY_USER@\$DEPLOY_HOST" "ghcr\.io\/jjgitt\/junjunorder@\$IMAGE_DIGEST"/);
-  assert.doesNotMatch(workflow, /SWR_PASSWORD:\s*['\"]?[A-Za-z0-9+/=]{20,}/);
+  assert.doesNotMatch(workflow, /SWR_PASSWORD:\s*['"]?[A-Za-z0-9+/=]{20,}/);
 });
