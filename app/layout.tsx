@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./workspace-ui.css";
 import "./touch-forms.css";
 
 const configuredOrigin = process.env.SITE_ORIGIN?.trim().replace(/\/$/, "");

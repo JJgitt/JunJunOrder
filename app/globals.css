@@ -48,7 +48,7 @@ button:active {
 
 .app-frame {
     width: min(100%, 500px);
-    min-height: 100 dvh;
+    min-height: 100dvh;
     margin: auto;
     background: var(--paper);
     padding: 0 18px 108px;
@@ -90,7 +90,7 @@ button:active {
 }
 
 .header-copy span {
-    font-size: 9px;
+    font-size: 12px;
     color: #8b94a2;
     margin-top: 3px;
     letter-spacing: .02em
@@ -103,7 +103,7 @@ button:active {
     background: #fff;
     color: #476078;
     padding: 7px 10px;
-    font-size: 9px;
+    font-size: 12px;
     box-shadow: 0 4px 12px #0f172a08
 }
 
@@ -123,7 +123,7 @@ button:active {
 }
 
 .date-row span {
-    font-size: 10px;
+    font-size: 13px;
     color: #8490a1
 }
 
@@ -180,7 +180,7 @@ button:active {
 }
 
 .stat-grid span {
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 650;
     margin-top: 7px
 }
@@ -188,7 +188,7 @@ button:active {
 .stat-grid em {
     font-style: normal;
     color: #a0a8b4;
-    font-size: 7.5px;
+    font-size: 11px;
     margin-top: 3px;
     white-space: nowrap
 }
@@ -235,7 +235,7 @@ button:active {
 }
 
 .receipt-hero span {
-    font-size: 8px;
+    font-size: 11px;
     color: #d4e5ff;
     letter-spacing: .08em
 }
@@ -246,7 +246,7 @@ button:active {
 }
 
 .receipt-hero p {
-    font-size: 8px;
+    font-size: 11px;
     color: #c7ddff;
     margin: 0;
     white-space: nowrap
@@ -260,7 +260,7 @@ button:active {
     background: #fff;
     color: var(--primary-dark);
     padding: 9px 10px;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 700;
     white-space: nowrap
 }
@@ -278,7 +278,7 @@ button:active {
 }
 
 .section-head span {
-    font-size: 9px;
+    font-size: 12px;
     color: #99a2af
 }
 
@@ -343,17 +343,17 @@ button:active {
 }
 
 .task-row b {
-    font-size: 11.5px
+    font-size: 14px
 }
 
 .task-row small {
-    font-size: 8px;
+    font-size: 11px;
     color: #9aa3af;
     margin-top: 4px
 }
 
 .task-row em {
-    font-size: 8px;
+    font-size: 11px;
     font-style: normal;
     color: var(--primary);
     white-space: nowrap
@@ -376,12 +376,12 @@ button:active {
 }
 
 .finance-card span {
-    font-size: 10px;
+    font-size: 13px;
     color: #788391
 }
 
 .finance-card b {
-    font-size: 13px
+    font-size: 14px
 }
 
 .finance-card .profit b {
@@ -415,7 +415,7 @@ button:active {
     outline: 0;
     background: transparent;
     padding: 0 9px;
-    font-size: 11px
+    font-size: 14px
 }
 
 .search-box input::placeholder {
@@ -450,7 +450,7 @@ button:active {
     background: #fff;
     color: #657080;
     padding: 7px 13px;
-    font-size: 9.5px
+    font-size: 13px
 }
 
 .chip-row button.active {
@@ -476,7 +476,7 @@ button:active {
     padding: 0;
     background: transparent;
     color: var(--primary);
-    font-size: 8.5px;
+    font-size: 12px;
     font-weight: 700
 }
 
@@ -493,7 +493,7 @@ button:active {
     border-radius: 10px;
     background: #fff;
     padding: 0 7px;
-    font-size: 9px;
+    font-size: 12px;
     color: #66717f;
     outline: 0
 }
@@ -504,7 +504,7 @@ button:active {
     gap: 10px;
     margin: -3px 0 13px;
     color: #7a8491;
-    font-size: 9px
+    font-size: 12px
 }
 
 .buyer-settlement-filter > span {
@@ -521,7 +521,7 @@ button:active {
     background: #fff;
     padding: 0 10px;
     color: #66717f;
-    font-size: 9px;
+    font-size: 12px;
     outline: 0
 }
 
@@ -547,7 +547,7 @@ button:active {
 }
 
 .stock-overview span {
-    font-size: 8px;
+    font-size: 11px;
     color: #aeb8c5
 }
 
@@ -585,7 +585,7 @@ button:active {
     color: #526174;
     display: grid;
     place-items: center;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 800
 }
 
@@ -601,7 +601,7 @@ button:active {
 }
 
 .sku-main h4 {
-    font-size: 11px;
+    font-size: 14px;
     margin: 0;
     white-space: nowrap;
     overflow: hidden;
@@ -609,19 +609,19 @@ button:active {
 }
 
 .sku-main p {
-    font-size: 9px;
+    font-size: 12px;
     color: #6f7a88;
     margin: 6px 0 0
 }
 
 .sku-main p b {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--ink)
 }
 
 .sku-main small {
     display: block;
-    font-size: 8px;
+    font-size: 11px;
     color: #a1a9b4;
     margin-top: 3px
 }
@@ -631,7 +631,7 @@ button:active {
     border-radius: 10px;
     background: var(--primary-light);
     color: var(--primary-dark);
-    font-size: 8px;
+    font-size: 11px;
     padding: 7px;
     white-space: nowrap
 }
@@ -696,7 +696,7 @@ button:active {
 }
 
 .order-top h4 {
-    font-size: 12px;
+    font-size: 14px;
     margin: 0;
     white-space: nowrap;
     overflow: hidden;
@@ -704,24 +704,24 @@ button:active {
 }
 
 .order-meta {
-    font-size: 9px;
+    font-size: 12px;
     color: #788391;
     margin-top: 7px
 }
 
 .order-meta b {
     color: var(--ink);
-    font-size: 11px
+    font-size: 14px
 }
 
 .order-meta.secondary {
-    font-size: 8px;
+    font-size: 11px;
     color: #a4acb6;
     margin-top: 4px
 }
 
 .reject-note {
-    font-size: 8.5px;
+    font-size: 12px;
     color: #c24444;
     background: #fff1f1;
     border-radius: 8px;
@@ -741,7 +741,7 @@ button:active {
 .order-actions button {
     border-radius: 9px;
     padding: 7px 12px;
-    font-size: 8.5px
+    font-size: 12px
 }
 
 .danger-ghost {
@@ -772,14 +772,14 @@ button:active {
 }
 
 .order-courier span {
-    font-size: 8px
+    font-size: 11px
 }
 
 .order-courier b {
     margin-left: auto;
     color: #334155;
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: .02em;
     overflow-wrap: anywhere;
     text-align: right
@@ -799,7 +799,7 @@ button:active {
 
 .order-settlement > span {
     flex: none;
-    font-size: 8px
+    font-size: 11px
 }
 
 .order-settlement > b {
@@ -815,12 +815,12 @@ button:active {
 .order-settlement em {
     flex: none;
     font-style: normal;
-    font-size: 9px
+    font-size: 12px
 }
 
 .order-settlement time {
     color: #8f9b91;
-    font-size: 7.5px;
+    font-size: 11px;
     font-weight: 500
 }
 
@@ -845,7 +845,7 @@ button:active {
     border-radius: 11px;
     background: #fffaf0;
     color: #8f6010;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 800
 }
 
@@ -889,7 +889,7 @@ button:active {
 }
 
 .order-shipment-head span, .order-shipment-head b {
-    font-size: 8.5px;
+    font-size: 12px;
     line-height: 1.4
 }
 
@@ -914,7 +914,7 @@ button:active {
     min-width: 0;
     overflow: hidden;
     color: #265f3a;
-    font-size: 9px;
+    font-size: 12px;
     line-height: 1.4;
     text-overflow: ellipsis;
     white-space: nowrap
@@ -923,7 +923,7 @@ button:active {
 .order-shipment-product span {
     flex: none;
     color: #6b8a76;
-    font-size: 8px;
+    font-size: 11px;
     line-height: 1.4
 }
 
@@ -937,7 +937,7 @@ button:active {
 
 .order-shipment-detail > span {
     color: #6b8a76;
-    font-size: 8px;
+    font-size: 11px;
     line-height: 1.4
 }
 
@@ -945,7 +945,7 @@ button:active {
     min-width: 0;
     justify-self: end;
     color: #176b38;
-    font-size: 8.5px;
+    font-size: 12px;
     line-height: 1.4;
     text-align: right
 }
@@ -960,14 +960,14 @@ button:active {
 
 .order-shipment-detail b em {
     font-family: inherit;
-    font-size: 8px;
+    font-size: 11px;
     font-style: normal;
     font-weight: 600;
     color: #5d8069
 }
 
 .order-shipment-detail .copy-number {
-    font-size: 8.5px
+    font-size: 12px
 }
 
 .order-shipment-detail .copy-button {
@@ -986,7 +986,7 @@ button:active {
     display: block;
     margin-bottom: 7px;
     color: #65748a;
-    font-size: 8px
+    font-size: 11px
 }
 
 .order-contact > div {
@@ -1008,7 +1008,7 @@ button:active {
     background: #e3edff;
     color: #2d63b8;
     padding: 3px 5px;
-    font-size: 7px;
+    font-size: 10px;
     font-style: normal;
     font-weight: 750
 }
@@ -1017,7 +1017,7 @@ button:active {
     justify-content: flex-start;
     color: #26364d;
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 8.5px;
+    font-size: 12px;
     font-weight: 700
 }
 
@@ -1050,7 +1050,7 @@ button:active {
     background: #f4f8ff;
     color: #2464c7;
     padding: 3px 6px;
-    font-size: 7.5px;
+    font-size: 11px;
     font-weight: 700;
     line-height: 1.1;
     white-space: nowrap
@@ -1088,7 +1088,7 @@ button:active {
     align-items: center;
     border-radius: 20px;
     padding: 3px 8px;
-    font-size: 8px;
+    font-size: 11px;
     font-weight: 700;
     white-space: nowrap
 }
@@ -1132,7 +1132,7 @@ button:active {
 }
 
 .buyer-welcome span {
-    font-size: 9px;
+    font-size: 12px;
     color: #c9ddff
 }
 
@@ -1142,7 +1142,7 @@ button:active {
 }
 
 .buyer-welcome p {
-    font-size: 9px;
+    font-size: 12px;
     color: #dce9ff;
     margin: 0
 }
@@ -1177,7 +1177,7 @@ button:active {
 }
 
 .buyer-stats span {
-    font-size: 8px;
+    font-size: 11px;
     color: #7d8794;
     margin-top: 3px
 }
@@ -1204,22 +1204,22 @@ button:active {
     border-radius: 50%;
     background: #e75252;
     color: #fff;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 900
 }
 
 .rejected-alert > div b {
-    font-size: 11px;
+    font-size: 14px;
     color: #b93333
 }
 
 .rejected-alert h4 {
-    font-size: 11px;
+    font-size: 14px;
     margin: 10px 0 4px
 }
 
 .rejected-alert p {
-    font-size: 8.5px;
+    font-size: 12px;
     color: #b65b5b;
     margin: 0
 }
@@ -1232,7 +1232,7 @@ button:active {
     background: #fff;
     color: #b43838;
     padding: 8px;
-    font-size: 9px
+    font-size: 12px
 }
 
 .buyer-quick {
@@ -1279,11 +1279,11 @@ button:active {
 }
 
 .buyer-quick b {
-    font-size: 11px
+    font-size: 14px
 }
 
 .buyer-quick small {
-    font-size: 8px;
+    font-size: 11px;
     color: #99a2ad;
     margin-top: 4px
 }
@@ -1299,7 +1299,7 @@ button:active {
 }
 
 .form-intro > span {
-    font-size: 8px;
+    font-size: 11px;
     color: var(--primary);
     letter-spacing: .14em
 }
@@ -1310,7 +1310,7 @@ button:active {
 }
 
 .form-intro p {
-    font-size: 9px;
+    font-size: 12px;
     color: #8893a1;
     margin: 0
 }
@@ -1333,7 +1333,7 @@ button:active {
 }
 
 .purchase-form label > span, .modal-field > span, .recognized-card label > span, .location-field > span {
-    font-size: 9px;
+    font-size: 12px;
     color: #5f6a77
 }
 
@@ -1353,7 +1353,7 @@ button:active {
     background: #fafbfd;
     padding: 0 11px;
     outline: 0;
-    font-size: 10px
+    font-size: 13px
 }
 
 .purchase-form input:focus, .purchase-form select:focus, .modal-field input:focus, .recognized-card input:focus, .location-field input:focus {
@@ -1361,9 +1361,9 @@ button:active {
     box-shadow: 0 0 0 3px #1a6dff12
 }
 
-/* 录入/编辑采购单：平台单号约为旁侧 10px 字段的一半，长号更容易看全。 */
+/* 长号码使用可读字号；输入时通过原生水平滚动查看完整号码。 */
 .purchase-form input.long-no-input {
-    font-size: 5px
+    font-size: 14px
 }
 
 .field-grid {
@@ -1381,7 +1381,7 @@ button:active {
     left: 11px;
     top: 13px;
     font-style: normal;
-    font-size: 11px;
+    font-size: 14px;
     color: #7d8794
 }
 
@@ -1416,11 +1416,11 @@ button:active {
 }
 
 .upload-zone b {
-    font-size: 10px
+    font-size: 13px
 }
 
 .upload-zone > span {
-    font-size: 8px !important;
+    font-size: 11px !important;
     color: #7188a8 !important
 }
 
@@ -1428,7 +1428,7 @@ button:active {
     width: 100%;
     height: 44px;
     border-radius: 11px;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 700
 }
 
@@ -1454,7 +1454,7 @@ button:active {
 .form-footnote {
     text-align: center;
     color: #9ea6b0;
-    font-size: 8px;
+    font-size: 11px;
     margin: 0
 }
 
@@ -1469,12 +1469,12 @@ button:active {
 }
 
 .inline-warning b {
-    font-size: 10px;
+    font-size: 13px;
     color: #b63838
 }
 
 .inline-warning span {
-    font-size: 8px;
+    font-size: 11px;
     color: #b76b6b;
     margin-top: 4px
 }
@@ -1512,7 +1512,7 @@ button:active {
 }
 
 .profile-card > div span {
-    font-size: 9px;
+    font-size: 12px;
     color: #aeb8c5
 }
 
@@ -1547,12 +1547,12 @@ button:active {
 }
 
 .profile-menu span {
-    font-size: 10.5px;
+    font-size: 13px;
     flex: 1
 }
 
 .profile-menu small {
-    font-size: 8px;
+    font-size: 11px;
     color: #8d97a4
 }
 
@@ -1577,7 +1577,7 @@ button:active {
 
 .version {
     text-align: center;
-    font-size: 8px;
+    font-size: 11px;
     color: #a5adb7;
     margin: 22px 0
 }
@@ -1603,7 +1603,7 @@ button:active {
     border: 0;
     background: transparent;
     color: #8a94a1;
-    font-size: 8px;
+    font-size: 11px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1641,7 +1641,7 @@ button:active {
 }
 
 .bottom-nav .central-scan span {
-    font-size: 7px
+    font-size: 10px
 }
 
 .buyer-nav {
@@ -1711,7 +1711,7 @@ button:active {
 }
 
 .modal-sheet > header span {
-    font-size: 8px;
+    font-size: 11px;
     color: var(--primary);
     letter-spacing: .12em
 }
@@ -1751,13 +1751,13 @@ button:active {
 }
 
 .camera-zone b {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--primary-dark);
     margin-top: 7px
 }
 
 .camera-zone span {
-    font-size: 8px;
+    font-size: 11px;
     color: #6381ad;
     margin-top: 5px
 }
@@ -1767,7 +1767,7 @@ button:active {
     border: 0;
     background: transparent;
     color: var(--primary);
-    font-size: 9px;
+    font-size: 12px;
     margin: 12px auto 0
 }
 
@@ -1786,7 +1786,7 @@ button:active {
 }
 
 .recognized-card > div b {
-    font-size: 10px
+    font-size: 13px
 }
 
 .recognized-card label {
@@ -1798,7 +1798,7 @@ button:active {
 }
 
 .match-card h3, .unmatched h3, .candidate-card h3, .timeline-card h3 {
-    font-size: 11px;
+    font-size: 14px;
     margin: 0 0 8px
 }
 
@@ -1812,18 +1812,18 @@ button:active {
 }
 
 .key-value span {
-    font-size: 9px;
+    font-size: 12px;
     color: #75808e
 }
 
 .key-value b {
-    font-size: 9.5px;
+    font-size: 13px;
     text-align: right
 }
 
 .key-value .highlight {
     color: var(--success);
-    font-size: 12px
+    font-size: 14px
 }
 
 .location-field {
@@ -1840,7 +1840,7 @@ button:active {
 }
 
 .unmatched p {
-    font-size: 8.5px;
+    font-size: 12px;
     color: #986262;
     margin: 0;
     line-height: 1.6
@@ -1860,11 +1860,11 @@ button:active {
 }
 
 .candidate-card b {
-    font-size: 9.5px
+    font-size: 13px
 }
 
 .candidate-card small {
-    font-size: 8px;
+    font-size: 11px;
     color: #8d97a3;
     margin-top: 4px
 }
@@ -1875,7 +1875,7 @@ button:active {
     background: var(--primary-light);
     color: var(--primary-dark);
     padding: 7px 8px;
-    font-size: 8px
+    font-size: 11px
 }
 
 .scanner-box {
@@ -1899,12 +1899,12 @@ button:active {
 }
 
 .scanner-box b {
-    font-size: 11px;
+    font-size: 14px;
     margin-top: 5px
 }
 
 .scanner-box span {
-    font-size: 8px;
+    font-size: 11px;
     color: #8994a1;
     margin-top: 4px
 }
@@ -1929,7 +1929,7 @@ button:active {
 }
 
 .detail-title h3 {
-    font-size: 12px;
+    font-size: 14px;
     margin: 0
 }
 
@@ -1959,11 +1959,11 @@ button:active {
 }
 
 .timeline-card li b {
-    font-size: 8.5px
+    font-size: 12px
 }
 
 .timeline-card li span {
-    font-size: 8px;
+    font-size: 11px;
     color: #7c8795;
     margin-top: 2px
 }
@@ -1979,7 +1979,7 @@ button:active {
     border-radius: 11px;
     background: #fff;
     color: #c43f3f;
-    font-size: 10px
+    font-size: 13px
 }
 
 .modal-field {
@@ -1994,7 +1994,7 @@ button:active {
     background: #fafbfd;
     padding: 11px;
     outline: 0;
-    font-size: 10px
+    font-size: 13px
 }
 
 .reason-chips {
@@ -2010,7 +2010,7 @@ button:active {
     background: #fff;
     color: #687381;
     padding: 6px 9px;
-    font-size: 8px
+    font-size: 11px
 }
 
 .danger-button {
@@ -2025,11 +2025,11 @@ button:active {
 }
 
 .modal-product b {
-    font-size: 11px
+    font-size: 14px
 }
 
 .modal-product span {
-    font-size: 8px;
+    font-size: 11px;
     color: #838e9b;
     margin-top: 4px
 }
@@ -2043,7 +2043,7 @@ button:active {
 }
 
 .profit-preview span {
-    font-size: 9px;
+    font-size: 12px;
     color: #4b7658
 }
 
@@ -2057,7 +2057,7 @@ button:active {
 }
 
 .modal-sheet > header .copy-number > span {
-    font-size: 8px;
+    font-size: 11px;
     color: var(--primary);
     letter-spacing: .12em
 }
@@ -2070,7 +2070,7 @@ button:active {
     background: #f4f8ff;
     color: #2464c7;
     padding: 3px 6px;
-    font-size: 7.5px;
+    font-size: 11px;
     line-height: 1.1
 }
 
@@ -2100,7 +2100,7 @@ button:active {
     background: #111827ef;
     color: #fff;
     padding: 11px 15px;
-    font-size: 9px;
+    font-size: 12px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -2168,7 +2168,7 @@ button:active {
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 700
 }
 
@@ -2188,7 +2188,7 @@ button:active {
     align-items: center;
     gap: 5px;
     margin-top: 4px;
-    font-size: 8.5px;
+    font-size: 12px;
     color: #8b95a2
 }
 
@@ -2198,7 +2198,7 @@ button:active {
 
 .item-sku-meta .copy-button {
     padding: 2px 5px;
-    font-size: 7px
+    font-size: 10px
 }
 
 .sku-copy-list {
@@ -2216,7 +2216,7 @@ button:active {
 }
 
 .sku-copy-list small {
-    font-size: 8px;
+    font-size: 11px;
     color: #7c8795;
     font-weight: 500;
     white-space: nowrap
@@ -2267,7 +2267,7 @@ button:active {
 }
 
 .scroll-top-button span {
-    font-size: 7px;
+    font-size: 10px;
     font-weight: 750
 }
 
@@ -2305,18 +2305,18 @@ button:active {
 }
 
 .item-purchase-logistics-head i {
-    font-size: 12px;
+    font-size: 14px;
     font-style: normal
 }
 
 .item-purchase-logistics-head b {
-    font-size: 9px;
+    font-size: 12px;
     color: #315987
 }
 
 .item-purchase-logistics-head span {
     margin-left: auto;
-    font-size: 7.5px;
+    font-size: 11px;
     color: #8396ad
 }
 
@@ -2335,7 +2335,7 @@ button:active {
 .order-purchase-logistics > span {
     display: block;
     margin-bottom: 6px;
-    font-size: 8px
+    font-size: 11px
 }
 
 .purchase-courier-list {
@@ -2366,7 +2366,7 @@ button:active {
     background: #e5edf8;
     color: #5c7290;
     padding: 2px 4px;
-    font-size: 7px;
+    font-size: 10px;
     font-weight: 700;
     text-overflow: ellipsis;
     white-space: nowrap
@@ -2374,7 +2374,7 @@ button:active {
 
 .purchase-courier-list > span > span:not(.copy-number) {
     flex: none;
-    font-size: 8px;
+    font-size: 11px;
     color: #637286
 }
 
@@ -2382,7 +2382,7 @@ button:active {
     min-width: 0;
     color: #334155;
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 8.5px;
+    font-size: 12px;
     font-weight: 700
 }
 
@@ -2451,7 +2451,7 @@ button:active {
     place-items: center;
     background: var(--primary-light);
     color: var(--primary-dark);
-    font-size: 10px
+    font-size: 13px
 }
 
 .identity-pill span {
@@ -2460,7 +2460,7 @@ button:active {
     text-overflow: ellipsis;
     white-space: nowrap;
     color: #7d8794;
-    font-size: 8px
+    font-size: 11px
 }
 
 .identity-logout {
@@ -2471,7 +2471,7 @@ button:active {
     color: #526174;
     padding: 6px 7px;
     text-decoration: none;
-    font-size: 8px;
+    font-size: 11px;
     font-weight: 700;
     box-shadow: 0 3px 9px #0f172a08
 }
@@ -2507,11 +2507,11 @@ button:active {
 }
 
 .member-list b {
-    font-size: 10px
+    font-size: 13px
 }
 
 .member-list small {
-    font-size: 8px;
+    font-size: 11px;
     color: #8b95a2;
     margin-top: 3px;
     overflow: hidden;
@@ -2524,7 +2524,7 @@ button:active {
     border-radius: 9px;
     background: #fff;
     padding: 0 7px;
-    font-size: 8px
+    font-size: 11px
 }
 
 .profile-menu button, .profile-menu a {
@@ -2556,7 +2556,7 @@ button:active {
     align-items: center;
     justify-content: center;
     text-decoration: none;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 700
 }
 
@@ -2570,7 +2570,7 @@ button:active {
     align-items: center;
     justify-content: center;
     position: relative;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 700
 }
 
@@ -2596,7 +2596,7 @@ button:active {
 }
 
 .system-state p {
-    font-size: 10px;
+    font-size: 13px;
     line-height: 1.6;
     color: #7d8794;
     margin: 0 0 18px
@@ -2634,7 +2634,7 @@ button:active {
 }
 
 .login-shell {
-    min-height: 100 dvh;
+    min-height: 100dvh;
     display: grid;
     place-items: center;
     padding: 28px;
@@ -2680,7 +2680,7 @@ button:active {
 .login-brand small {
     margin-top: 2px;
     color: #8b98ab;
-    font-size: 11px;
+    font-size: 14px;
     letter-spacing: .12em
 }
 
@@ -2691,7 +2691,7 @@ button:active {
 .login-copy p {
     margin: 0 0 8px;
     color: #3478f6;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 800;
     letter-spacing: .16em
 }
@@ -2720,7 +2720,7 @@ button:active {
 }
 
 .login-card label span {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
     color: #556176
 }
@@ -2746,13 +2746,13 @@ button:active {
     border-radius: 10px;
     background: #fff0f0;
     color: #d73535;
-    font-size: 13px
+    font-size: 14px
 }
 
 .login-footnote {
     margin: 22px 0 0;
     color: #9aa5b5;
-    font-size: 12px;
+    font-size: 14px;
     line-height: 1.6;
     text-align: center
 }
@@ -2767,7 +2767,7 @@ button:active {
     display: block;
     margin: 0 0 10px;
     color: #7b8799;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 650
 }
 
@@ -2829,7 +2829,7 @@ button:active {
 .register-entry small {
     margin-top: 4px;
     color: #6680ae;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 500
 }
 
@@ -2853,7 +2853,7 @@ button:active {
     justify-content: center;
     margin-top: 18px;
     color: #3478f6;
-    font-size: 13px
+    font-size: 14px
 }
 
 .register-success {
@@ -2893,7 +2893,7 @@ button:active {
     border-radius: 12px;
     background: #3478f6;
     color: #fff;
-    font-size: 13px;
+    font-size: 14px;
     box-shadow: 0 7px 16px #1a6dff35
 }
 
@@ -2906,7 +2906,7 @@ button:active {
     background: #f3f7ff;
     color: #3478f6;
     font: inherit;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 750
 }
 
@@ -2929,7 +2929,7 @@ button:active {
     border-radius: 10px;
     background: #f9fbfe;
     font: inherit;
-    font-size: 12px
+    font-size: 14px
 }
 
 .member-create-form .primary-button {
@@ -2958,7 +2958,7 @@ button:active {
     background: #f2f5f9;
     color: #667085;
     font: inherit;
-    font-size: 11px
+    font-size: 14px
 }
 
 .member-disabled {
@@ -3031,13 +3031,13 @@ button:active {
 }
 
 .application-main b {
-    font-size: 11px
+    font-size: 14px
 }
 
 .application-main span {
     margin-top: 4px;
     color: #4d5968;
-    font-size: 9px;
+    font-size: 12px;
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace
 }
 
@@ -3045,7 +3045,7 @@ button:active {
     margin-top: 2px;
     overflow: hidden;
     color: #8993a0;
-    font-size: 8px;
+    font-size: 11px;
     text-overflow: ellipsis
 }
 
@@ -3060,7 +3060,7 @@ button:active {
     padding: 7px 8px;
     border-radius: 9px;
     font: inherit;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 750
 }
 
@@ -3086,7 +3086,7 @@ button:active {
     border-radius: 15px;
     background: #fff;
     color: #8793a2;
-    font-size: 10px
+    font-size: 13px
 }
 
 .application-empty i {
@@ -3120,12 +3120,12 @@ button:active {
 }
 
 .items-editor-head b {
-    font-size: 11px;
+    font-size: 14px;
     letter-spacing: .01em
 }
 
 .items-editor-head span {
-    font-size: 8.5px;
+    font-size: 12px;
     color: #8b98a9
 }
 
@@ -3145,16 +3145,16 @@ button:active {
 .items-editor select {
     height: 36px;
     padding: 0 9px;
-    font-size: 8.5px
+    font-size: 12px
 }
 
 .items-editor input.long-no-input {
-    font-size: 4.5px
+    font-size: 14px
 }
 
 .items-editor .money-input i {
     top: 10px;
-    font-size: 9px
+    font-size: 12px
 }
 
 .items-editor .money-input input {
@@ -3179,7 +3179,7 @@ button:active {
     background: var(--primary);
     color: #fff;
     font-style: normal;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 800;
     box-shadow: 0 3px 8px #1a6dff33
 }
@@ -3187,7 +3187,7 @@ button:active {
 .item-card-head b {
     min-width: 0;
     flex: 1;
-    font-size: 10.5px;
+    font-size: 13px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis
@@ -3200,7 +3200,7 @@ button:active {
     background: #fff;
     color: #c34848;
     padding: 5px 9px;
-    font-size: 8px;
+    font-size: 11px;
     font-weight: 700
 }
 
@@ -3239,13 +3239,13 @@ button:active {
 }
 
 .item-add-button b {
-    font-size: 10.5px;
+    font-size: 13px;
     color: var(--primary-dark)
 }
 
 .item-add-button small {
     margin-top: 3px;
-    font-size: 8px;
+    font-size: 11px;
     color: #7f95b5
 }
 
@@ -3260,7 +3260,7 @@ button:active {
 }
 
 .items-total span {
-    font-size: 9px;
+    font-size: 12px;
     color: #b9c2d0
 }
 
@@ -3300,7 +3300,7 @@ button:active {
 }
 
 .search-history-head span {
-    font-size: 8.5px;
+    font-size: 12px;
     color: #8b95a2;
     letter-spacing: .02em
 }
@@ -3309,7 +3309,7 @@ button:active {
     border: 0;
     background: transparent;
     color: #98a2ae;
-    font-size: 8.5px;
+    font-size: 12px;
     padding: 3px 4px
 }
 
@@ -3344,14 +3344,14 @@ button:active {
 .search-history-pick i {
     flex: none;
     font-style: normal;
-    font-size: 12px;
+    font-size: 14px;
     color: #a3adb9
 }
 
 .search-history-pick span {
     min-width: 0;
     flex: 1;
-    font-size: 10.5px;
+    font-size: 13px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis
@@ -3439,13 +3439,13 @@ button:active {
 }
 
 .purchase-form .recognize-zone b {
-    font-size: 10.5px;
+    font-size: 13px;
     color: #3b1f8f
 }
 
 .purchase-form .recognize-zone small {
     margin-top: 3px;
-    font-size: 8px;
+    font-size: 11px;
     color: #7c6bb0;
     line-height: 1.5
 }
@@ -3458,7 +3458,7 @@ button:active {
     background: #fff1e6;
     color: #b4560f;
     font-style: normal;
-    font-size: 8px;
+    font-size: 11px;
     font-weight: 700
 }
 
@@ -3474,24 +3474,24 @@ button:active {
 }
 
 .recognize-result b {
-    font-size: 9.5px;
+    font-size: 13px;
     color: #13813b
 }
 
 .recognize-result span {
-    font-size: 8.5px;
+    font-size: 12px;
     color: #a26a1c
 }
 
 .recognize-result small {
-    font-size: 8px;
+    font-size: 11px;
     color: #5f7c68;
     line-height: 1.5
 }
 
 .recognize-result em {
     font-style: normal;
-    font-size: 8px;
+    font-size: 11px;
     color: #7d8794
 }
 
@@ -3527,7 +3527,7 @@ button:active {
     background: #fff;
     color: #c34848;
     font: inherit;
-    font-size: 11px
+    font-size: 14px
 }
 
 .dual-actions .secondary-button {
@@ -3546,7 +3546,7 @@ button:active {
     border-radius: 10px;
     background: #fff;
     color: #66717f;
-    font-size: 9px;
+    font-size: 12px;
     text-align: left
 }
 
@@ -3568,13 +3568,13 @@ button:active {
     padding: 0 4px;
     background: var(--primary);
     color: #fff;
-    font-size: 7.5px
+    font-size: 11px
 }
 
 .buyer-filter-trigger > i {
     flex: none;
     font-style: normal;
-    font-size: 9px;
+    font-size: 12px;
     color: #98a2ae;
     transition: transform .15s
 }
@@ -3608,13 +3608,13 @@ button:active {
 }
 
 .buyer-filter-head b {
-    font-size: 10px
+    font-size: 13px
 }
 
 .buyer-filter-head span {
     min-width: 0;
     flex: 1;
-    font-size: 8px;
+    font-size: 11px;
     color: #8b95a2;
     white-space: nowrap;
     overflow: hidden;
@@ -3626,7 +3626,7 @@ button:active {
     border: 0;
     background: transparent;
     color: var(--primary);
-    font-size: 8.5px;
+    font-size: 12px;
     font-weight: 700;
     padding: 3px 4px
 }
@@ -3661,7 +3661,7 @@ button:active {
     background: #fff;
     color: #fff;
     font-style: normal;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 900;
     line-height: 1
 }
@@ -3669,7 +3669,7 @@ button:active {
 .buyer-filter-options button span {
     min-width: 0;
     flex: 1;
-    font-size: 9.5px;
+    font-size: 13px;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
@@ -3678,7 +3678,7 @@ button:active {
 
 .buyer-filter-options button small {
     flex: none;
-    font-size: 7.5px;
+    font-size: 11px;
     color: #98a2ae
 }
 
@@ -3705,7 +3705,7 @@ button:active {
     border-radius: 10px;
     background: var(--primary);
     color: #fff;
-    font-size: 9.5px;
+    font-size: 13px;
     font-weight: 700;
     box-shadow: 0 6px 14px #1a6dff30
 }
@@ -3728,12 +3728,12 @@ button:active {
 
 .order-sort-copy b {
     color: #344255;
-    font-size: 10px
+    font-size: 13px
 }
 
 .order-sort-copy span {
     color: #98a2ae;
-    font-size: 8px
+    font-size: 11px
 }
 
 .order-sort-buttons {
@@ -3767,7 +3767,7 @@ button:active {
     border-radius: 7px;
     background: #e3e7ec;
     color: #8c96a2;
-    font-size: 10px;
+    font-size: 13px;
     font-style: normal;
     font-weight: 800
 }
@@ -3781,14 +3781,14 @@ button:active {
 
 .order-sort-button b {
     overflow: hidden;
-    font-size: 9px;
+    font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap
 }
 
 .order-sort-button small {
     color: #a5adb7;
-    font-size: 7.5px
+    font-size: 11px
 }
 
 .order-sort-button.active {
@@ -3843,19 +3843,19 @@ button:active {
 
 .location-history-head i {
     font-style: normal;
-    font-size: 11px;
+    font-size: 14px;
     line-height: 1
 }
 
 .location-history-head b {
-    font-size: 10px;
+    font-size: 13px;
     color: #1f6b3a
 }
 
 .location-history-head span {
     margin-left: auto;
     min-width: 0;
-    font-size: 8px;
+    font-size: 11px;
     color: #6f8c79;
     white-space: nowrap;
     overflow: hidden;
@@ -3879,7 +3879,7 @@ button:active {
     border-radius: 10px;
     background: #fff;
     color: #33475b;
-    font-size: 9.5px;
+    font-size: 13px;
     font-weight: 600;
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
     letter-spacing: .02em;
@@ -3899,7 +3899,7 @@ button:active {
 .location-chips button em {
     font-style: normal;
     font-family: Inter, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-    font-size: 7.5px;
+    font-size: 11px;
     font-weight: 700;
     color: #0d7a37;
     background: #dff5e6;
@@ -3933,7 +3933,7 @@ button:active {
     border-radius: 11px;
     background: #fffaf1;
     color: #a9691a;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 700
 }
 
@@ -3963,13 +3963,13 @@ button:active {
 }
 
 .revert-warning b {
-    font-size: 10.5px;
+    font-size: 13px;
     color: #96601a
 }
 
 .revert-warning p {
     margin: 6px 0 0;
-    font-size: 8.5px;
+    font-size: 12px;
     color: #a17c4d;
     line-height: 1.65
 }
@@ -4015,13 +4015,13 @@ button:active {
 
 .settlement-confirm-card b {
     color: #855513;
-    font-size: 11px
+    font-size: 14px
 }
 
 .settlement-confirm-card p {
     margin: 6px 0 0;
     color: #95764a;
-    font-size: 8.5px;
+    font-size: 12px;
     line-height: 1.65
 }
 
@@ -4037,12 +4037,12 @@ button:active {
 
 .settlement-summary span {
     color: #87919e;
-    font-size: 8.5px
+    font-size: 12px
 }
 
 .settlement-summary b {
     text-align: right;
-    font-size: 9.5px
+    font-size: 13px
 }
 
 .settlement-confirm-actions .secondary-button {
@@ -4064,7 +4064,7 @@ button:active {
     gap: 6px;
     margin-bottom: 8px;
     color: #596575;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 700
 }
 
@@ -4073,7 +4073,7 @@ button:active {
     border-radius: 999px;
     background: #fff0e8;
     color: #d45b24;
-    font-size: 7px;
+    font-size: 10px;
     font-style: normal
 }
 
@@ -4117,7 +4117,7 @@ button:active {
     display: block;
     margin-top: 7px;
     color: #9099a6;
-    font-size: 7.5px
+    font-size: 11px
 }
 
 .settlement-proof-field {
@@ -4164,7 +4164,7 @@ button:active {
     border-radius: 9px;
     background: #fff9f9;
     color: #b54b4b;
-    font-size: 8px;
+    font-size: 11px;
     font-weight: 700;
     transform: translateY(-50%)
 }
@@ -4177,7 +4177,7 @@ button:active {
     margin: 8px 2px 12px;
     padding: 8px 10px;
     border-radius: 10px;
-    font-size: 8px;
+    font-size: 11px;
     line-height: 1.45
 }
 
@@ -4217,13 +4217,13 @@ button:active {
 
 .settlement-proof-repair-note b {
     color: #7d5719;
-    font-size: 9px
+    font-size: 12px
 }
 
 .settlement-proof-repair-note p {
     margin: 4px 0 0;
     color: #9c7c49;
-    font-size: 7.5px;
+    font-size: 11px;
     line-height: 1.5
 }
 
@@ -4240,12 +4240,12 @@ button:active {
 }
 
 .items-card-head h3 {
-    font-size: 11px;
+    font-size: 14px;
     margin: 0
 }
 
 .items-card-head span {
-    font-size: 8.5px;
+    font-size: 12px;
     color: #8b95a2
 }
 
@@ -4279,7 +4279,7 @@ button:active {
     background: var(--primary-light);
     color: var(--primary-dark);
     font-style: normal;
-    font-size: 9.5px;
+    font-size: 13px;
     font-weight: 800
 }
 
@@ -4304,7 +4304,7 @@ button:active {
 
 .item-row-top b {
     min-width: 0;
-    font-size: 10.5px;
+    font-size: 13px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis
@@ -4313,14 +4313,14 @@ button:active {
 .item-row-top em {
     flex: none;
     font-style: normal;
-    font-size: 10.5px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--ink)
 }
 
 .item-row-main small {
     margin-top: 4px;
-    font-size: 8.5px;
+    font-size: 12px;
     color: #8b95a2
 }
 
@@ -4328,7 +4328,7 @@ button:active {
     flex: none;
     border-radius: 9px;
     padding: 7px 10px;
-    font-size: 8.5px;
+    font-size: 12px;
     font-weight: 700
 }
 
@@ -4366,7 +4366,7 @@ button:active {
 
 .item-ship-line > span {
     flex: none;
-    font-size: 8px
+    font-size: 11px
 }
 
 .item-ship-line > b {
@@ -4378,7 +4378,7 @@ button:active {
     gap: 10px;
     color: #176b38;
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 9px;
+    font-size: 12px;
     text-align: right;
     overflow-wrap: anywhere
 }
@@ -4392,7 +4392,7 @@ button:active {
     flex: none;
     font-style: normal;
     font-family: inherit;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 800;
     color: var(--success)
 }
@@ -4427,7 +4427,7 @@ button:active {
     background: linear-gradient(145deg, var(--primary), #4c91ff);
     color: #fff;
     font-style: normal;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 900;
     box-shadow: 0 5px 11px #1a6dff2b
 }
@@ -4441,13 +4441,13 @@ button:active {
 
 .status-filter-copy > span {
     color: #8092aa;
-    font-size: 7.5px;
+    font-size: 11px;
     letter-spacing: .05em
 }
 
 .status-filter-copy > b {
     color: #25456f;
-    font-size: 9.5px
+    font-size: 13px
 }
 
 .status-filter-copy em {
@@ -4460,7 +4460,7 @@ button:active {
     background: #dce9ff;
     color: var(--primary-dark);
     font-style: normal;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 900
 }
 
@@ -4475,7 +4475,7 @@ button:active {
     padding: 0 7px 0 9px;
     background: #fff;
     color: #4770aa;
-    font-size: 8px;
+    font-size: 11px;
     font-weight: 700;
     box-shadow: 0 2px 7px #16498f0d
 }
@@ -4489,7 +4489,7 @@ button:active {
     background: #edf3fc;
     color: #6d87ab;
     font-style: normal;
-    font-size: 11px;
+    font-size: 14px;
     line-height: 1
 }
 
@@ -4521,7 +4521,7 @@ button:active {
     padding: 0 8px;
     background: #fff;
     color: #3e6397;
-    font-size: 8px;
+    font-size: 11px;
     font-weight: 650;
     box-shadow: 0 2px 5px #16498f08
 }
@@ -4578,18 +4578,18 @@ button:active {
 }
 
 .admin-create-entry b, .admin-order-create b {
-    font-size: 11px
+    font-size: 14px
 }
 
 .admin-create-entry small, .admin-order-create small {
     margin-top: 4px;
     color: #8491a2;
-    font-size: 8px
+    font-size: 11px
 }
 
 .admin-create-entry em, .admin-order-create em {
     color: var(--primary);
-    font-size: 8.5px;
+    font-size: 12px;
     font-style: normal;
     white-space: nowrap
 }
@@ -4614,7 +4614,7 @@ button:active {
 }
 
 .form-intro > div > span {
-    font-size: 8px;
+    font-size: 11px;
     color: var(--primary);
     letter-spacing: .14em
 }
@@ -4626,7 +4626,7 @@ button:active {
     background: #fff;
     color: var(--primary-dark);
     padding: 8px 10px;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 700
 }
 
@@ -4667,7 +4667,7 @@ button:active {
 }
 
 .shipping-guide b {
-    font-size: 10.5px
+    font-size: 13px
 }
 
 .shipping-guide small {
@@ -4680,7 +4680,7 @@ button:active {
 .shipping-guide em {
     flex: none;
     color: #7e22ce;
-    font-size: 8.5px;
+    font-size: 12px;
     font-style: normal;
     font-weight: 700
 }
@@ -4695,7 +4695,7 @@ button:active {
 }
 
 .modal-sheet .location-field input {
-    font-size: 12px
+    font-size: 14px
 }
 
 .batch-toolbar {
@@ -4714,7 +4714,7 @@ button:active {
     align-items: center;
     gap: 6px;
     color: #556273;
-    font-size: 8.5px;
+    font-size: 12px;
     white-space: nowrap
 }
 
@@ -4728,7 +4728,7 @@ button:active {
     min-width: 0;
     flex: 1;
     color: #7b8795;
-    font-size: 8.5px
+    font-size: 12px
 }
 
 .batch-toolbar button {
@@ -4738,7 +4738,7 @@ button:active {
     background: var(--danger);
     color: #fff;
     padding: 7px 10px;
-    font-size: 8.5px;
+    font-size: 12px;
     font-weight: 700
 }
 
@@ -4760,7 +4760,7 @@ button:active {
     border-bottom: 1px solid #eef2f7;
     background: #f6f9ff;
     color: var(--primary-dark);
-    font-size: 8.5px;
+    font-size: 12px;
     font-weight: 700
 }
 
@@ -4797,13 +4797,13 @@ button:active {
 .delete-warning b {
     display: block;
     color: #a92e2e;
-    font-size: 11px
+    font-size: 14px
 }
 
 .delete-warning p {
     margin: 6px 0 0;
     color: #9a5555;
-    font-size: 8.5px;
+    font-size: 12px;
     line-height: 1.65
 }
 
@@ -4850,14 +4850,14 @@ button:active {
 }
 
 .batch-ship-note b {
-    font-size: 10px;
+    font-size: 13px;
     color: #6b21a8
 }
 
 .batch-ship-note span {
     margin-top: 4px;
     color: #806497;
-    font-size: 8px;
+    font-size: 11px;
     line-height: 1.5
 }
 
@@ -4886,7 +4886,7 @@ button:active {
 }
 
 .batch-shipment-list b {
-    font-size: 9px;
+    font-size: 12px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis
@@ -4908,7 +4908,7 @@ button:active {
     background: #fff;
     padding: 0 9px;
     outline: 0;
-    font-size: 9px
+    font-size: 12px
 }
 
 .batch-shipment-list input:focus {
@@ -4926,7 +4926,7 @@ button:active {
     border-radius: 999px;
     background: #eee5fa;
     color: #6b21a8;
-    font-size: 8.5px;
+    font-size: 12px;
     font-style: normal;
     font-weight: 700;
     text-align: center
@@ -4949,7 +4949,7 @@ button:active {
 
 .order-images-head h3 {
     margin: 0;
-    font-size: 10px
+    font-size: 13px
 }
 
 .batch-settlement-note {
@@ -4958,7 +4958,7 @@ button:active {
     border-radius: 11px;
     background: #fff8e8;
     color: #8b641f;
-    font-size: 8.5px;
+    font-size: 12px;
     line-height: 1.6
 }
 
@@ -4966,13 +4966,13 @@ button:active {
     display: block;
     margin-top: 3px;
     color: #8a95a3;
-    font-size: 7.5px;
+    font-size: 11px;
     font-weight: 500
 }
 
 .order-images-head span {
     color: #7b8795;
-    font-size: 8px
+    font-size: 11px
 }
 
 .order-images-head-actions {
@@ -4990,7 +4990,7 @@ button:active {
     border-radius: 9px;
     background: #fffdf8;
     color: #8e6117;
-    font-size: 8px;
+    font-size: 11px;
     font-weight: 700
 }
 
@@ -5026,7 +5026,7 @@ button:active {
     padding: 6px;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 7.5px
+    font-size: 11px
 }
 
 .settlement-proof-gallery {
@@ -5084,7 +5084,7 @@ button:active {
     border-radius: 11px;
     background: #ffffff8f;
     color: #9c8052;
-    font-size: 8.5px
+    font-size: 12px
 }
 
 .order-images-empty i {
@@ -5116,7 +5116,7 @@ button:active {
 .image-preview button { min-height: 44px; padding: 0 14px; border: 1px solid #64748b; border-radius: 10px; background: #263446; color: #fff; font-size: 14px; }
 .image-preview button:disabled { opacity: .4; }
 .image-preview footer { display: grid; grid-template-columns: 1fr 1.2fr 1.3fr 1fr; gap: 6px; }
-.image-preview footer button { min-width: 0; padding: 0 4px; font-size: 12px; white-space: nowrap; }
+.image-preview footer button { min-width: 0; padding: 0 4px; font-size: 14px; white-space: nowrap; }
 .image-preview-content { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .image-preview-content img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .image-preview-content.zoomed img { width: 200%; max-width: none; height: auto; }
@@ -5163,11 +5163,11 @@ button:active {
 }
 
 .receipt-upload b {
-    font-size: 9.5px
+    font-size: 13px
 }
 
 .receipt-upload small {
     margin-top: 3px;
     color: #7185a4;
-    font-size: 8px
+    font-size: 11px
 }

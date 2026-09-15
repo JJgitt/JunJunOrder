@@ -33,6 +33,9 @@ test("touch forms prevent iOS focus zoom while keeping field text compact", asyn
   const css = await readFile(new URL("../app/touch-forms.css", import.meta.url), "utf8");
   const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
   assert.match(layout, /import "\.\/touch-forms\.css"/);
+  const stylesheets = [...layout.matchAll(/import "(.+\.css)"/g)].map(match => match[1]);
+  assert.ok(stylesheets.includes("./workspace-ui.css"));
+  assert.equal(stylesheets.at(-1), "./touch-forms.css", "mobile input safeguards must load after visual themes");
   assert.match(css, /@media \(max-width: 720px\), \(any-pointer: coarse\)/);
   assert.match(css, /input:not\(/);
   assert.match(css, /textarea,\s*select\s*\{/);
@@ -937,8 +940,8 @@ test("multi-item entry and detail views carry dedicated visual styles",async()=>
     assert.ok(compactCss(styles).includes(rule),`missing style rule ${rule}`);
   }
   assertCssMatch(styles,/\.item-row\.shipped \.item-index\{/);
-  assertCssMatch(styles,/\.purchase-form input\.long-no-input\{font-size:5px/);
-  assertCssMatch(styles,/\.items-editor input\.long-no-input\{font-size:4\.5px/);
+  assertCssMatch(styles,/\.purchase-form input\.long-no-input\{font-size:14px/);
+  assertCssMatch(styles,/\.items-editor input\.long-no-input\{font-size:14px/);
   assert.doesNotMatch(compactCss(styles),/\.item-row-main b\{font-size:11\.5px\}/);
 });
 
