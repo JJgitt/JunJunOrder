@@ -25,7 +25,7 @@ type PurchaseOrder = {
     purchaser: string; purchaserId?: string; purchaserPhone?: string; purchaserWechatId?: string; createdAt: string; location?: string; receivedAt?: string; rejectReason?: string;
     settled: boolean; settledAt?: string; settledByName?: string;
     title: string; itemCount: number; amount: number; items: OrderItem[];
-    images: OrderImage[];
+    images: OrderImage[]; settlementProofs: OrderImage[];
 };
 
 type RecognizedOrder = { platform: string; platformNo: string; courierCompany: string; courierNo: string; items: Array<{ title: string; sku: string; size: string; qty: number; amount: number | null }>; notes: string[] };
@@ -199,11 +199,21 @@ export default function Home() {
 
     const approve = (id: string) => void run("approve", {orderId: id}, "订单审核通过，已进入在途状态");
     const reject = (id: string, reason: string) => void run("reject", {orderId: id, reason}, "订单已驳回，采购员将收到提醒");
-    async function settleOrder(id: string) {
+    async function settleOrder(id: string, proof?: File) {
         try {
-            await mutate("settle-order", {orderId: id});
+            const form = new FormData();
+            form.set("orderId", id);
+            if (proof) form.set("proof", proof);
+            const response = await fetch("/api/settlements", {method: "POST", body: form});
+            if (response.status === 401) {
+                router.replace("/login");
+                throw new Error("登录已过期");
+            }
+            const json = await response.json() as { error?: string; proofUploaded?: boolean };
+            if (!response.ok) throw new Error(json.error || "结款失败");
+            await load();
             setOverlay(null);
-            notify("采购单已完成结款，发货状态保持不变");
+            notify(json.proofUploaded ? "采购单已结款，结款凭证已保存" : "采购单已完成结款，发货状态保持不变");
             return true;
         } catch (error) {
             notify(error instanceof Error ? error.message : "结款失败");
@@ -994,7 +1004,8 @@ function UploadPage({
                 itemCount: normalizedItems.length,
                 amount: normalizedItems.reduce((sum, item) => sum + item.amount, 0),
                 items: normalizedItems,
-                images: editing?.images ?? []
+                images: editing?.images ?? [],
+                settlementProofs: editing?.settlementProofs ?? []
             }, files);
         } finally {
             setSubmitting(false);
@@ -1440,7 +1451,7 @@ function ScanSheet({
     </Modal>;
 }
 
-function OrderImages({images}: { images: OrderImage[] }) {
+function OrderImages({images, title = "订单图片"}: { images: OrderImage[]; title?: string }) {
     const [selected, setSelected] = useState<number | null>(null);
     const [zoomed, setZoomed] = useState(false);
     const dialog = useRef<HTMLDialogElement>(null);
@@ -1451,7 +1462,7 @@ function OrderImages({images}: { images: OrderImage[] }) {
     }, [selected]);
     if (!images.length) return null;
     return <section className="order-images">
-        <div className="order-images-head"><h3>订单图片</h3><span>{images.length} 张</span></div>
+        <div className="order-images-head"><h3>{title}</h3><span>{images.length} 张</span></div>
         <div className="order-images-grid">{images.map((image, index) => <button type="button" key={image.id}
             onClick={() => {setZoomed(false); setSelected(index);}} aria-label={`预览图片 ${index + 1}`} title={image.fileName}><Image
             src={image.url} alt={image.fileName} width={180} height={132}
@@ -1567,6 +1578,7 @@ function OrderDetail({
             </div>)}
         </div>
         <OrderImages images={order.images}/>
+        <OrderImages images={order.settlementProofs} title="结款凭证"/>
         <div className="timeline-card"><h3>流转记录</h3>
             <ol>
                 <li><b>{order.createdAt}</b><span>{order.purchaser}上传订单</span></li>
@@ -1596,14 +1608,15 @@ function SettlementSheet({
                              order,
                              onClose,
                              onSubmit
-                         }: { order: PurchaseOrder; onClose: () => void; onSubmit: (id: string) => Promise<boolean> }) {
-    const [busy, setBusy] = useState(false);
+                         }: { order: PurchaseOrder; onClose: () => void; onSubmit: (id: string, proof?: File) => Promise<boolean> }) {
+    const [busy, setBusy] = useState(false), [proof, setProof] = useState<File | null>(null);
+    const proofInput = useRef<HTMLInputElement>(null);
 
     async function confirm() {
         if (busy) return;
         setBusy(true);
         try {
-            await onSubmit(order.id);
+            await onSubmit(order.id, proof ?? undefined);
         } finally {
             setBusy(false);
         }
@@ -1614,10 +1627,20 @@ function SettlementSheet({
             <p>本单采购金额为 {money(order.amount)}。结款状态独立记录，不会发货、扣减库存或改变当前发货状态。</p></div></div>
         <div className="settlement-summary"><span>采购员</span><b>{order.purchaser}</b><span>当前发货状态</span>
             <b>{order.status === "已发货" ? "已全部发货" : order.items.some(item => item.shipped) ? "部分已发货" : "未发货"}</b></div>
+        <div className="settlement-proof-field">
+            <label className={`receipt-upload settlement-proof-upload ${proof ? "selected" : ""}`}>
+                <input ref={proofInput} type="file" accept="image/*" disabled={busy}
+                       onChange={event => setProof(event.target.files?.[0] ?? null)}/>
+                <i>{proof ? "✓" : "＋"}</i><span><b>{proof ? proof.name : "上传结款截图（选填）"}</b>
+                <small>{proof ? "已选择，点击可更换图片" : "最多 1 张、图片不超过 5MB"}</small></span>
+            </label>
+            {proof && <button type="button" className="settlement-proof-clear" disabled={busy}
+                              onClick={() => {setProof(null); if (proofInput.current) proofInput.current.value = "";}}>移除截图</button>}
+        </div>
         <div className="dual-actions settlement-confirm-actions">
             <button className="secondary-button" disabled={busy} onClick={onClose}>取消</button>
             <button className="primary-button settlement-confirm-button" disabled={busy}
-                    onClick={() => void confirm()}>{busy ? "正在结款…" : "确认已结款"}</button>
+                    onClick={() => void confirm()}>{busy ? "正在结款…" : proof ? "确认结款并保存截图" : "确认已结款"}</button>
         </div>
     </Modal>;
 }

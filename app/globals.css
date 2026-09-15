@@ -3894,6 +3894,59 @@ button:active {
     margin-top: 0
 }
 
+.settlement-proof-field {
+    position: relative;
+    margin: 12px 0 2px
+}
+
+.settlement-proof-upload {
+    margin: 0;
+    border-color: #e7c982;
+    background: linear-gradient(145deg, #fffefa, #fff8e8)
+}
+
+.settlement-proof-upload.selected {
+    padding-right: 82px;
+    border-color: #b98529;
+    background: linear-gradient(145deg, #fffcf3, #fff1cf)
+}
+
+.settlement-proof-upload.selected > i {
+    background: #b77916;
+    color: #fff
+}
+
+.settlement-proof-upload span {
+    min-width: 0
+}
+
+.settlement-proof-upload b {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.settlement-proof-clear {
+    position: absolute;
+    z-index: 2;
+    right: 12px;
+    top: 50%;
+    min-height: 34px;
+    padding: 0 10px;
+    border: 1px solid #e3bebe;
+    border-radius: 9px;
+    background: #fff9f9;
+    color: #b54b4b;
+    font-size: 8px;
+    font-weight: 700;
+    transform: translateY(-50%)
+}
+
+.settlement-proof-clear:disabled {
+    opacity: .55
+}
+
 /* 订单详情：商品清单 */
 .items-card {
     padding: 13px 14px

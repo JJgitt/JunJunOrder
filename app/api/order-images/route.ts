@@ -26,7 +26,7 @@ export async function POST(request:Request){
       const id=`img_${crypto.randomUUID()}`,objectKey=`orders/${orderId}/${id}${extension}`,target=uploadPath(objectKey);
       await mkdir(path.dirname(target),{recursive:true});
       await writeFile(target,Buffer.from(await file.arrayBuffer()),{flag:"wx"});
-      try{await db.insert(orderImages).values({id,orderId,objectKey,fileName:file.name,contentType:file.type,sizeBytes:file.size,uploadedBy:user.id});uploaded.push(id);}
+      try{await db.insert(orderImages).values({id,orderId,kind:"order",objectKey,fileName:file.name,contentType:file.type,sizeBytes:file.size,uploadedBy:user.id});uploaded.push(id);}
       catch(error){await unlink(target).catch(()=>undefined);throw error;}
     }
     return Response.json({imageIds:uploaded},{status:201});
@@ -39,7 +39,7 @@ export async function GET(request:Request){
     const [order]=await db.select().from(purchaseOrders).where(eq(purchaseOrders.id,orderId)).limit(1);
     if(!order)return Response.json({error:"订单不存在"},{status:404});
     if(user.role!=="admin"&&order.purchaserId!==user.id)return Response.json({error:"无权查看"},{status:403});
-    const rows=await db.select({id:orderImages.id,fileName:orderImages.fileName,contentType:orderImages.contentType,sizeBytes:orderImages.sizeBytes,createdAt:orderImages.createdAt}).from(orderImages).where(and(eq(orderImages.orderId,orderId)));
+    const rows=await db.select({id:orderImages.id,kind:orderImages.kind,fileName:orderImages.fileName,contentType:orderImages.contentType,sizeBytes:orderImages.sizeBytes,createdAt:orderImages.createdAt}).from(orderImages).where(and(eq(orderImages.orderId,orderId)));
     return Response.json({images:rows.map(row=>({...row,url:`/api/files/${row.id}`}))});
   }catch(error){return routeError(error);}
 }

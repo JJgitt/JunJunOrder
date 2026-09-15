@@ -106,6 +106,7 @@ export const inventoryMovements = pgTable("inventory_movements", {
 export const orderImages = pgTable("order_images", {
   id: text("id").primaryKey(),
   orderId: text("order_id").notNull().references(() => purchaseOrders.id),
+  kind: text("kind", { enum: ["order", "settlement"] }).notNull().default("order"),
   objectKey: text("object_key").notNull(),
   fileName: text("file_name").notNull(),
   contentType: text("content_type").notNull(),

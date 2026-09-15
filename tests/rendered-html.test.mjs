@@ -759,12 +759,14 @@ test("administrator can revert a received order back to in-transit and roll back
   assertCssMatch(styles,/\.revert-warning\{/);
 });
 
-test("purchase settlement starts after receipt and stays independent from shipping",async()=>{
-  const [page,appRoute,schema,migration,exportRoute,styles]=await Promise.all([
+test("purchase settlement starts after receipt, supports an optional proof, and stays independent from shipping",async()=>{
+  const [page,appRoute,settlementRoute,schema,migration,proofMigration,exportRoute,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/settlements/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
     readFile(new URL("../drizzle/0009_purchase_order_settlement.sql",import.meta.url),"utf8"),
+    readFile(new URL("../drizzle/0010_settlement_proof_image.sql",import.meta.url),"utf8"),
     readFile(new URL("../app/api/export/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
@@ -780,22 +782,40 @@ test("purchase settlement starts after receipt and stays independent from shippi
   assert.match(appRoute,/action:"settle"/);
   assert.match(appRoute,/if\(order\.settled\)throw conflict\("订单已结款，不能再驳回"\)/);
   assert.match(appRoute,/if\(order\.settled\)throw conflict\("订单已结款，不能撤销入库"\)/);
+  assert.match(schema,/kind: text\("kind", \{ enum: \["order", "settlement"\] \}\)\.notNull\(\)\.default\("order"\)/);
+  assert.match(proofMigration,/ADD COLUMN "kind" text DEFAULT 'order' NOT NULL/);
+  assert.match(proofMigration,/CHECK \("kind" IN \('order', 'settlement'\)\)/);
+  assert.match(appRoute,/settlementProofs:imageRows\.filter\(image=>image\.orderId===row\.id&&image\.kind==="settlement"\)/);
   const settleBlock=appRoute.slice(appRoute.indexOf('if(action==="settle-order")'),appRoute.indexOf('if(action==="revert-receive")'));
   assert.doesNotMatch(settleBlock,/set\(\{[^}]*status:/);
   const shipBlock=appRoute.slice(appRoute.indexOf('if(action==="ship")'),appRoute.indexOf('if(action==="update-shipping")'));
   assert.doesNotMatch(shipBlock,/settled|settledAt|settledBy/);
   assertJsMatch(page,/type Overlay = [^;]+"settle"/);
-  assertJsMatch(page,/mutate\("settle-order",\{orderId:id\}\)/);
+  assertJsMatch(page,/fetch\("\/api\/settlements",\{method:"POST",body:form\}\)/);
+  assertJsMatch(page,/form\.set\("proof",proof\)/);
   assertJsMatch(page,/function SettlementStatus/);
   assertJsMatch(page,/order\.receivedAt&&!order\.settled&&<button className="settlement-action"/);
   assertJsMatch(page,/function SettlementSheet/);
   assertJsMatch(page,/结款状态独立记录，不会发货、扣减库存或改变当前发货状态/);
+  assertJsMatch(page,/上传结款截图（选填）/);
+  assertJsMatch(page,/<OrderImages images=\{order\.settlementProofs\} title="结款凭证"\/>/);
   assertJsMatch(page,/canManage&&order\.receivedAt&&!order\.settled&&<button className="primary-button settlement-confirm-button"/);
+  assert.match(settlementRoute,/requireAdmin\(user\)/);
+  assert.match(settlementRoute,/form\.get\("proof"\)/);
+  assert.match(settlementRoute,/proof\.size > 5 \* 1024 \* 1024/);
+  assert.match(settlementRoute,/kind: "settlement"/);
+  assert.match(settlementRoute,/if \(!order\.receivedAt\) throw conflict\("采购单尚未入库，不能结款"\)/);
+  assert.match(settlementRoute,/proofImageId: image\?\.id \?\? null/);
+  assert.match(settlementRoute,/if \(storedFile\) await unlink\(storedFile\)/);
+  const proofSettleBlock=settlementRoute.slice(settlementRoute.indexOf("await db.transaction"),settlementRoute.indexOf("storedFile = null"));
+  assert.doesNotMatch(proofSettleBlock,/update\(purchaseOrders\)\.set\(\{[^}]*status:/);
   assert.match(exportRoute,/"结款状态","结款时间"/);
   assert.match(exportRoute,/order\.settled\?"已结款":"未结款"/);
   assertCssMatch(styles,/\.order-settlement\{/);
   assertCssMatch(styles,/\.order-settlement\.settled\{/);
   assertCssMatch(styles,/\.settlement-confirm-card\{/);
+  assertCssMatch(styles,/\.settlement-proof-upload\{/);
+  assertCssMatch(styles,/\.settlement-proof-clear\{/);
 });
 
 test("multi-item entry and detail views carry dedicated visual styles",async()=>{

@@ -36,7 +36,7 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
   const names=new Map(people.map(person=>[person.id,person.name]));
   const phones=new Map(people.map(person=>[person.id,person.phone]));
   const wechatIds=new Map(people.map(person=>[person.id,person.wechatId]));
-  const imageRows=rows.length?await db.select({id:orderImages.id,orderId:orderImages.orderId,fileName:orderImages.fileName,uploadedBy:orderImages.uploadedBy,createdAt:orderImages.createdAt}).from(orderImages).where(inArray(orderImages.orderId,rows.map(row=>row.id))):[];
+  const imageRows=rows.length?await db.select({id:orderImages.id,orderId:orderImages.orderId,kind:orderImages.kind,fileName:orderImages.fileName,uploadedBy:orderImages.uploadedBy,createdAt:orderImages.createdAt}).from(orderImages).where(inArray(orderImages.orderId,rows.map(row=>row.id))):[];
   const itemRows=rows.length?await db.select().from(orderItems).where(inArray(orderItems.orderId,rows.map(row=>row.id))):[];
   const orders=rows.map(row=>{
     const rawItems=itemRows.filter(item=>item.orderId===row.id);
@@ -59,7 +59,8 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
       settled:row.settled,settledAt:row.settledAt??undefined,receivedAt:row.receivedAt??undefined,
       ...(isAdmin?{purchaserPhone:phones.get(row.purchaserId)??"",purchaserWechatId:wechatIds.get(row.purchaserId)??""}:{}),
       title:items[0]?.title??"",itemCount:items.length,amount:items.reduce((sum,item)=>sum+item.amount,0),items,
-      images:imageRows.filter(image=>image.orderId===row.id).map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
+      images:imageRows.filter(image=>image.orderId===row.id&&image.kind==="order").map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
+      settlementProofs:imageRows.filter(image=>image.orderId===row.id&&image.kind==="settlement").map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
       ...(isAdmin?{...(row.location?{location:row.location}:{}),settledByName:row.settledBy?names.get(row.settledBy)??"管理员":undefined}:{}),
     };
   });
