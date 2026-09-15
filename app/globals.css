@@ -498,6 +498,33 @@ button:active {
     outline: 0
 }
 
+.buyer-settlement-filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: -3px 0 13px;
+    color: #7a8491;
+    font-size: 9px
+}
+
+.buyer-settlement-filter > span {
+    flex: none;
+    font-weight: 700
+}
+
+.buyer-settlement-filter select {
+    min-width: 0;
+    flex: 1;
+    height: 37px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    padding: 0 10px;
+    color: #66717f;
+    font-size: 9px;
+    outline: 0
+}
+
 .stock-overview {
     display: grid;
     grid-template-columns:repeat(3, 1fr);

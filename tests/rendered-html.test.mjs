@@ -356,8 +356,7 @@ test("buyer snapshots show shipment status but hide outbound logistics",async()=
   assertJsMatch(page,/showLocation=\{role === "admin"\}/);
   assertJsMatch(page,/canManage=\{role === "admin"\}/);
   assertJsMatch(page,/showLocation && order\.location && <KeyValue label="库位"/);
-  assertJsMatch(page,/showLocation && order\.location && <li>/);
-  assertJsMatch(page,/!showLocation&&order\.status==="已入库"&&<li><b>已入库<\/b><span>仓库已完成入库<\/span><\/li>/);
+  assertJsMatch(page,/order\.receivedAt&&<li><b>\{dateTime\(order\.receivedAt\)\}<\/b><span>收货入库\{showLocation&&order\.location\?` · \$\{order\.location\}`:""\}<\/span><\/li>/);
   assertJsMatch(page,/normalizeStatus\?statusLabel\(order\.status\):order\.status/);
   assertJsMatch(page,/canManage\?statusLabel\(order\.status\):order\.status/);
   assertJsMatch(page,/canManage&&item\.shipped&&<div className="item-ship-block">/);
@@ -710,7 +709,7 @@ test("admin and buyer order lists filter by multiple statuses at once",async()=>
   assertCssMatch(styles,/\.status-filter-values>span\{/);
 });
 
-test("admin order list filters by settlement status",async()=>{
+test("admin and buyer order lists filter by settlement status",async()=>{
   const [page,styles,touchStyles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
@@ -722,7 +721,10 @@ test("admin order list filters by settlement status",async()=>{
   assertJsMatch(page,/<select aria-label="结款状态" value=\{settlement\}/);
   assertJsMatch(page,/<option>全部结款状态<\/option><option>已结款<\/option><option>未结款<\/option>/);
   assertJsMatch(page,/setSettlement\("全部结款状态"\)/);
+  assertJsMatch(page,/\(settlement === "全部结款状态" \|\| o\.settled === \(settlement === "已结款"\)\)/);
+  assertJsMatch(page,/className="buyer-settlement-filter"/);
   assertCssMatch(styles,/\.select-row\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assertCssMatch(styles,/\.buyer-settlement-filter\{/);
   assertCssMatch(touchStyles,/\.select-row\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
 });
 

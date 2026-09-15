@@ -1151,13 +1151,18 @@ function BuyerOrders({
     const [statuses, setStatuses] = useState<string[]>([]);
     const [query, setQuery] = useState("");
     const [platform, setPlatform] = useState("全部渠道");
-    const visible = orders.filter(o => matchesStatusFilter(o, statuses) && (platform === "全部渠道" || o.platform === platform) && `${o.title}${o.items.map(item => `${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}`).join("")}${o.platformNo}`.toLowerCase().includes(query.toLowerCase()));
+    const [settlement, setSettlement] = useState("全部结款状态");
+    const visible = orders.filter(o => matchesStatusFilter(o, statuses) && (platform === "全部渠道" || o.platform === platform) && (settlement === "全部结款状态" || o.settled === (settlement === "已结款")) && `${o.title}${o.items.map(item => `${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}`).join("")}${o.platformNo}`.toLowerCase().includes(query.toLowerCase()));
     return <section className="enter"><Search value={query} onChange={setQuery} placeholder="搜索商品 / 订单号 / 快递单号"
                                               historyKey="buyer-orders"/><StatusFilter
         options={["全部", "待审核", "在途", "已入库", "已发货", "已驳回"]} value={statuses} onChange={setStatuses}/>
         <div className="chip-row scroll">{["全部渠道", ...purchaseChannels].map(v => <button key={v}
                                                                                          className={platform === v ? "active" : ""}
                                                                                          onClick={() => setPlatform(v)}>{v}</button>)}</div>
+        <label className="buyer-settlement-filter"><span>结款状态</span>
+            <select aria-label="结款状态" value={settlement} onChange={event => setSettlement(event.target.value)}>
+                <option>全部结款状态</option><option>已结款</option><option>未结款</option>
+            </select></label>
         <SectionHead title="我的采购订单" note={orderListSummary(visible)}/>
         <div className="order-list">{visible.map(order => <BuyerOrderCard key={order.id} order={order}
                                                                           onOpen={() => onOpen(order.id)}
@@ -1635,10 +1640,8 @@ function OrderDetail({
             <ol>
                 <li><b>{order.createdAt}</b><span>{order.purchaser}上传订单</span></li>
                 {order.status !== "待审核" && order.status !== "已驳回" &&
-                    <li><b>08-24 15:01</b><span>管理员审核通过</span></li>}{!showLocation && order.status === "已入库" &&
-                <li><b>已入库</b><span>仓库已完成入库</span></li>}{showLocation && order.location &&
-                <li><b>08-24 16:12</b><span>收货入库 · {order.location}</span>
-                </li>}{canManage && order.items.some(item => item.resaleNo) &&
+                    <li><b>08-24 15:01</b><span>管理员审核通过</span></li>}{order.receivedAt &&
+                <li><b>{dateTime(order.receivedAt)}</b><span>收货入库{showLocation && order.location ? ` · ${order.location}` : ""}</span></li>}{canManage && order.items.some(item => item.resaleNo) &&
                 <li><b>08-24 17:40</b><span>二级平台售出</span></li>}{order.settled &&
                 <li><b>{dateTime(order.settledAt)}</b><span>{order.settledByName || "管理员"}完成采购结款{order.settledAmount != null ? ` · ${money(order.settledAmount)}` : ""}</span></li>}</ol>
         </div>
