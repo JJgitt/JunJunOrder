@@ -382,7 +382,9 @@ export async function POST(request:Request){
         return {orderId:string(record.orderId),courier:string(record.courier),company:string(record.company)};
       });
       const ids=shipments.map(item=>item.orderId);
-      if(!shipments.length||shipments.some(item=>!item.orderId||!item.courier||!item.company)||new Set(ids).size!==ids.length)return Response.json({error:"请为每笔订单完整填写物流公司和发货运单号"},{status:400});
+      if(!shipments.length||shipments.some(item=>!item.orderId||!item.courier||!item.company)||new Set(ids).size!==ids.length)return Response.json({error:"请完整填写批量发货订单、物流公司和发货运单号"},{status:400});
+      const sharedShipment=shipments[0];
+      if(shipments.some(item=>item.courier!==sharedShipment.courier||item.company!==sharedShipment.company))return Response.json({error:"批量发货必须使用同一物流公司和发货运单号"},{status:400});
       await db.transaction(async tx=>{
         const orders=await tx.select().from(purchaseOrders).where(inArray(purchaseOrders.id,ids)).for("update");
         if(orders.length!==ids.length)throw notFound("部分订单不存在，请刷新后重试");

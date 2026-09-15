@@ -4804,6 +4804,22 @@ button:active {
     box-shadow: 0 0 0 3px #1a6dff12
 }
 
+.batch-shipment-list.shared-courier > div {
+    grid-template-columns:minmax(0, 1fr) auto
+}
+
+.batch-shipment-list.shared-courier > div > em {
+    min-width: 42px;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: #eee5fa;
+    color: #6b21a8;
+    font-size: 8.5px;
+    font-style: normal;
+    font-weight: 700;
+    text-align: center
+}
+
 .order-images {
     margin: 0 0 11px;
     padding: 12px;

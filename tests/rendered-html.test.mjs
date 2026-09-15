@@ -417,7 +417,11 @@ test("administrator can edit shipped logistics and batch ship ready orders atomi
   assertJsMatch(page,/"update-shipping":"ship"/);
   assertJsMatch(page,/order\.status === "已发货" \? <button[^\n]+编辑发货信息<\/button>/);
   assertJsMatch(page,/function BatchShipSheet/);
-  assertJsMatch(page,/统一物流公司，逐笔填写运单号/);
+  assertJsMatch(page,/整批共用一个发货运单/);
+  assertJsMatch(page,/\[courier,setCourier\] = useState\(""\)/);
+  assertJsMatch(page,/courier:courier\.trim\(\),company:resolvedCompany/);
+  assertJsMatch(page,/aria-label="批量发货运单号"/);
+  assertJsNotMatch(page,/aria-label=\{`\$\{order\.id\} 发货运单号`\}/);
   assertJsMatch(page,/onBatchShip=\{batchShip\}/);
   assertJsMatch(page,/className="batch-ship-button"/);
   assert.match(appRoute,/if\(action==="update-shipping"\)/);
@@ -427,10 +431,12 @@ test("administrator can edit shipped logistics and batch ship ready orders atomi
   assert.match(appRoute,/before:\{salePriceCents:item\.salePriceCents/);
   assertJsMatch(page,/保存预估售价与发货物流/);
   assert.match(appRoute,/if\(action==="batch-ship"\)/);
+  assert.match(appRoute,/item\.courier!==sharedShipment\.courier\|\|item\.company!==sharedShipment\.company/);
   assert.match(appRoute,/await db\.transaction\(async tx=>\{/);
   assert.match(appRoute,/action:"batch_ship"/);
   assert.match(appRoute,/shippedCount:shipments\.length/);
   assertCssMatch(styles,/\.batch-shipment-list\{/);
+  assertCssMatch(styles,/\.batch-shipment-list\.shared-courier>div\{/);
   assertCssMatch(styles,/\.shipping-edit-action/);
 });
 

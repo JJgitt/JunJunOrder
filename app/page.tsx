@@ -1961,9 +1961,9 @@ function BatchShipSheet({
                             onClose,
                             onSubmit
                         }: { orders: PurchaseOrder[]; onClose: () => void; onSubmit: (shipments: Array<{ orderId: string; courier: string; company: string }>) => Promise<void> }) {
-    const [company, setCompany] = useState("顺丰速运"), [customCompany, setCustomCompany] = useState(""), [couriers, setCouriers] = useState<Record<string, string>>(() => Object.fromEntries(orders.map(order => [order.id, ""]))), [busy, setBusy] = useState(false);
+    const [company, setCompany] = useState("顺丰速运"), [customCompany, setCustomCompany] = useState(""), [courier, setCourier] = useState(""), [busy, setBusy] = useState(false);
     const resolvedCompany = company === "其他" ? customCompany.trim() : company;
-    const complete = Boolean(resolvedCompany) && orders.length > 0 && orders.every(order => couriers[order.id]?.trim());
+    const complete = Boolean(resolvedCompany && courier.trim()) && orders.length > 0;
 
     async function confirm() {
         if (!complete || busy) return;
@@ -1971,7 +1971,7 @@ function BatchShipSheet({
         try {
             await onSubmit(orders.map(order => ({
                 orderId: order.id,
-                courier: couriers[order.id].trim(),
+                courier: courier.trim(),
                 company: resolvedCompany
             })));
         } finally {
@@ -1980,7 +1980,7 @@ function BatchShipSheet({
     }
 
     return <Modal title="批量发货" subtitle={`${orders.length} ORDERS`} onClose={onClose}>
-        <div className="batch-ship-note"><b>统一物流公司，逐笔填写运单号</b><span>提交后订单内全部待发货商品将一次性发货并扣减库存；任意订单失败时整批不会生效。</span></div>
+        <div className="batch-ship-note"><b>整批共用一个发货运单</b><span>以下 {orders.length} 笔订单将使用同一物流公司和运单号；提交后全部待发货商品将一次性出库，任意订单失败时整批不会生效。</span></div>
         <label className="modal-field"><span>发货物流公司 *</span><select value={company}
                                                                     onChange={e => setCompany(e.target.value)}>{courierCompanies.map(item =>
             <option key={item}>{item}</option>)}
@@ -1989,14 +1989,12 @@ function BatchShipSheet({
         <label className="modal-field"><span>其他物流公司 *</span><input value={customCompany}
                                                                    onChange={e => setCustomCompany(e.target.value)}
                                                                    placeholder="请输入物流公司名称"/></label>}
-        <div className="batch-shipment-list">{orders.map((order, index) => <div key={order.id}>
+        <label className="modal-field"><span>发货运单号 *</span><input aria-label="批量发货运单号" value={courier}
+                                                                    onChange={e => setCourier(e.target.value)}
+                                                                    placeholder="只需填写一个运单号"/></label>
+        <div className="batch-shipment-list shared-courier">{orders.map((order, index) => <div key={order.id}>
             <span><b>{index + 1}. {order.itemCount > 1 ? `${order.title} 等${order.itemCount}件` : `${order.title} · ${order.items[0]?.size}码`}</b><small><CopyNumber
-                value={order.id} label="采购订单号"/></small></span><input aria-label={`${order.id} 发货运单号`}
-                                                                      value={couriers[order.id] ?? ""}
-                                                                      onChange={e => setCouriers(current => ({
-                                                                          ...current,
-                                                                          [order.id]: e.target.value
-                                                                      }))} placeholder="请输入该订单发货运单号"/></div>)}</div>
+                value={order.id} label="采购订单号"/></small></span><em>{order.items.reduce((sum, item) => sum + item.qty, 0)} 件</em></div>)}</div>
         <button className="primary-button" disabled={!complete || busy}
                 onClick={() => void confirm()}>{busy ? "正在批量发货…" : `确认批量发货 ${orders.length} 笔`}</button>
     </Modal>;
