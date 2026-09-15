@@ -35,6 +35,9 @@ export const purchaseOrders = pgTable("purchase_orders", {
   auditorId: text("auditor_id").references(() => users.id),
   receivedAt: timestamp("received_at", { withTimezone: true, mode: "string" }),
   location: text("location"),
+  settled: boolean("settled").notNull().default(false),
+  settledAt: timestamp("settled_at", { withTimezone: true, mode: "string" }),
+  settledBy: text("settled_by").references(() => users.id),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (table) => [
@@ -42,6 +45,7 @@ export const purchaseOrders = pgTable("purchase_orders", {
   index("idx_orders_status_created").on(table.status, table.createdAt),
   index("idx_orders_purchaser_created").on(table.purchaserId, table.createdAt),
   index("idx_orders_courier_no").on(table.courierNo),
+  index("idx_orders_settled_received").on(table.settled, table.receivedAt),
 ]);
 
 export const orderItems = pgTable("order_items", {

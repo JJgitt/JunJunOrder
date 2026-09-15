@@ -753,10 +753,49 @@ test("administrator can revert a received order back to in-transit and roll back
   assertJsMatch(page,/订单已退回在途，库存已回滚/);
   assertJsMatch(page,/function RevertReceiveSheet/);
   assertJsMatch(page,/role === "admin" && overlay === "revert-receive"/);
-  assertJsMatch(page,/canManage && readyToShip\(order\.status\) && !order\.items\.some\(item=>item\.shipped\) && <button className="revert-receive-button"/);
+  assertJsMatch(page,/canManage && !order\.settled && readyToShip\(order\.status\) && !order\.items\.some\(item=>item\.shipped\) && <button className="revert-receive-button"/);
   assertJsMatch(page,/确认退回在途/);
   assertCssMatch(styles,/\.revert-receive-button\{/);
   assertCssMatch(styles,/\.revert-warning\{/);
+});
+
+test("purchase settlement starts after receipt and stays independent from shipping",async()=>{
+  const [page,appRoute,schema,migration,exportRoute,styles]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
+    readFile(new URL("../drizzle/0009_purchase_order_settlement.sql",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/export/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
+  ]);
+  assert.match(schema,/settled: boolean\("settled"\)\.notNull\(\)\.default\(false\)/);
+  assert.match(schema,/settledAt: timestamp\("settled_at"/);
+  assert.match(schema,/settledBy: text\("settled_by"\)\.references\(\(\) => users\.id\)/);
+  assert.match(migration,/ADD COLUMN "settled" boolean DEFAULT false NOT NULL/);
+  assert.match(migration,/采购款结算状态，独立于发货状态/);
+  assert.match(appRoute,/settled:row\.settled,settledAt:row\.settledAt\?\?undefined,receivedAt:row\.receivedAt\?\?undefined/);
+  assert.match(appRoute,/if\(action==="settle-order"\)/);
+  assert.match(appRoute,/if\(!order\.receivedAt\)throw conflict\("采购单尚未入库，不能结款"\)/);
+  assert.match(appRoute,/set\(\{settled:true,settledAt:timestamp,settledBy:user\.id,updatedAt:timestamp\}\)/);
+  assert.match(appRoute,/action:"settle"/);
+  assert.match(appRoute,/if\(order\.settled\)throw conflict\("订单已结款，不能再驳回"\)/);
+  assert.match(appRoute,/if\(order\.settled\)throw conflict\("订单已结款，不能撤销入库"\)/);
+  const settleBlock=appRoute.slice(appRoute.indexOf('if(action==="settle-order")'),appRoute.indexOf('if(action==="revert-receive")'));
+  assert.doesNotMatch(settleBlock,/set\(\{[^}]*status:/);
+  const shipBlock=appRoute.slice(appRoute.indexOf('if(action==="ship")'),appRoute.indexOf('if(action==="update-shipping")'));
+  assert.doesNotMatch(shipBlock,/settled|settledAt|settledBy/);
+  assertJsMatch(page,/type Overlay = [^;]+"settle"/);
+  assertJsMatch(page,/mutate\("settle-order",\{orderId:id\}\)/);
+  assertJsMatch(page,/function SettlementStatus/);
+  assertJsMatch(page,/order\.receivedAt&&!order\.settled&&<button className="settlement-action"/);
+  assertJsMatch(page,/function SettlementSheet/);
+  assertJsMatch(page,/结款状态独立记录，不会发货、扣减库存或改变当前发货状态/);
+  assertJsMatch(page,/canManage&&order\.receivedAt&&!order\.settled&&<button className="primary-button settlement-confirm-button"/);
+  assert.match(exportRoute,/"结款状态","结款时间"/);
+  assert.match(exportRoute,/order\.settled\?"已结款":"未结款"/);
+  assertCssMatch(styles,/\.order-settlement\{/);
+  assertCssMatch(styles,/\.order-settlement\.settled\{/);
+  assertCssMatch(styles,/\.settlement-confirm-card\{/);
 });
 
 test("multi-item entry and detail views carry dedicated visual styles",async()=>{

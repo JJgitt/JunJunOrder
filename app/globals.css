@@ -758,6 +758,58 @@ button:active {
     text-align: right
 }
 
+.order-settlement {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 8px 9px;
+    border: 1px solid #f0dfba;
+    border-radius: 10px;
+    background: #fffbf1;
+    color: #8b6d32
+}
+
+.order-settlement > span {
+    flex: none;
+    font-size: 8px
+}
+
+.order-settlement > b {
+    min-width: 0;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 7px;
+    text-align: right
+}
+
+.order-settlement em {
+    flex: none;
+    font-style: normal;
+    font-size: 9px
+}
+
+.order-settlement time {
+    color: #8f9b91;
+    font-size: 7.5px;
+    font-weight: 500
+}
+
+.order-settlement.settled {
+    border-color: #cce8d5;
+    background: #f0faf3;
+    color: #17733a
+}
+
+.settlement-action {
+    border: 1px solid #e7c978;
+    background: #fffaf0;
+    color: #9b6810;
+    font-weight: 700
+}
+
 .order-courier.empty b {
     color: #a1a9b4;
     font-family: inherit;
@@ -3774,6 +3826,72 @@ button:active {
 .revert-confirm {
     background: #e0921f;
     box-shadow: 0 7px 16px #e0921f33
+}
+
+.settlement-confirm-button {
+    background: #bf7a12;
+    box-shadow: 0 7px 16px #bf7a1233
+}
+
+.settlement-confirm-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    padding: 14px;
+    border: 1px solid #efd79e;
+    border-radius: 16px;
+    background: linear-gradient(145deg, #fffdf7, #fff7e5)
+}
+
+.settlement-confirm-card > i {
+    width: 32px;
+    height: 32px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #bf7a12;
+    color: #fff;
+    font-style: normal;
+    font-size: 17px;
+    font-weight: 900;
+    box-shadow: 0 5px 13px #bf7a1238
+}
+
+.settlement-confirm-card b {
+    color: #855513;
+    font-size: 11px
+}
+
+.settlement-confirm-card p {
+    margin: 6px 0 0;
+    color: #95764a;
+    font-size: 8.5px;
+    line-height: 1.65
+}
+
+.settlement-summary {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 9px 14px;
+    margin: 12px 0;
+    padding: 12px 14px;
+    border-radius: 13px;
+    background: #f7f8fa
+}
+
+.settlement-summary span {
+    color: #87919e;
+    font-size: 8.5px
+}
+
+.settlement-summary b {
+    text-align: right;
+    font-size: 9.5px
+}
+
+.settlement-confirm-actions .secondary-button {
+    margin-top: 0
 }
 
 /* 订单详情：商品清单 */

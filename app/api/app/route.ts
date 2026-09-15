@@ -56,10 +56,11 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
     return {
       id:row.id,platform:row.platform,platformNo:row.platformOrderNo,courierCompany:row.courierCompany,courierNo:row.courierNo,status,rejectReason:row.rejectReason??undefined,
       purchaserId:row.purchaserId,purchaser:names.get(row.purchaserId)??"采购员",createdAt:row.createdAt,
+      settled:row.settled,settledAt:row.settledAt??undefined,receivedAt:row.receivedAt??undefined,
       ...(isAdmin?{purchaserPhone:phones.get(row.purchaserId)??"",purchaserWechatId:wechatIds.get(row.purchaserId)??""}:{}),
       title:items[0]?.title??"",itemCount:items.length,amount:items.reduce((sum,item)=>sum+item.amount,0),items,
       images:imageRows.filter(image=>image.orderId===row.id).map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
-      ...(isAdmin?{...(row.location?{location:row.location}:{}),receivedAt:row.receivedAt??undefined}:{}),
+      ...(isAdmin?{...(row.location?{location:row.location}:{}),settledByName:row.settledBy?names.get(row.settledBy)??"管理员":undefined}:{}),
     };
   });
   let stock:Array<{sku:string;title:string;size:string;count:number;locations:string[]}>=[];
@@ -225,6 +226,7 @@ export async function POST(request:Request){
         if(action==="approve"&&order.status!=="待审核")throw conflict("只有待审核订单可以通过审核");
         const timestamp=now();
         if(action==="reject"){
+          if(order.settled)throw conflict("订单已结款，不能再驳回");
           if(!["待审核","在途","已入库","待发货"].includes(order.status))throw conflict("当前订单不能驳回");
           const items=await tx.select().from(orderItems).where(eq(orderItems.orderId,id)).for("update");
           if(items.some(item=>item.shippedAt))throw conflict("订单已有商品发货，不能整单驳回");
@@ -264,12 +266,28 @@ export async function POST(request:Request){
       return Response.json({data:await snapshot(user)});
     }
 
+    if(action==="settle-order"){
+      requireAdmin(user);const id=string(body.orderId);
+      if(!id)return Response.json({error:"缺少订单 ID"},{status:400});
+      await db.transaction(async tx=>{
+        const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,id)).for("update").limit(1);
+        if(!order)throw notFound("订单不存在");
+        if(!order.receivedAt)throw conflict("采购单尚未入库，不能结款");
+        if(order.settled)throw conflict("采购单已经完成结款，请勿重复操作");
+        const timestamp=now();
+        await tx.update(purchaseOrders).set({settled:true,settledAt:timestamp,settledBy:user.id,updatedAt:timestamp}).where(eq(purchaseOrders.id,id));
+        await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"settle",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({receivedAt:order.receivedAt,shippingIndependent:true}),createdAt:timestamp});
+      });
+      return Response.json({data:await snapshot(user)});
+    }
+
     if(action==="revert-receive"){
       requireAdmin(user);const id=string(body.orderId);
       if(!id)return Response.json({error:"缺少订单 ID"},{status:400});
       await db.transaction(async tx=>{
         const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,id)).for("update").limit(1);
         if(!order)throw notFound("订单不存在");
+        if(order.settled)throw conflict("订单已结款，不能撤销入库");
         if(order.status!=="已入库")throw conflict("只有已入库订单可以退回在途");
         const items=await tx.select().from(orderItems).where(eq(orderItems.orderId,id)).for("update");
         if(items.some(item=>item.shippedAt))throw conflict("订单内已有商品发货，无法退回在途");

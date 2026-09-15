@@ -10,7 +10,7 @@ type Role = "admin" | "buyer";
 type AdminTab = "dashboard" | "stock" | "orders" | "upload" | "profile";
 type BuyerTab = "home" | "upload" | "mine";
 type OrderStatus = "待审核" | "在途" | "已入库" | "待发货" | "已发货" | "已驳回";
-type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "detail" | "reject" | "ship" | null;
+type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "detail" | "reject" | "ship" | "settle" | null;
 type OrderImage = { id: string; url: string; fileName: string; uploadedBy: string; createdAt: string };
 
 type OrderItem = {
@@ -23,6 +23,7 @@ type OrderItemDraft = { id: string; title: string; sku: string; size: string; qt
 type PurchaseOrder = {
     id: string; platform: string; platformNo: string; courierCompany: string; courierNo: string; status: OrderStatus;
     purchaser: string; purchaserId?: string; purchaserPhone?: string; purchaserWechatId?: string; createdAt: string; location?: string; receivedAt?: string; rejectReason?: string;
+    settled: boolean; settledAt?: string; settledByName?: string;
     title: string; itemCount: number; amount: number; items: OrderItem[];
     images: OrderImage[];
 };
@@ -42,7 +43,7 @@ const statusTone: Record<OrderStatus, string> = {
     "已驳回": "red"
 };
 const readyToShip = (status: OrderStatus) => status === "已入库" || status === "待发货";
-const canRejectOrder = (order: PurchaseOrder) => ["待审核", "在途", "已入库", "待发货"].includes(order.status) && !order.items.some(item => item.shipped);
+const canRejectOrder = (order: PurchaseOrder) => !order.settled && ["待审核", "在途", "已入库", "待发货"].includes(order.status) && !order.items.some(item => item.shipped);
 const buyerCanEditOrder = (status: OrderStatus) => status === "待审核" || status === "在途" || status === "已驳回";
 const statusLabel = (status: OrderStatus) => readyToShip(status) ? "待发货" : status;
 const money = (value: number) => `¥${value.toLocaleString("zh-CN", {minimumFractionDigits: 2})}`;
@@ -198,6 +199,17 @@ export default function Home() {
 
     const approve = (id: string) => void run("approve", {orderId: id}, "订单审核通过，已进入在途状态");
     const reject = (id: string, reason: string) => void run("reject", {orderId: id, reason}, "订单已驳回，采购员将收到提醒");
+    async function settleOrder(id: string) {
+        try {
+            await mutate("settle-order", {orderId: id});
+            setOverlay(null);
+            notify("采购单已完成结款，发货状态保持不变");
+            return true;
+        } catch (error) {
+            notify(error instanceof Error ? error.message : "结款失败");
+            return false;
+        }
+    }
 
     async function receive(id: string, location: string, files: File[] = []) {
         try {
@@ -364,7 +376,11 @@ export default function Home() {
             }} onShip={(id) => {
                 setSelectedId(id);
                 setOverlay("detail");
+            }} onSettle={(id) => {
+                setSelectedId(id);
+                setOverlay("settle");
             }}/>}
+
             {role === "admin" && adminTab === "upload" &&
                 <UploadPage key={`upload-${selectedId || "new"}-${uploadNonce}`} mode="admin"
                             people={people}
@@ -427,6 +443,7 @@ export default function Home() {
                          onClose={() => setOverlay(null)} onApprove={() => approve(selected.id)}
                          onReceive={() => setOverlay("manual-receive")}
                          onRevertReceive={() => setOverlay("revert-receive")} onReject={() => setOverlay("reject")}
+                         onSettle={() => setOverlay("settle")}
                          onShipItem={(itemId) => {
                              setSelectedItemId(itemId);
                              setOverlay("ship");
@@ -435,6 +452,8 @@ export default function Home() {
             <RevertReceiveSheet order={selected} onClose={() => setOverlay(null)} onSubmit={revertReceive}/>}
         {role === "admin" && overlay === "reject" && selected &&
             <RejectSheet order={selected} onClose={() => setOverlay(null)} onSubmit={reject}/>}
+        {role === "admin" && overlay === "settle" && selected &&
+            <SettlementSheet order={selected} onClose={() => setOverlay(null)} onSubmit={settleOrder}/>}
         {role === "admin" && overlay === "ship" && selected && selected.items.length > 0 && <ShipSheet order={selected}
                                                                                                        item={selected.items.find(item => item.id === selectedItemId) ?? selected.items[0]}
                                                                                                        onClose={() => setOverlay(null)}
@@ -604,8 +623,9 @@ function AdminOrders({
                          onApprove,
                          onReceive,
                          onReject,
-                         onShip
-                     }: { orders: PurchaseOrder[]; onCreate: () => void; onEdit: (id: string) => void; onDelete: (ids: string[]) => Promise<boolean>; onBatchShip: (shipments: Array<{ orderId: string; courier: string; company: string }>) => Promise<boolean>; onOpen: (id: string) => void; onApprove: (id: string) => void; onReceive: (id: string) => void; onReject: (id: string) => void; onShip: (id: string) => void }) {
+                         onShip,
+                         onSettle
+                     }: { orders: PurchaseOrder[]; onCreate: () => void; onEdit: (id: string) => void; onDelete: (ids: string[]) => Promise<boolean>; onBatchShip: (shipments: Array<{ orderId: string; courier: string; company: string }>) => Promise<boolean>; onOpen: (id: string) => void; onApprove: (id: string) => void; onReceive: (id: string) => void; onReject: (id: string) => void; onShip: (id: string) => void; onSettle: (id: string) => void }) {
     const [query, setQuery] = useState("");
     const [statuses, setStatuses] = useState<string[]>([]);
     const [platform, setPlatform] = useState("全部渠道");
@@ -699,6 +719,8 @@ function AdminOrders({
                                                                      onOpen={() => onOpen(order.id)}
                                                                      showPurchaserContact showLocation actions={<>
             <button className="edit-ghost" onClick={() => onEdit(order.id)}>编辑</button>
+            {order.receivedAt && !order.settled && <button className="settlement-action"
+                                                           onClick={() => onSettle(order.id)}>确认结款</button>}
             {canRejectOrder(order) && <button className="danger-ghost"
                                               onClick={() => onReject(order.id)}>驳回</button>}{order.status === "待审核" ? <>
             <button className="small-primary" onClick={() => onApprove(order.id)}>✓ 通过</button>
@@ -760,6 +782,7 @@ function OrderCard({
             <div className="order-purchase-logistics"><span>采购快递信息</span><PurchaseCourierList items={order.items}
                                                                                               showItem={order.items.length > 1}/>
             </div>
+            <SettlementStatus order={order}/>
             {showOutbound && (readyToShip(order.status) || order.status === "已发货") &&
                 <OutboundOrderInfo order={order}/>}
             {showLocation && readyToShip(order.status) && <div className="order-courier order-location">
@@ -769,6 +792,13 @@ function OrderCard({
         </div>
         {actions && <div className="order-actions">{actions}</div>}
     </article>;
+}
+
+function SettlementStatus({order}: { order: PurchaseOrder }) {
+    return <div className={`order-settlement ${order.settled ? "settled" : "pending"}`}>
+        <span>采购结款</span><b>{order.settled ? <><em>已结款</em><time>{dateTime(order.settledAt)}</time></> :
+        <em>{order.receivedAt ? "待结款" : "入库后可结款"}</em>}</b>
+    </div>;
 }
 
 function OutboundOrderInfo({order}: { order: PurchaseOrder }) {
@@ -957,6 +987,8 @@ function UploadPage({
                 status: "待审核",
                 purchaser: "",
                 ...(mode === "admin" && editing ? {purchaserId} : {}),
+                settled: editing?.settled ?? false,
+                settledAt: editing?.settledAt,
                 createdAt: "",
                 title: normalizedItems[0].title,
                 itemCount: normalizedItems.length,
@@ -1487,8 +1519,9 @@ function OrderDetail({
                          onReceive,
                          onRevertReceive,
                          onReject,
+                         onSettle,
                          onShipItem
-                     }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onReject: () => void; onShipItem: (itemId: string) => void }) {
+                     }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onReject: () => void; onSettle: () => void; onShipItem: (itemId: string) => void }) {
     return <Modal title="订单详情" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
         <div className={`detail-card edge-${statusTone[order.status]}`}>
             <div className="detail-title">
@@ -1504,7 +1537,9 @@ function OrderDetail({
             <KeyValue label="采购员手机号" value={order.purchaserPhone} copyValue={order.purchaserPhone}/>}<KeyValue
             label="采购物流" value={<PurchaseCourierList items={order.items}
                                                      showItem={order.items.length > 1}/>}/>{showLocation && order.location &&
-            <KeyValue label="库位" value={order.location}/>}</div>
+            <KeyValue label="库位" value={order.location}/>}<KeyValue label="采购结款"
+            value={order.settled ? `已结款 · ${dateTime(order.settledAt)}` : order.receivedAt ? "待结款" : "入库后可结款"}
+            highlight={order.settled}/></div>
         <div className="detail-card items-card">
             <div className="items-card-head"><h3>商品清单</h3><span>{order.itemCount} 件 · {money(order.amount)}</span></div>
             {order.items.map((item, index) => <div className={`item-row ${canManage && item.shipped ? "shipped" : ""}`}
@@ -1540,7 +1575,8 @@ function OrderDetail({
                 <li><b>已入库</b><span>仓库已完成入库</span></li>}{showLocation && order.location &&
                 <li><b>08-24 16:12</b><span>收货入库 · {order.location}</span>
                 </li>}{canManage && order.items.some(item => item.resaleNo) &&
-                <li><b>08-24 17:40</b><span>二级平台售出</span></li>}</ol>
+                <li><b>08-24 17:40</b><span>二级平台售出</span></li>}{order.settled &&
+                <li><b>{dateTime(order.settledAt)}</b><span>{order.settledByName || "管理员"}完成采购结款</span></li>}</ol>
         </div>
         {!canManage && <div className="detail-card"><KeyValue label="发货状态"
                                                               value={order.status === "已发货" ? "已全部发货" : order.items.some(item => item.shipped) ? "部分已发货" : "未发货"}/>
@@ -1551,8 +1587,39 @@ function OrderDetail({
         <button className="primary-button" onClick={onApprove}>审核通过</button>
     </div>}{canManage && order.status === "在途" &&
         <button className="primary-button receive-confirm-button" onClick={onReceive}>📦
-            手动确认入库</button>}{canManage && readyToShip(order.status) && !order.items.some(item => item.shipped) &&
+            手动确认入库</button>}{canManage && order.receivedAt && !order.settled &&
+        <button className="primary-button settlement-confirm-button" onClick={onSettle}>¥ 确认采购结款</button>}{canManage && !order.settled && readyToShip(order.status) && !order.items.some(item => item.shipped) &&
         <button className="revert-receive-button" onClick={onRevertReceive}>↩ 退回在途（撤销入库）</button>}</Modal>;
+}
+
+function SettlementSheet({
+                             order,
+                             onClose,
+                             onSubmit
+                         }: { order: PurchaseOrder; onClose: () => void; onSubmit: (id: string) => Promise<boolean> }) {
+    const [busy, setBusy] = useState(false);
+
+    async function confirm() {
+        if (busy) return;
+        setBusy(true);
+        try {
+            await onSubmit(order.id);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return <Modal title="确认采购结款" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
+        <div className="settlement-confirm-card"><i>¥</i><div><b>确认已向采购员完成结款？</b>
+            <p>本单采购金额为 {money(order.amount)}。结款状态独立记录，不会发货、扣减库存或改变当前发货状态。</p></div></div>
+        <div className="settlement-summary"><span>采购员</span><b>{order.purchaser}</b><span>当前发货状态</span>
+            <b>{order.status === "已发货" ? "已全部发货" : order.items.some(item => item.shipped) ? "部分已发货" : "未发货"}</b></div>
+        <div className="dual-actions settlement-confirm-actions">
+            <button className="secondary-button" disabled={busy} onClick={onClose}>取消</button>
+            <button className="primary-button settlement-confirm-button" disabled={busy}
+                    onClick={() => void confirm()}>{busy ? "正在结款…" : "确认已结款"}</button>
+        </div>
+    </Modal>;
 }
 
 function RevertReceiveSheet({
