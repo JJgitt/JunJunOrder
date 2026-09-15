@@ -872,6 +872,18 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assertJsMatch(page,/fetch\("\/api\/settlements\/proof",\{method:"POST",body:form\}\)/);
   assertJsMatch(page,/function SettlementProofSheet/);
   assertJsMatch(page,/order\.settlementProofs\.length\?"更换截图":"补传截图"/);
+  assertJsMatch(page,/type Overlay = [^;]+"settlement-amount"/);
+  assertJsMatch(page,/mutate\("update-settlement-amount",\{orderId:id,amount:amount==null\?"":String\(amount\)\}\)/);
+  assertJsMatch(page,/onSettlementAmount=\{\(\)=>setOverlay\("settlement-amount"\)\}/);
+  assertJsMatch(page,/canManage&&order\.settled&&<button className="settlement-amount-edit"/);
+  assertJsMatch(page,/function SettlementAmountSheet/);
+  assertJsMatch(page,/order\.settledAmount\?\.toFixed\(2\)\?\?""/);
+  assertJsMatch(page,/只更新实际结款金额，不会改变结款状态、原结款时间、结款截图或发货信息/);
+  assert.match(appRoute,/if\(action==="update-settlement-amount"\)/);
+  assert.match(appRoute,/if\(!order\.settled\)throw conflict\("订单尚未结款，不能修改结款金额"\)/);
+  assert.match(appRoute,/set\(\{settledAmountCents,updatedAt:timestamp\}\)/);
+  assert.match(appRoute,/action:"update_settlement_amount"/);
+  assert.match(appRoute,/before:\{settledAmountCents:order\.settledAmountCents\},after:\{settledAmountCents\}/);
   const proofSettleBlock=settlementRoute.slice(settlementRoute.indexOf("await db.transaction"),settlementRoute.indexOf("storedFile = null"));
   assert.doesNotMatch(proofSettleBlock,/update\(purchaseOrders\)\.set\(\{[^}]*status:/);
   assert.match(exportRoute,/"结款状态","实际结款金额","结款时间"/);
@@ -884,6 +896,7 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assertCssMatch(styles,/\.settlement-amount-field\{/);
   assertCssMatch(styles,/\.settlement-recognition\.success\{/);
   assertCssMatch(styles,/\.settlement-proof-upload\{/);
+  assertCssMatch(styles,/\.settlement-amount-edit\{/);
   assertCssMatch(styles,/\.settlement-proof-clear\{/);
   assertCssMatch(styles,/\.settlement-proof-gallery\{/);
   assertCssMatch(styles,/\.order-images-empty\{/);

@@ -10,7 +10,7 @@ type Role = "admin" | "buyer";
 type AdminTab = "dashboard" | "stock" | "orders" | "upload" | "profile";
 type BuyerTab = "home" | "upload" | "mine";
 type OrderStatus = "待审核" | "在途" | "已入库" | "待发货" | "已发货" | "已驳回";
-type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "detail" | "reject" | "ship" | "settle" | "settlement-proof" | null;
+type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "detail" | "reject" | "ship" | "settle" | "settlement-amount" | "settlement-proof" | null;
 type OrderImage = { id: string; url: string; fileName: string; uploadedBy: string; createdAt: string };
 
 type OrderItem = {
@@ -243,6 +243,18 @@ export default function Home() {
             return true;
         } catch (error) {
             notify(error instanceof Error ? error.message : "结款截图上传失败");
+            return false;
+        }
+    }
+
+    async function updateSettlementAmount(id: string, amount?: number) {
+        try {
+            await mutate("update-settlement-amount", {orderId: id, amount: amount == null ? "" : String(amount)});
+            setOverlay(null);
+            notify(amount == null ? "结款金额已清空" : "结款金额已更新");
+            return true;
+        } catch (error) {
+            notify(error instanceof Error ? error.message : "结款金额更新失败");
             return false;
         }
     }
@@ -491,6 +503,7 @@ export default function Home() {
                          onReceive={() => setOverlay("manual-receive")}
                          onRevertReceive={() => setOverlay("revert-receive")} onReject={() => setOverlay("reject")}
                          onSettle={() => setOverlay("settle")}
+                         onSettlementAmount={() => setOverlay("settlement-amount")}
                          onSettlementProof={() => setOverlay("settlement-proof")}
                          onShipItem={(itemId) => {
                              setSelectedItemId(itemId);
@@ -502,6 +515,8 @@ export default function Home() {
             <RejectSheet order={selected} onClose={() => setOverlay(null)} onSubmit={reject}/>}
         {role === "admin" && overlay === "settle" && selected &&
             <SettlementSheet order={selected} onClose={() => setOverlay(null)} onSubmit={settleOrder}/>}
+        {role === "admin" && overlay === "settlement-amount" && selected &&
+            <SettlementAmountSheet order={selected} onClose={() => setOverlay(null)} onSubmit={updateSettlementAmount}/>}
         {role === "admin" && overlay === "settlement-proof" && selected &&
             <SettlementProofSheet order={selected} onClose={() => setOverlay(null)} onSubmit={updateSettlementProof}/>}
         {role === "admin" && overlay === "ship" && selected && selected.items.length > 0 && <ShipSheet order={selected}
@@ -1609,9 +1624,10 @@ function OrderDetail({
                          onRevertReceive,
                          onReject,
                          onSettle,
+                         onSettlementAmount,
                          onSettlementProof,
                          onShipItem
-                     }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onReject: () => void; onSettle: () => void; onSettlementProof: () => void; onShipItem: (itemId: string) => void }) {
+                     }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onReject: () => void; onSettle: () => void; onSettlementAmount: () => void; onSettlementProof: () => void; onShipItem: (itemId: string) => void }) {
     return <Modal title="订单详情" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
         <div className={`detail-card edge-${statusTone[order.status]}`}>
             <div className="detail-title">
@@ -1661,6 +1677,7 @@ function OrderDetail({
                                       subtitle={`已结款 · ${order.settledAmount != null ? money(order.settledAmount) : "金额未记录"} · ${dateTime(order.settledAt)}`} emptyText="本次结款未上传截图"
                                       actionLabel={canManage ? order.settlementProofs.length ? "更换截图" : "补传截图" : undefined}
                                       onAction={canManage ? onSettlementProof : undefined}/>}
+        {canManage && order.settled && <button className="settlement-amount-edit" onClick={onSettlementAmount}>¥ 编辑结款金额</button>}
         <div className="timeline-card"><h3>流转记录</h3>
             <ol>
                 <li><b>{order.createdAt}</b><span>{order.purchaser}上传订单</span></li>
@@ -1755,6 +1772,41 @@ function SettlementSheet({
             <button className="secondary-button" disabled={busy} onClick={onClose}>取消</button>
             <button className="primary-button settlement-confirm-button" disabled={busy || recognizing || amountInvalid}
                     onClick={() => void confirm()}>{busy ? "正在结款…" : recognizing ? "正在识别金额…" : proof ? "确认结款并保存截图" : "确认已结款"}</button>
+        </div>
+    </Modal>;
+}
+
+function SettlementAmountSheet({
+                                   order,
+                                   onClose,
+                                   onSubmit
+                               }: { order: PurchaseOrder; onClose: () => void; onSubmit: (id: string, amount?: number) => Promise<boolean> }) {
+    const [amount, setAmount] = useState(order.settledAmount?.toFixed(2) ?? ""), [busy, setBusy] = useState(false);
+    const parsedAmount = amount.trim() ? Number(amount) : undefined;
+    const amountInvalid = parsedAmount != null && (!Number.isFinite(parsedAmount) || parsedAmount <= 0);
+
+    async function confirm() {
+        if (busy || amountInvalid) return;
+        setBusy(true);
+        try {
+            await onSubmit(order.id, parsedAmount);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return <Modal title="编辑结款金额" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
+        <div className="settlement-confirm-card settlement-amount-edit-card"><i>¥</i><div><b>修改已结款订单的金额</b>
+            <p>只更新实际结款金额，不会改变结款状态、原结款时间、结款截图或发货信息。</p></div></div>
+        <label className="settlement-amount-field"><span>实际结款金额 <em>选填</em></span>
+            <div><i>¥</i><input value={amount} inputMode="decimal" placeholder="留空则显示金额未记录"
+                               onChange={event => setAmount(event.target.value.replace(/[^\d.]/g, ""))}/></div>
+            <small>{amountInvalid ? "请输入有效的正数金额，或清空后保存" : "可以补填、修改，也可以清空已有金额"}</small>
+        </label>
+        <div className="dual-actions settlement-confirm-actions">
+            <button className="secondary-button" disabled={busy} onClick={onClose}>取消</button>
+            <button className="primary-button settlement-confirm-button" disabled={busy || amountInvalid}
+                    onClick={() => void confirm()}>{busy ? "正在保存…" : "保存结款金额"}</button>
         </div>
     </Modal>;
 }

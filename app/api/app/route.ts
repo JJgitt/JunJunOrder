@@ -15,7 +15,7 @@ const orderId=()=>`PO${new Date().toISOString().slice(0,10).replaceAll("-","")}-
 const string=(value:unknown)=>typeof value==="string"?value.trim():"";
 const positiveInt=(value:unknown,fallback=1)=>Math.max(1,Math.floor(Number(value)||fallback));
 const cents=(value:unknown)=>Math.max(0,Math.round(Number(value)*100));
-const optionalPositiveCents=(value:unknown)=>{const text=string(value);if(!text)return null;const amount=Math.round(Number(text)*100);return Number.isFinite(amount)&&amount>0&&amount<=2_147_483_647?amount:undefined};
+const optionalPositiveCents=(value:unknown)=>{const text=typeof value==="number"?String(value):string(value);if(!text)return null;const amount=Math.round(Number(text)*100);return Number.isFinite(amount)&&amount>0&&amount<=2_147_483_647?amount:undefined};
 const conflict=(message:string)=>new Response(JSON.stringify({error:message}),{status:409,headers:{"content-type":"application/json"}});
 const notFound=(message:string)=>new Response(JSON.stringify({error:message}),{status:404,headers:{"content-type":"application/json"}});
 
@@ -300,6 +300,21 @@ export async function POST(request:Request){
         await tx.insert(auditLogs).values(orders.map(order=>({id:uid("audit"),actorId:user.id,action:"batch_settle",entityType:"purchase_order",entityId:order.id,detailJson:JSON.stringify({receivedAt:order.receivedAt,shippingIndependent:true,settledAmountCents:null}),createdAt:timestamp})));
       });
       return Response.json({data:await snapshot(user),settledCount:ids.length});
+    }
+
+    if(action==="update-settlement-amount"){
+      requireAdmin(user);const id=string(body.orderId),settledAmountCents=optionalPositiveCents(body.amount);
+      if(!id)return Response.json({error:"缺少订单 ID"},{status:400});
+      if(settledAmountCents===undefined)return Response.json({error:"请输入有效的实际结款金额，或留空清除"},{status:400});
+      await db.transaction(async tx=>{
+        const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,id)).for("update").limit(1);
+        if(!order)throw notFound("订单不存在");
+        if(!order.settled)throw conflict("订单尚未结款，不能修改结款金额");
+        const timestamp=now();
+        await tx.update(purchaseOrders).set({settledAmountCents,updatedAt:timestamp}).where(eq(purchaseOrders.id,id));
+        await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"update_settlement_amount",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({before:{settledAmountCents:order.settledAmountCents},after:{settledAmountCents}}),createdAt:timestamp});
+      });
+      return Response.json({data:await snapshot(user)});
     }
 
     if(action==="revert-receive"){

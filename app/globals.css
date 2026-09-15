@@ -837,6 +837,22 @@ button:active {
     font-weight: 700
 }
 
+.settlement-amount-edit {
+    width: 100%;
+    margin: -5px 0 14px;
+    padding: 10px 12px;
+    border: 1px solid #e7c978;
+    border-radius: 11px;
+    background: #fffaf0;
+    color: #8f6010;
+    font-size: 9px;
+    font-weight: 800
+}
+
+.settlement-amount-edit:active {
+    background: #fff3d6
+}
+
 .order-courier.empty b {
     color: #a1a9b4;
     font-family: inherit;
