@@ -85,6 +85,8 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64
+          provenance: false
+          sbom: false
           tags: ghcr.io/jjgitt/junjunorder:sha-${{ github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/JJgitt/JunJunOrder
@@ -104,6 +106,7 @@ jobs:
           [[ "$SWR_REPOSITORY" =~ ^[a-z0-9._-]+/[a-z0-9._-]+$ ]] || exit 1
           [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
           docker buildx imagetools create \
+            --prefer-index=false \
             --tag "$SWR_HOST/$SWR_REPOSITORY:sha-${{ github.sha }}" \
             "ghcr.io/jjgitt/junjunorder@$IMAGE_DIGEST"
 

@@ -25,6 +25,9 @@ test("workflow keeps GHCR publish and optional SWR mirror", async () => {
   const rollback = await readFile(new URL("../deploy/ci/rollback/ghcr-20260915/ci-cd.yml", import.meta.url), "utf8");
   assert.match(workflow, /tags: ghcr\.io\/jjgitt\/junjunorder:sha-\$\{\{ github\.sha \}\}/);
   assert.match(workflow, /Mirror image to Huawei SWR/);
+  assert.match(workflow, /provenance: false/);
+  assert.match(workflow, /sbom: false/);
+  assert.match(workflow, /--prefer-index=false/);
   assert.match(workflow, /IMAGE_REGISTRY == 'swr'/);
   assert.match(workflow, /swr\.cn-north-4\.myhuaweicloud\.com\/junjunorder\/junjunorder/);
   assert.match(workflow, /ghcr\.io\/jjgitt\/junjunorder/);
