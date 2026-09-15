@@ -10,7 +10,7 @@ type Role = "admin" | "buyer";
 type AdminTab = "dashboard" | "stock" | "orders" | "upload" | "profile";
 type BuyerTab = "home" | "upload" | "mine";
 type OrderStatus = "待审核" | "在途" | "已入库" | "待发货" | "已发货" | "已驳回";
-type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "detail" | "reject" | "ship" | "settle" | null;
+type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "detail" | "reject" | "ship" | "settle" | "settlement-proof" | null;
 type OrderImage = { id: string; url: string; fileName: string; uploadedBy: string; createdAt: string };
 
 type OrderItem = {
@@ -204,7 +204,10 @@ export default function Home() {
             const form = new FormData();
             form.set("orderId", id);
             form.set("amount", String(amount));
-            if (proof) form.set("proof", proof);
+            if (proof) {
+                form.set("proofSelected", "true");
+                form.append("proof", proof, proof.name);
+            }
             const response = await fetch("/api/settlements", {method: "POST", body: form});
             if (response.status === 401) {
                 router.replace("/login");
@@ -218,6 +221,28 @@ export default function Home() {
             return true;
         } catch (error) {
             notify(error instanceof Error ? error.message : "结款失败");
+            return false;
+        }
+    }
+
+    async function updateSettlementProof(id: string, proof: File) {
+        try {
+            const form = new FormData();
+            form.set("orderId", id);
+            form.append("proof", proof, proof.name);
+            const response = await fetch("/api/settlements/proof", {method: "POST", body: form});
+            if (response.status === 401) {
+                router.replace("/login");
+                throw new Error("登录已过期");
+            }
+            const json = await response.json() as { error?: string; replaced?: boolean };
+            if (!response.ok) throw new Error(json.error || "结款截图上传失败");
+            await load();
+            setOverlay(null);
+            notify(json.replaced ? "结款截图已更换" : "结款截图已补充");
+            return true;
+        } catch (error) {
+            notify(error instanceof Error ? error.message : "结款截图上传失败");
             return false;
         }
     }
@@ -455,6 +480,7 @@ export default function Home() {
                          onReceive={() => setOverlay("manual-receive")}
                          onRevertReceive={() => setOverlay("revert-receive")} onReject={() => setOverlay("reject")}
                          onSettle={() => setOverlay("settle")}
+                         onSettlementProof={() => setOverlay("settlement-proof")}
                          onShipItem={(itemId) => {
                              setSelectedItemId(itemId);
                              setOverlay("ship");
@@ -465,6 +491,8 @@ export default function Home() {
             <RejectSheet order={selected} onClose={() => setOverlay(null)} onSubmit={reject}/>}
         {role === "admin" && overlay === "settle" && selected &&
             <SettlementSheet order={selected} onClose={() => setOverlay(null)} onSubmit={settleOrder}/>}
+        {role === "admin" && overlay === "settlement-proof" && selected &&
+            <SettlementProofSheet order={selected} onClose={() => setOverlay(null)} onSubmit={updateSettlementProof}/>}
         {role === "admin" && overlay === "ship" && selected && selected.items.length > 0 && <ShipSheet order={selected}
                                                                                                        item={selected.items.find(item => item.id === selectedItemId) ?? selected.items[0]}
                                                                                                        onClose={() => setOverlay(null)}
@@ -1458,8 +1486,10 @@ function OrderImages({
                          title = "订单图片",
                          variant = "order",
                          subtitle,
-                         emptyText
-                     }: { images: OrderImage[]; title?: string; variant?: "order" | "settlement"; subtitle?: string; emptyText?: string }) {
+                         emptyText,
+                         actionLabel,
+                         onAction
+                     }: { images: OrderImage[]; title?: string; variant?: "order" | "settlement"; subtitle?: string; emptyText?: string; actionLabel?: string; onAction?: () => void }) {
     const [selected, setSelected] = useState<number | null>(null);
     const [zoomed, setZoomed] = useState(false);
     const dialog = useRef<HTMLDialogElement>(null);
@@ -1471,7 +1501,8 @@ function OrderImages({
     if (!images.length && !emptyText) return null;
     return <section className={`order-images ${variant === "settlement" ? "settlement-proof-gallery" : ""}`}>
         <div className="order-images-head"><div><h3>{title}</h3>{subtitle && <small>{subtitle}</small>}</div>
-            <span>{images.length ? `${images.length} 张` : "未上传"}</span></div>
+            <div className="order-images-head-actions"><span>{images.length ? `${images.length} 张` : "未上传"}</span>
+                {onAction && actionLabel && <button type="button" onClick={onAction}>{actionLabel}</button>}</div></div>
         {images.length ? <div className="order-images-grid">{images.map((image, index) => <button type="button" key={image.id}
             onClick={() => {setZoomed(false); setSelected(index);}} aria-label={`预览图片 ${index + 1}`} title={image.fileName}><Image
             src={image.url} alt={image.fileName} width={180} height={132}
@@ -1541,8 +1572,9 @@ function OrderDetail({
                          onRevertReceive,
                          onReject,
                          onSettle,
+                         onSettlementProof,
                          onShipItem
-                     }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onReject: () => void; onSettle: () => void; onShipItem: (itemId: string) => void }) {
+                     }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onReject: () => void; onSettle: () => void; onSettlementProof: () => void; onShipItem: (itemId: string) => void }) {
     return <Modal title="订单详情" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
         <div className={`detail-card edge-${statusTone[order.status]}`}>
             <div className="detail-title">
@@ -1589,7 +1621,9 @@ function OrderDetail({
         </div>
         <OrderImages images={order.images}/>
         {order.settled && <OrderImages images={order.settlementProofs} title="结款截图" variant="settlement"
-                                      subtitle={`已结款 · ${order.settledAmount != null ? money(order.settledAmount) : "金额未记录"} · ${dateTime(order.settledAt)}`} emptyText="本次结款未上传截图"/>}
+                                      subtitle={`已结款 · ${order.settledAmount != null ? money(order.settledAmount) : "金额未记录"} · ${dateTime(order.settledAt)}`} emptyText="本次结款未上传截图"
+                                      actionLabel={canManage ? order.settlementProofs.length ? "更换截图" : "补传截图" : undefined}
+                                      onAction={canManage ? onSettlementProof : undefined}/>}
         <div className="timeline-card"><h3>流转记录</h3>
             <ol>
                 <li><b>{order.createdAt}</b><span>{order.purchaser}上传订单</span></li>
@@ -1685,6 +1719,42 @@ function SettlementSheet({
             <button className="secondary-button" disabled={busy} onClick={onClose}>取消</button>
             <button className="primary-button settlement-confirm-button" disabled={busy || recognizing || !(Number(amount) > 0)}
                     onClick={() => void confirm()}>{busy ? "正在结款…" : recognizing ? "正在识别金额…" : proof ? "确认结款并保存截图" : "确认已结款"}</button>
+        </div>
+    </Modal>;
+}
+
+function SettlementProofSheet({
+                                  order,
+                                  onClose,
+                                  onSubmit
+                              }: { order: PurchaseOrder; onClose: () => void; onSubmit: (id: string, proof: File) => Promise<boolean> }) {
+    const [proof, setProof] = useState<File | null>(null), [busy, setBusy] = useState(false);
+
+    async function confirm() {
+        if (!proof || busy) return;
+        setBusy(true);
+        try {
+            await onSubmit(order.id, proof);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return <Modal title={order.settlementProofs.length ? "更换结款截图" : "补传结款截图"} subtitle={order.id}
+                  subtitleCopyValue={order.id} onClose={onClose}>
+        <div className="settlement-proof-repair-note"><i>▧</i><div><b>结款状态与金额不会改变</b>
+            <p>这里只补充或更换结款凭证，不会重复结款，也不会影响订单的发货状态。</p></div></div>
+        {order.settlementProofs.length > 0 && <OrderImages images={order.settlementProofs} title="当前结款截图" variant="settlement"/>}
+        <label className={`receipt-upload settlement-proof-upload ${proof ? "selected" : ""}`}>
+            <input type="file" accept="image/*" disabled={busy}
+                   onChange={event => setProof(event.target.files?.[0] ?? null)}/>
+            <i>{proof ? "✓" : "＋"}</i><span><b>{proof ? proof.name : order.settlementProofs.length ? "选择新的结款截图" : "选择要补传的结款截图"}</b>
+            <small>最多 1 张、图片不超过 5MB</small></span>
+        </label>
+        <div className="dual-actions settlement-confirm-actions">
+            <button className="secondary-button" disabled={busy} onClick={onClose}>取消</button>
+            <button className="primary-button settlement-confirm-button" disabled={busy || !proof}
+                    onClick={() => void confirm()}>{busy ? "正在保存…" : order.settlementProofs.length ? "确认更换截图" : "确认补传截图"}</button>
         </div>
     </Modal>;
 }

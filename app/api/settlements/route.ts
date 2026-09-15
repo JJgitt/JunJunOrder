@@ -31,6 +31,9 @@ export async function POST(request: Request) {
 
     const proofValue = form.get("proof");
     const proof = proofValue instanceof File && proofValue.size > 0 ? proofValue : null;
+    if (form.get("proofSelected") === "true" && !proof) {
+      return Response.json({ error: "结款截图未成功传输，请重新选择图片后再提交" }, { status: 400 });
+    }
     let image: { id: string; objectKey: string; fileName: string; contentType: string; sizeBytes: number } | null = null;
     if (proof) {
       const extension = imageExtension(proof.type);

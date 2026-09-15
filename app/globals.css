@@ -4036,6 +4036,42 @@ button:active {
     color: #a85f2f
 }
 
+.settlement-proof-repair-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 12px;
+    border: 1px solid #efd79e;
+    border-radius: 14px;
+    background: #fffaf0
+}
+
+.settlement-proof-repair-note > i {
+    width: 30px;
+    height: 30px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
+    background: #fff0c8;
+    color: #956312;
+    font-size: 15px;
+    font-style: normal
+}
+
+.settlement-proof-repair-note b {
+    color: #7d5719;
+    font-size: 9px
+}
+
+.settlement-proof-repair-note p {
+    margin: 4px 0 0;
+    color: #9c7c49;
+    font-size: 7.5px;
+    line-height: 1.5
+}
+
 /* 订单详情：商品清单 */
 .items-card {
     padding: 13px 14px
@@ -4754,6 +4790,25 @@ button:active {
     font-size: 8px
 }
 
+.order-images-head-actions {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 6px
+}
+
+.order-images-head-actions button {
+    min-height: 30px;
+    padding: 0 9px;
+    border: 1px solid #d7b66f;
+    border-radius: 9px;
+    background: #fffdf8;
+    color: #8e6117;
+    font-size: 8px;
+    font-weight: 700
+}
+
 .order-images-grid {
     display: grid;
     grid-template-columns:repeat(3, minmax(0, 1fr));
@@ -4821,7 +4876,7 @@ button:active {
     color: #aa7d37
 }
 
-.settlement-proof-gallery .order-images-head > span {
+.settlement-proof-gallery .order-images-head-actions > span {
     padding: 4px 8px;
     border-radius: 999px;
     background: #fff3cf;

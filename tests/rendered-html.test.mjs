@@ -760,10 +760,11 @@ test("administrator can revert a received order back to in-transit and roll back
 });
 
 test("purchase settlement records a manual or recognized amount, supports an optional proof, and stays independent from shipping",async()=>{
-  const [page,appRoute,settlementRoute,recognizeRoute,vision,schema,migration,proofMigration,amountMigration,exportRoute,styles]=await Promise.all([
+  const [page,appRoute,settlementRoute,proofRoute,recognizeRoute,vision,schema,migration,proofMigration,amountMigration,exportRoute,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../app/api/settlements/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/settlements/proof/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../app/api/settlements/recognize/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../lib/vision.ts",import.meta.url),"utf8"),
     readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
@@ -799,7 +800,8 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assertJsMatch(page,/type Overlay = [^;]+"settle"/);
   assertJsMatch(page,/fetch\("\/api\/settlements",\{method:"POST",body:form\}\)/);
   assertJsMatch(page,/form\.set\("amount",String\(amount\)\)/);
-  assertJsMatch(page,/form\.set\("proof",proof\)/);
+  assertJsMatch(page,/form\.set\("proofSelected","true"\)/);
+  assertJsMatch(page,/form\.append\("proof",proof,proof\.name\)/);
   assertJsMatch(page,/function SettlementStatus/);
   assertJsMatch(page,/order\.receivedAt&&!order\.settled&&<button className="settlement-action"/);
   assertJsMatch(page,/function SettlementSheet/);
@@ -813,6 +815,7 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assertJsMatch(page,/canManage&&order\.receivedAt&&!order\.settled&&<button className="primary-button settlement-confirm-button"/);
   assert.match(settlementRoute,/requireAdmin\(user\)/);
   assert.match(settlementRoute,/form\.get\("proof"\)/);
+  assert.match(settlementRoute,/form\.get\("proofSelected"\) === "true" && !proof/);
   assert.match(settlementRoute,/form\.get\("amount"\)/);
   assert.match(settlementRoute,/settledAmountCents: amountCents/);
   assert.match(settlementRoute,/proof\.size > 5 \* 1024 \* 1024/);
@@ -826,6 +829,13 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assert.match(vision,/export function normalizeSettlementAmount/);
   assert.match(vision,/export async function recognizeSettlementImage/);
   assert.match(settlementRoute,/if \(storedFile\) await unlink\(storedFile\)/);
+  assert.match(proofRoute,/if \(!order\.settled\) throw conflict\("订单尚未结款，不能单独上传结款截图"\)/);
+  assert.match(proofRoute,/eq\(orderImages\.kind, "settlement"\)/);
+  assert.match(proofRoute,/oldImages\.length \? "replace_settlement_proof" : "add_settlement_proof"/);
+  assertJsMatch(page,/type Overlay = [^;]+"settlement-proof"/);
+  assertJsMatch(page,/fetch\("\/api\/settlements\/proof",\{method:"POST",body:form\}\)/);
+  assertJsMatch(page,/function SettlementProofSheet/);
+  assertJsMatch(page,/order\.settlementProofs\.length\?"更换截图":"补传截图"/);
   const proofSettleBlock=settlementRoute.slice(settlementRoute.indexOf("await db.transaction"),settlementRoute.indexOf("storedFile = null"));
   assert.doesNotMatch(proofSettleBlock,/update\(purchaseOrders\)\.set\(\{[^}]*status:/);
   assert.match(exportRoute,/"结款状态","实际结款金额","结款时间"/);
