@@ -4699,6 +4699,10 @@ button:active {
     background: #7e22ce
 }
 
+.batch-toolbar .batch-settle-button {
+    background: #bf7a12
+}
+
 .batch-toolbar .batch-delete-button {
     background: var(--danger)
 }
@@ -4802,6 +4806,16 @@ button:active {
 .order-images-head h3 {
     margin: 0;
     font-size: 10px
+}
+
+.batch-settlement-note {
+    margin: 10px 0 14px;
+    padding: 10px 12px;
+    border-radius: 11px;
+    background: #fff8e8;
+    color: #8b641f;
+    font-size: 8.5px;
+    line-height: 1.6
 }
 
 .order-images-head small {

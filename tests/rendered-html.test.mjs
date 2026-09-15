@@ -822,6 +822,17 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assertJsMatch(page,/form\.append\("proof",proof,proof\.name\)/);
   assertJsMatch(page,/function SettlementStatus/);
   assertJsMatch(page,/order\.receivedAt&&!order\.settled&&<button className="settlement-action"/);
+  assertJsMatch(page,/onBatchSettle=\{batchSettle\}/);
+  assertJsMatch(page,/selectedSettleReady=selectedOrders\.filter\(order=>order\.receivedAt&&!order\.settled\)/);
+  assertJsMatch(page,/className="batch-settle-button" disabled=\{!selectedSettleReady\.length\}/);
+  assertJsMatch(page,/function BatchSettlementSheet/);
+  assertJsMatch(page,/批量结款不记录每笔实际结款金额和结款截图/);
+  assert.match(appRoute,/if\(action==="batch-settle"\)/);
+  assert.match(appRoute,/const notReceived=orders\.find\(order=>!order\.receivedAt\)/);
+  assert.match(appRoute,/const settled=orders\.find\(order=>order\.settled\)/);
+  assert.match(appRoute,/settled:true,settledAt:timestamp,settledBy:user\.id,settledAmountCents:null/);
+  assert.match(appRoute,/action:"batch_settle"/);
+  assert.match(appRoute,/settledCount:ids\.length/);
   assertJsMatch(page,/function SettlementSheet/);
   assertJsMatch(page,/结款状态独立记录，不会发货、扣减库存或改变当前发货状态/);
   assertJsMatch(page,/上传结款截图（选填）/);
@@ -868,6 +879,8 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assertCssMatch(styles,/\.order-settlement\{/);
   assertCssMatch(styles,/\.order-settlement\.settled\{/);
   assertCssMatch(styles,/\.settlement-confirm-card\{/);
+  assertCssMatch(styles,/\.batch-toolbar \.batch-settle-button\{/);
+  assertCssMatch(styles,/\.batch-settlement-note\{/);
   assertCssMatch(styles,/\.settlement-amount-field\{/);
   assertCssMatch(styles,/\.settlement-recognition\.success\{/);
   assertCssMatch(styles,/\.settlement-proof-upload\{/);

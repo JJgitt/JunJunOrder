@@ -284,6 +284,24 @@ export async function POST(request:Request){
       return Response.json({data:await snapshot(user)});
     }
 
+    if(action==="batch-settle"){
+      requireAdmin(user);
+      const ids=Array.from(new Set((Array.isArray(body.orderIds)?body.orderIds:[]).filter((value):value is string=>typeof value==="string").map(value=>value.trim()).filter(Boolean))).slice(0,100);
+      if(!ids.length)return Response.json({error:"请选择要结款的订单"},{status:400});
+      await db.transaction(async tx=>{
+        const orders=await tx.select().from(purchaseOrders).where(inArray(purchaseOrders.id,ids)).for("update");
+        if(orders.length!==ids.length)throw notFound("部分订单不存在，请刷新后重试");
+        const notReceived=orders.find(order=>!order.receivedAt);
+        if(notReceived)throw conflict(`订单 ${notReceived.id} 尚未入库，不能结款`);
+        const settled=orders.find(order=>order.settled);
+        if(settled)throw conflict(`订单 ${settled.id} 已经完成结款，请勿重复操作`);
+        const timestamp=now();
+        await tx.update(purchaseOrders).set({settled:true,settledAt:timestamp,settledBy:user.id,settledAmountCents:null,updatedAt:timestamp}).where(inArray(purchaseOrders.id,ids));
+        await tx.insert(auditLogs).values(orders.map(order=>({id:uid("audit"),actorId:user.id,action:"batch_settle",entityType:"purchase_order",entityId:order.id,detailJson:JSON.stringify({receivedAt:order.receivedAt,shippingIndependent:true,settledAmountCents:null}),createdAt:timestamp})));
+      });
+      return Response.json({data:await snapshot(user),settledCount:ids.length});
+    }
+
     if(action==="revert-receive"){
       requireAdmin(user);const id=string(body.orderId);
       if(!id)return Response.json({error:"缺少订单 ID"},{status:400});

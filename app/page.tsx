@@ -170,7 +170,7 @@ export default function Home() {
             router.replace("/login");
             throw new Error("登录已过期");
         }
-        const json = await response.json() as { data: Snapshot; createdOrderId?: string; deletedCount?: number; shippedCount?: number; deletedUserName?: string; error?: string };
+        const json = await response.json() as { data: Snapshot; createdOrderId?: string; deletedCount?: number; shippedCount?: number; settledCount?: number; deletedUserName?: string; error?: string };
         if (!response.ok) throw new Error(json.error || "操作失败");
         applySnapshot(json.data);
         return json;
@@ -284,6 +284,17 @@ export default function Home() {
             return true;
         } catch (error) {
             notify(error instanceof Error ? error.message : "批量发货失败");
+            return false;
+        }
+    }
+
+    async function batchSettle(ids: string[]) {
+        try {
+            const result = await mutate("batch-settle", {orderIds: ids});
+            notify(`已完成 ${result.settledCount ?? ids.length} 笔订单结款`);
+            return true;
+        } catch (error) {
+            notify(error instanceof Error ? error.message : "批量结款失败");
             return false;
         }
     }
@@ -402,7 +413,7 @@ export default function Home() {
             }} onEdit={(id) => {
                 setSelectedId(id);
                 setAdminTab("upload");
-            }} onDelete={deleteOrders} onBatchShip={batchShip} onOpen={openOrder} onApprove={approve}
+            }} onDelete={deleteOrders} onBatchShip={batchShip} onBatchSettle={batchSettle} onOpen={openOrder} onApprove={approve}
                                                                        onReceive={(id) => {
                                                                            setSelectedId(id);
                                                                            setOverlay("manual-receive");
@@ -658,13 +669,14 @@ function AdminOrders({
                          onEdit,
                          onDelete,
                          onBatchShip,
+                         onBatchSettle,
                          onOpen,
                          onApprove,
                          onReceive,
                          onReject,
                          onShip,
                          onSettle
-                     }: { orders: PurchaseOrder[]; onCreate: () => void; onEdit: (id: string) => void; onDelete: (ids: string[]) => Promise<boolean>; onBatchShip: (shipments: Array<{ orderId: string; courier: string; company: string }>) => Promise<boolean>; onOpen: (id: string) => void; onApprove: (id: string) => void; onReceive: (id: string) => void; onReject: (id: string) => void; onShip: (id: string) => void; onSettle: (id: string) => void }) {
+                     }: { orders: PurchaseOrder[]; onCreate: () => void; onEdit: (id: string) => void; onDelete: (ids: string[]) => Promise<boolean>; onBatchShip: (shipments: Array<{ orderId: string; courier: string; company: string }>) => Promise<boolean>; onBatchSettle: (ids: string[]) => Promise<boolean>; onOpen: (id: string) => void; onApprove: (id: string) => void; onReceive: (id: string) => void; onReject: (id: string) => void; onShip: (id: string) => void; onSettle: (id: string) => void }) {
     const [query, setQuery] = useState("");
     const [statuses, setStatuses] = useState<string[]>([]);
     const [platform, setPlatform] = useState("全部渠道");
@@ -674,6 +686,7 @@ function AdminOrders({
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [batchShipOpen, setBatchShipOpen] = useState(false);
+    const [batchSettleOpen, setBatchSettleOpen] = useState(false);
     const [dateDays, setDateDays] = useState(30);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -689,6 +702,7 @@ function AdminOrders({
     const visible = useMemo(() => orders.filter(order => new Date(order.createdAt).getTime() >= dateStart && new Date(order.createdAt).getTime() < dateEnd && matchesStatusFilter(order, statuses) && (platform === "全部渠道" || order.platform === platform) && (settlement === "全部结款状态" || order.settled === (settlement === "已结款")) && (buyers.length === 0 || buyers.includes(order.purchaser)) && `${order.id}${order.platformNo}${order.items.map(item => `${item.title}${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}${item.outboundCourier ?? ""}`).join("")}`.toLowerCase().includes(query.toLowerCase())), [orders, query, statuses, platform, settlement, buyers, dateStart, dateEnd]);
     const selectedSet = new Set(selectedIds), selectedOrders = orders.filter(order => selectedSet.has(order.id)),
         selectedReady = selectedOrders.filter(order => readyToShip(order.status)),
+        selectedSettleReady = selectedOrders.filter(order => order.receivedAt && !order.settled),
         selectedItemQuantity = selectedOrders.reduce((sum, order) => sum + order.items.reduce((qty, item) => qty + item.qty, 0), 0),
         allVisibleSelected = visible.length > 0 && visible.every(order => selectedSet.has(order.id));
     const toggle = (id: string) => setSelectedIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
@@ -705,6 +719,14 @@ function AdminOrders({
         if (await onBatchShip(shipments)) {
             setSelectedIds(current => current.filter(id => !shipments.some(item => item.orderId === id)));
             setBatchShipOpen(false);
+        }
+    }
+
+    async function confirmBatchSettle() {
+        const ids = selectedSettleReady.map(order => order.id);
+        if (await onBatchSettle(ids)) {
+            setSelectedIds(current => current.filter(id => !ids.includes(id)));
+            setBatchSettleOpen(false);
         }
     }
 
@@ -753,6 +775,8 @@ function AdminOrders({
         </div>}
         <SectionHead title="采购订单" note={orderListSummary(visible)}/>
         <div className="batch-toolbar"><label><input type="checkbox" checked={allVisibleSelected} onChange={toggleAll}/><span>{allVisibleSelected ? "取消全选" : "全选当前结果"}</span></label><b>{selectedIds.length ? `已选择 ${selectedIds.length} 笔 · 共 ${selectedItemQuantity} 件` : "可批量选择订单"}</b>
+            <button className="batch-settle-button" disabled={!selectedSettleReady.length}
+                    onClick={() => setBatchSettleOpen(true)}>批量结款{selectedSettleReady.length ? ` ${selectedSettleReady.length}` : ""}</button>
             <button className="batch-ship-button" disabled={!selectedReady.length}
                     onClick={() => setBatchShipOpen(true)}>批量发货{selectedReady.length ? ` ${selectedReady.length}` : ""}</button>
             <button className="batch-delete-button" disabled={!selectedIds.length}
@@ -776,7 +800,8 @@ function AdminOrders({
                 去发货</button> : order.status === "已发货" ? <button className="small-primary shipping-edit-action"
                                                                 onClick={() => onShip(order.id)}>编辑发货信息</button> : null}</>}/>)}</div>
         {deleteOpen && <DeleteOrdersSheet count={selectedIds.length} onClose={() => setDeleteOpen(false)}
-                                          onSubmit={confirmDelete}/>} {batchShipOpen &&
+                                          onSubmit={confirmDelete}/>} {batchSettleOpen &&
+        <BatchSettlementSheet orders={selectedSettleReady} onClose={() => setBatchSettleOpen(false)} onSubmit={confirmBatchSettle}/>} {batchShipOpen &&
         <BatchShipSheet orders={selectedReady} onClose={() => setBatchShipOpen(false)} onSubmit={confirmBatchShip}/>}
     </section>;
 }
@@ -1849,6 +1874,37 @@ function DeleteOrdersSheet({
             <button className="secondary-button" disabled={busy} onClick={onClose}>取消</button>
             <button className="primary-button danger-button" disabled={busy}
                     onClick={() => void confirm()}>{busy ? "正在删除…" : "确认批量删除"}</button>
+        </div>
+    </Modal>;
+}
+
+function BatchSettlementSheet({
+                                  orders,
+                                  onClose,
+                                  onSubmit
+                              }: { orders: PurchaseOrder[]; onClose: () => void; onSubmit: () => Promise<void> }) {
+    const [busy, setBusy] = useState(false);
+    const purchaseAmount = orders.reduce((sum, order) => sum + order.amount, 0);
+
+    async function confirm() {
+        if (busy || !orders.length) return;
+        setBusy(true);
+        try {
+            await onSubmit();
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return <Modal title="批量确认结款" subtitle={`${orders.length} 笔可结款订单`} onClose={onClose}>
+        <div className="settlement-confirm-card batch-settlement-card"><i>¥</i><div><b>确认批量完成采购结款？</b>
+            <p>将把选中的 {orders.length} 笔已入库订单标记为已结款，不会改变订单发货状态。</p></div></div>
+        <div className="settlement-summary"><span>结款订单</span><b>{orders.length} 笔</b><span>采购总金额</span><b>{money(purchaseAmount)}</b></div>
+        <p className="batch-settlement-note">批量结款不记录每笔实际结款金额和结款截图；订单详情将显示“金额未记录”。</p>
+        <div className="dual-actions settlement-confirm-actions">
+            <button className="secondary-button" disabled={busy} onClick={onClose}>取消</button>
+            <button className="primary-button settlement-confirm-button" disabled={busy || !orders.length}
+                    onClick={() => void confirm()}>{busy ? "正在批量结款…" : `确认结款 ${orders.length} 笔`}</button>
         </div>
     </Modal>;
 }
