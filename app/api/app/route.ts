@@ -56,7 +56,7 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
     return {
       id:row.id,platform:row.platform,platformNo:row.platformOrderNo,courierCompany:row.courierCompany,courierNo:row.courierNo,status,rejectReason:row.rejectReason??undefined,
       purchaserId:row.purchaserId,purchaser:names.get(row.purchaserId)??"采购员",createdAt:row.createdAt,
-      settled:row.settled,settledAt:row.settledAt??undefined,receivedAt:row.receivedAt??undefined,
+      settled:row.settled,settledAt:row.settledAt??undefined,settledAmount:row.settledAmountCents==null?undefined:row.settledAmountCents/100,receivedAt:row.receivedAt??undefined,
       ...(isAdmin?{purchaserPhone:phones.get(row.purchaserId)??"",purchaserWechatId:wechatIds.get(row.purchaserId)??""}:{}),
       title:items[0]?.title??"",itemCount:items.length,amount:items.reduce((sum,item)=>sum+item.amount,0),items,
       images:imageRows.filter(image=>image.orderId===row.id&&image.kind==="order").map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
@@ -268,16 +268,17 @@ export async function POST(request:Request){
     }
 
     if(action==="settle-order"){
-      requireAdmin(user);const id=string(body.orderId);
+      requireAdmin(user);const id=string(body.orderId),settledAmountCents=cents(body.amount);
       if(!id)return Response.json({error:"缺少订单 ID"},{status:400});
+      if(settledAmountCents<=0)return Response.json({error:"请输入有效的实际结款金额"},{status:400});
       await db.transaction(async tx=>{
         const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,id)).for("update").limit(1);
         if(!order)throw notFound("订单不存在");
         if(!order.receivedAt)throw conflict("采购单尚未入库，不能结款");
         if(order.settled)throw conflict("采购单已经完成结款，请勿重复操作");
         const timestamp=now();
-        await tx.update(purchaseOrders).set({settled:true,settledAt:timestamp,settledBy:user.id,updatedAt:timestamp}).where(eq(purchaseOrders.id,id));
-        await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"settle",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({receivedAt:order.receivedAt,shippingIndependent:true}),createdAt:timestamp});
+        await tx.update(purchaseOrders).set({settled:true,settledAt:timestamp,settledBy:user.id,settledAmountCents,updatedAt:timestamp}).where(eq(purchaseOrders.id,id));
+        await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"settle",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({receivedAt:order.receivedAt,shippingIndependent:true,settledAmountCents}),createdAt:timestamp});
       });
       return Response.json({data:await snapshot(user)});
     }

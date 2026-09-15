@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeRecognition } from "../lib/vision.ts";
+import { normalizeRecognition, normalizeSettlementAmount } from "../lib/vision.ts";
 
 test("missing, null, empty and whitespace SKUs fall back to trimmed product names", () => {
   for (const sku of [undefined, null, "", "   "]) {
@@ -37,4 +37,11 @@ test("courier-only screenshots keep items empty and preserve tracking fields", (
   assert.deepEqual(result.items, []);
   assert.equal(result.courierCompany, "中通快递");
   assert.equal(result.courierNo, "772012345678");
+});
+
+test("settlement amount normalization accepts currency text and rejects missing or non-positive values", () => {
+  assert.equal(normalizeSettlementAmount({ amount: "¥1,288.50" }), 1288.5);
+  assert.equal(normalizeSettlementAmount({ transferAmount: 399 }), 399);
+  assert.equal(normalizeSettlementAmount({ amount: null }), null);
+  assert.equal(normalizeSettlementAmount({ amount: 0 }), null);
 });

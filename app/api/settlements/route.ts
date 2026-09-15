@@ -23,6 +23,11 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const orderId = String(form.get("orderId") ?? "").trim();
     if (!orderId) return Response.json({ error: "缺少订单 ID" }, { status: 400 });
+    const amount = Number(String(form.get("amount") ?? "").replace(/[¥￥,，\s]/g, ""));
+    const amountCents = Math.round(amount * 100);
+    if (!Number.isFinite(amount) || amountCents <= 0 || amountCents > 2_147_483_647) {
+      return Response.json({ error: "请输入有效的实际结款金额" }, { status: 400 });
+    }
 
     const proofValue = form.get("proof");
     const proof = proofValue instanceof File && proofValue.size > 0 ? proofValue : null;
@@ -51,19 +56,19 @@ export async function POST(request: Request) {
       if (image) {
         await tx.insert(orderImages).values({ ...image, orderId, kind: "settlement", uploadedBy: user.id, createdAt: timestamp });
       }
-      await tx.update(purchaseOrders).set({ settled: true, settledAt: timestamp, settledBy: user.id, updatedAt: timestamp }).where(eq(purchaseOrders.id, orderId));
+      await tx.update(purchaseOrders).set({ settled: true, settledAt: timestamp, settledBy: user.id, settledAmountCents: amountCents, updatedAt: timestamp }).where(eq(purchaseOrders.id, orderId));
       await tx.insert(auditLogs).values({
         id: `audit_${crypto.randomUUID()}`,
         actorId: user.id,
         action: "settle",
         entityType: "purchase_order",
         entityId: orderId,
-        detailJson: JSON.stringify({ receivedAt: order.receivedAt, shippingIndependent: true, proofImageId: image?.id ?? null }),
+        detailJson: JSON.stringify({ receivedAt: order.receivedAt, shippingIndependent: true, settledAmountCents: amountCents, proofImageId: image?.id ?? null }),
         createdAt: timestamp,
       });
     });
     storedFile = null;
-    return Response.json({ settled: true, proofUploaded: Boolean(image) });
+    return Response.json({ settled: true, amount: amountCents / 100, proofUploaded: Boolean(image) });
   } catch (error) {
     if (storedFile) await unlink(storedFile).catch(() => undefined);
     return routeError(error);

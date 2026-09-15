@@ -62,6 +62,18 @@ export const waybillPrompt = `你是快递面单识别助手。用户会上传�
 1. 只认面单上的运单号/快递单号，不要把手机号、订单号、分拣码、地址或条码旁的无关数字当成运单号。
 2. 看不清就填空字符串，不要猜。`;
 
+export const settlementPrompt = `你是采购结款凭证识别助手。用户会上传一张微信、支付宝、银行或其他支付渠道的付款/转账截图，请只提取本次已经成功支付的结款金额。
+
+只输出一个 JSON 对象，不要输出 markdown 代码块或任何解释文字：
+{
+  "amount": "本次实际付款或转账成功金额，数字类型、单位元；无法确认时填 null"
+}
+
+规则：
+1. 优先读取明确标注为“转账金额”“付款金额”“支付金额”“实付金额”或成功交易主金额的数值。
+2. 不要把账户余额、优惠金额、商品原价、订单号、手续费、收款方账号或日期数字当成结款金额。
+3. 金额必须来自图片中的明确文字；看不清、交易失败或无法确认时填 null，不要猜。`;
+
 /** 从模型返回的文本里提取第一个完整的 JSON 对象，容忍 markdown 代码块与前后废话。 */
 export function extractJson(text: string): unknown {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
@@ -102,6 +114,12 @@ export function normalizeCourierCompany(raw: unknown): string {
 const str = (value: unknown) => String(value ?? "").trim();
 const positiveInt = (value: unknown) => { const n = Math.floor(Number(value)); return Number.isFinite(n) && n > 0 ? n : 1; };
 const amountOrNull = (value: unknown) => { if (value === null || value === undefined || value === "") return null; const n = Number(String(value).replace(/[¥￥,，\s]/g, "")); return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null; };
+
+export function normalizeSettlementAmount(payload: unknown): number | null {
+  const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+  const amount = amountOrNull(record.amount ?? record.paidAmount ?? record.paymentAmount ?? record.transferAmount);
+  return amount !== null && amount > 0 ? amount : null;
+}
 
 /** 把模型的原始 JSON 清洗成稳定结构：类型校正、字段归一、去掉空商品行。 */
 export function normalizeRecognition(payload: unknown): RecognizedOrder {
@@ -205,4 +223,38 @@ export async function recognizeWaybillImage(image: File): Promise<RecognizedWayb
   const courierNo = str(record.courierNo ?? record.courier_no).replace(/[\s-]/g, "");
   if (!courierNo) throw new Error("未能识别快递单号，请重新拍照或手动输入");
   return { courierCompany: normalizeCourierCompany(record.courierCompany ?? record.courier_company), courierNo };
+}
+
+/** 识别付款/转账截图中的实际结款金额；无法确认时要求管理员手动输入。 */
+export async function recognizeSettlementImage(image: File): Promise<{ amount: number }> {
+  const base = process.env.VISION_API_BASE?.replace(/\/+$/, "");
+  const key = process.env.VISION_API_KEY;
+  const model = process.env.VISION_MODEL;
+  if (!base || !key || !model) throw new Error("尚未配置智能识图服务，请手动输入结款金额");
+  const bytes = Buffer.from(await image.arrayBuffer());
+  const dataUrl = `data:${image.type || "image/jpeg"};base64,${bytes.toString("base64")}`;
+  const response = await fetch(`${base}/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model,
+      temperature: 0,
+      messages: [
+        { role: "system", content: settlementPrompt },
+        { role: "user", content: [{ type: "image_url", image_url: { url: dataUrl } }, { type: "text", text: "请识别截图中本次已成功支付的结款金额，并按要求输出 JSON。" }] },
+      ],
+    }),
+    signal: AbortSignal.timeout(Number(process.env.VISION_TIMEOUT_MS) || 45000),
+  });
+  const body = await response.json().catch(() => ({})) as { choices?: Array<{ message?: { content?: unknown } }>; error?: { message?: string } };
+  if (!response.ok) {
+    console.error("[vision] settlement upstream error", response.status, body);
+    throw new Error(`识图服务调用失败（${response.status}）${body.error?.message ? `：${body.error.message}` : ""}`);
+  }
+  const content = body.choices?.[0]?.message?.content;
+  const text = typeof content === "string" ? content : Array.isArray(content) ? content.map(part => (part && typeof part === "object" && "text" in part ? String((part as { text?: unknown }).text ?? "") : "")).join("") : "";
+  if (!text) throw new Error("识图服务没有返回内容，请手动输入结款金额");
+  const amount = normalizeSettlementAmount(extractJson(text));
+  if (amount === null) throw new Error("未能识别结款金额，请手动输入");
+  return { amount };
 }

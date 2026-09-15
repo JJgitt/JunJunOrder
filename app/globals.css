@@ -3894,6 +3894,77 @@ button:active {
     margin-top: 0
 }
 
+.settlement-amount-field {
+    display: block;
+    margin: 12px 0;
+    padding: 12px 13px;
+    border: 1px solid #e3e7ed;
+    border-radius: 14px;
+    background: #fff
+}
+
+.settlement-amount-field > span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    color: #596575;
+    font-size: 9px;
+    font-weight: 700
+}
+
+.settlement-amount-field > span em {
+    padding: 2px 5px;
+    border-radius: 999px;
+    background: #fff0e8;
+    color: #d45b24;
+    font-size: 7px;
+    font-style: normal
+}
+
+.settlement-amount-field > div {
+    height: 45px;
+    display: flex;
+    align-items: center;
+    border: 1px solid #d9dee7;
+    border-radius: 11px;
+    background: #fafbfd;
+    overflow: hidden
+}
+
+.settlement-amount-field > div:focus-within {
+    border-color: #bf7a12;
+    box-shadow: 0 0 0 3px #bf7a1214
+}
+
+.settlement-amount-field > div i {
+    padding-left: 13px;
+    color: #aa6d13;
+    font-size: 15px;
+    font-style: normal;
+    font-weight: 800
+}
+
+.settlement-amount-field input {
+    min-width: 0;
+    flex: 1;
+    height: 100%;
+    padding: 0 12px 0 7px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #26303d;
+    font-size: 15px;
+    font-weight: 800
+}
+
+.settlement-amount-field > small {
+    display: block;
+    margin-top: 7px;
+    color: #9099a6;
+    font-size: 7.5px
+}
+
 .settlement-proof-field {
     position: relative;
     margin: 12px 0 2px
@@ -3945,6 +4016,24 @@ button:active {
 
 .settlement-proof-clear:disabled {
     opacity: .55
+}
+
+.settlement-recognition {
+    margin: 8px 2px 12px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 8px;
+    line-height: 1.45
+}
+
+.settlement-recognition.success {
+    background: #edf9f1;
+    color: #237846
+}
+
+.settlement-recognition.failed {
+    background: #fff4ed;
+    color: #a85f2f
 }
 
 /* 订单详情：商品清单 */

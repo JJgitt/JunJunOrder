@@ -23,7 +23,7 @@ type OrderItemDraft = { id: string; title: string; sku: string; size: string; qt
 type PurchaseOrder = {
     id: string; platform: string; platformNo: string; courierCompany: string; courierNo: string; status: OrderStatus;
     purchaser: string; purchaserId?: string; purchaserPhone?: string; purchaserWechatId?: string; createdAt: string; location?: string; receivedAt?: string; rejectReason?: string;
-    settled: boolean; settledAt?: string; settledByName?: string;
+    settled: boolean; settledAt?: string; settledByName?: string; settledAmount?: number;
     title: string; itemCount: number; amount: number; items: OrderItem[];
     images: OrderImage[]; settlementProofs: OrderImage[];
 };
@@ -199,17 +199,18 @@ export default function Home() {
 
     const approve = (id: string) => void run("approve", {orderId: id}, "订单审核通过，已进入在途状态");
     const reject = (id: string, reason: string) => void run("reject", {orderId: id, reason}, "订单已驳回，采购员将收到提醒");
-    async function settleOrder(id: string, proof?: File) {
+    async function settleOrder(id: string, amount: number, proof?: File) {
         try {
             const form = new FormData();
             form.set("orderId", id);
+            form.set("amount", String(amount));
             if (proof) form.set("proof", proof);
             const response = await fetch("/api/settlements", {method: "POST", body: form});
             if (response.status === 401) {
                 router.replace("/login");
                 throw new Error("登录已过期");
             }
-            const json = await response.json() as { error?: string; proofUploaded?: boolean };
+            const json = await response.json() as { error?: string; amount?: number; proofUploaded?: boolean };
             if (!response.ok) throw new Error(json.error || "结款失败");
             await load();
             setOverlay(null);
@@ -806,7 +807,7 @@ function OrderCard({
 
 function SettlementStatus({order}: { order: PurchaseOrder }) {
     return <div className={`order-settlement ${order.settled ? "settled" : "pending"}`}>
-        <span>采购结款</span><b>{order.settled ? <><em>已结款</em><time>{dateTime(order.settledAt)}</time></> :
+        <span>采购结款</span><b>{order.settled ? <><em>已结款{order.settledAmount != null ? ` · ${money(order.settledAmount)}` : " · 金额未记录"}</em><time>{dateTime(order.settledAt)}</time></> :
         <em>{order.receivedAt ? "待结款" : "入库后可结款"}</em>}</b>
     </div>;
 }
@@ -999,6 +1000,7 @@ function UploadPage({
                 ...(mode === "admin" && editing ? {purchaserId} : {}),
                 settled: editing?.settled ?? false,
                 settledAt: editing?.settledAt,
+                settledAmount: editing?.settledAmount,
                 createdAt: "",
                 title: normalizedItems[0].title,
                 itemCount: normalizedItems.length,
@@ -1557,7 +1559,7 @@ function OrderDetail({
             label="采购物流" value={<PurchaseCourierList items={order.items}
                                                      showItem={order.items.length > 1}/>}/>{showLocation && order.location &&
             <KeyValue label="库位" value={order.location}/>}<KeyValue label="采购结款"
-            value={order.settled ? `已结款 · ${dateTime(order.settledAt)}` : order.receivedAt ? "待结款" : "入库后可结款"}
+            value={order.settled ? `已结款 · ${order.settledAmount != null ? money(order.settledAmount) : "金额未记录"} · ${dateTime(order.settledAt)}` : order.receivedAt ? "待结款" : "入库后可结款"}
             highlight={order.settled}/></div>
         <div className="detail-card items-card">
             <div className="items-card-head"><h3>商品清单</h3><span>{order.itemCount} 件 · {money(order.amount)}</span></div>
@@ -1587,7 +1589,7 @@ function OrderDetail({
         </div>
         <OrderImages images={order.images}/>
         {order.settled && <OrderImages images={order.settlementProofs} title="结款截图" variant="settlement"
-                                      subtitle={`已结款 · ${dateTime(order.settledAt)}`} emptyText="本次结款未上传截图"/>}
+                                      subtitle={`已结款 · ${order.settledAmount != null ? money(order.settledAmount) : "金额未记录"} · ${dateTime(order.settledAt)}`} emptyText="本次结款未上传截图"/>}
         <div className="timeline-card"><h3>流转记录</h3>
             <ol>
                 <li><b>{order.createdAt}</b><span>{order.purchaser}上传订单</span></li>
@@ -1597,7 +1599,7 @@ function OrderDetail({
                 <li><b>08-24 16:12</b><span>收货入库 · {order.location}</span>
                 </li>}{canManage && order.items.some(item => item.resaleNo) &&
                 <li><b>08-24 17:40</b><span>二级平台售出</span></li>}{order.settled &&
-                <li><b>{dateTime(order.settledAt)}</b><span>{order.settledByName || "管理员"}完成采购结款</span></li>}</ol>
+                <li><b>{dateTime(order.settledAt)}</b><span>{order.settledByName || "管理员"}完成采购结款{order.settledAmount != null ? ` · ${money(order.settledAmount)}` : ""}</span></li>}</ol>
         </div>
         {!canManage && <div className="detail-card"><KeyValue label="发货状态"
                                                               value={order.status === "已发货" ? "已全部发货" : order.items.some(item => item.shipped) ? "部分已发货" : "未发货"}/>
@@ -1617,15 +1619,42 @@ function SettlementSheet({
                              order,
                              onClose,
                              onSubmit
-                         }: { order: PurchaseOrder; onClose: () => void; onSubmit: (id: string, proof?: File) => Promise<boolean> }) {
+                         }: { order: PurchaseOrder; onClose: () => void; onSubmit: (id: string, amount: number, proof?: File) => Promise<boolean> }) {
     const [busy, setBusy] = useState(false), [proof, setProof] = useState<File | null>(null);
+    const [amount, setAmount] = useState(""), [recognizing, setRecognizing] = useState(false), [recognitionMessage, setRecognitionMessage] = useState("");
     const proofInput = useRef<HTMLInputElement>(null);
+    const recognitionRequest = useRef(0);
+
+    async function recognizeProof(file: File) {
+        const requestId = ++recognitionRequest.current;
+        setRecognitionMessage("");
+        if (!file.type.startsWith("image/") || file.size > 5 * 1024 * 1024) {
+            setRecognitionMessage("请选择 5MB 以内的结款截图");
+            return;
+        }
+        setRecognizing(true);
+        try {
+            const form = new FormData();
+            form.set("image", file);
+            const response = await fetch("/api/settlements/recognize", {method: "POST", body: form});
+            const json = await response.json() as { data?: { amount: number }; error?: string };
+            if (!response.ok || !json.data) throw new Error(json.error || "结款金额识别失败");
+            if (recognitionRequest.current !== requestId) return;
+            setAmount(json.data.amount.toFixed(2));
+            setRecognitionMessage(`已识别 ${money(json.data.amount)}，请核对后确认`);
+        } catch (error) {
+            if (recognitionRequest.current === requestId) setRecognitionMessage(error instanceof Error ? error.message : "未识别出金额，请手动输入");
+        } finally {
+            if (recognitionRequest.current === requestId) setRecognizing(false);
+        }
+    }
 
     async function confirm() {
-        if (busy) return;
+        const parsedAmount = Number(amount);
+        if (busy || recognizing || !Number.isFinite(parsedAmount) || parsedAmount <= 0) return;
         setBusy(true);
         try {
-            await onSubmit(order.id, proof ?? undefined);
+            await onSubmit(order.id, parsedAmount, proof ?? undefined);
         } finally {
             setBusy(false);
         }
@@ -1636,20 +1665,26 @@ function SettlementSheet({
             <p>本单采购金额为 {money(order.amount)}。结款状态独立记录，不会发货、扣减库存或改变当前发货状态。</p></div></div>
         <div className="settlement-summary"><span>采购员</span><b>{order.purchaser}</b><span>当前发货状态</span>
             <b>{order.status === "已发货" ? "已全部发货" : order.items.some(item => item.shipped) ? "部分已发货" : "未发货"}</b></div>
+        <label className="settlement-amount-field"><span>实际结款金额 <em>必填</em></span>
+            <div><i>¥</i><input value={amount} inputMode="decimal" placeholder="请输入结款金额"
+                               onChange={event => {setAmount(event.target.value.replace(/[^\d.]/g, "")); setRecognitionMessage("");}}/></div>
+            <small>上传截图后会自动识别并回填，也可以直接手动输入</small>
+        </label>
         <div className="settlement-proof-field">
             <label className={`receipt-upload settlement-proof-upload ${proof ? "selected" : ""}`}>
-                <input ref={proofInput} type="file" accept="image/*" disabled={busy}
-                       onChange={event => setProof(event.target.files?.[0] ?? null)}/>
-                <i>{proof ? "✓" : "＋"}</i><span><b>{proof ? proof.name : "上传结款截图（选填）"}</b>
-                <small>{proof ? "已选择，点击可更换图片" : "最多 1 张、图片不超过 5MB"}</small></span>
+                <input ref={proofInput} type="file" accept="image/*" disabled={busy || recognizing}
+                       onChange={event => {const file = event.target.files?.[0] ?? null; setProof(file); if (file) void recognizeProof(file);}}/>
+                <i>{recognizing ? "…" : proof ? "✓" : "＋"}</i><span><b>{proof ? proof.name : "上传结款截图（选填）"}</b>
+                <small>{recognizing ? "正在识别结款金额…" : proof ? "已选择，点击可更换图片" : "最多 1 张、图片不超过 5MB"}</small></span>
             </label>
             {proof && <button type="button" className="settlement-proof-clear" disabled={busy}
-                              onClick={() => {setProof(null); if (proofInput.current) proofInput.current.value = "";}}>移除截图</button>}
+                              onClick={() => {recognitionRequest.current += 1; setRecognizing(false); setProof(null); setRecognitionMessage(""); if (proofInput.current) proofInput.current.value = "";}}>移除截图</button>}
         </div>
+        {recognitionMessage && <p className={`settlement-recognition ${recognitionMessage.startsWith("已识别") ? "success" : "failed"}`}>{recognitionMessage}</p>}
         <div className="dual-actions settlement-confirm-actions">
             <button className="secondary-button" disabled={busy} onClick={onClose}>取消</button>
-            <button className="primary-button settlement-confirm-button" disabled={busy}
-                    onClick={() => void confirm()}>{busy ? "正在结款…" : proof ? "确认结款并保存截图" : "确认已结款"}</button>
+            <button className="primary-button settlement-confirm-button" disabled={busy || recognizing || !(Number(amount) > 0)}
+                    onClick={() => void confirm()}>{busy ? "正在结款…" : recognizing ? "正在识别金额…" : proof ? "确认结款并保存截图" : "确认已结款"}</button>
         </div>
     </Modal>;
 }

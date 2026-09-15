@@ -38,6 +38,7 @@ export const purchaseOrders = pgTable("purchase_orders", {
   settled: boolean("settled").notNull().default(false),
   settledAt: timestamp("settled_at", { withTimezone: true, mode: "string" }),
   settledBy: text("settled_by").references(() => users.id),
+  settledAmountCents: integer("settled_amount_cents"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (table) => [

@@ -759,14 +759,17 @@ test("administrator can revert a received order back to in-transit and roll back
   assertCssMatch(styles,/\.revert-warning\{/);
 });
 
-test("purchase settlement starts after receipt, supports an optional proof, and stays independent from shipping",async()=>{
-  const [page,appRoute,settlementRoute,schema,migration,proofMigration,exportRoute,styles]=await Promise.all([
+test("purchase settlement records a manual or recognized amount, supports an optional proof, and stays independent from shipping",async()=>{
+  const [page,appRoute,settlementRoute,recognizeRoute,vision,schema,migration,proofMigration,amountMigration,exportRoute,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../app/api/settlements/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/settlements/recognize/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../lib/vision.ts",import.meta.url),"utf8"),
     readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
     readFile(new URL("../drizzle/0009_purchase_order_settlement.sql",import.meta.url),"utf8"),
     readFile(new URL("../drizzle/0010_settlement_proof_image.sql",import.meta.url),"utf8"),
+    readFile(new URL("../drizzle/0011_settlement_amount.sql",import.meta.url),"utf8"),
     readFile(new URL("../app/api/export/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
@@ -775,10 +778,13 @@ test("purchase settlement starts after receipt, supports an optional proof, and 
   assert.match(schema,/settledBy: text\("settled_by"\)\.references\(\(\) => users\.id\)/);
   assert.match(migration,/ADD COLUMN "settled" boolean DEFAULT false NOT NULL/);
   assert.match(migration,/采购款结算状态，独立于发货状态/);
-  assert.match(appRoute,/settled:row\.settled,settledAt:row\.settledAt\?\?undefined,receivedAt:row\.receivedAt\?\?undefined/);
+  assert.match(schema,/settledAmountCents: integer\("settled_amount_cents"\)/);
+  assert.match(amountMigration,/ADD COLUMN "settled_amount_cents" integer/);
+  assert.match(amountMigration,/CHECK \("settled_amount_cents" IS NULL OR "settled_amount_cents" > 0\)/);
+  assert.match(appRoute,/settled:row\.settled,settledAt:row\.settledAt\?\?undefined,settledAmount:row\.settledAmountCents==null\?undefined:row\.settledAmountCents\/100,receivedAt:row\.receivedAt\?\?undefined/);
   assert.match(appRoute,/if\(action==="settle-order"\)/);
   assert.match(appRoute,/if\(!order\.receivedAt\)throw conflict\("采购单尚未入库，不能结款"\)/);
-  assert.match(appRoute,/set\(\{settled:true,settledAt:timestamp,settledBy:user\.id,updatedAt:timestamp\}\)/);
+  assert.match(appRoute,/set\(\{settled:true,settledAt:timestamp,settledBy:user\.id,settledAmountCents,updatedAt:timestamp\}\)/);
   assert.match(appRoute,/action:"settle"/);
   assert.match(appRoute,/if\(order\.settled\)throw conflict\("订单已结款，不能再驳回"\)/);
   assert.match(appRoute,/if\(order\.settled\)throw conflict\("订单已结款，不能撤销入库"\)/);
@@ -792,29 +798,43 @@ test("purchase settlement starts after receipt, supports an optional proof, and 
   assert.doesNotMatch(shipBlock,/settled|settledAt|settledBy/);
   assertJsMatch(page,/type Overlay = [^;]+"settle"/);
   assertJsMatch(page,/fetch\("\/api\/settlements",\{method:"POST",body:form\}\)/);
+  assertJsMatch(page,/form\.set\("amount",String\(amount\)\)/);
   assertJsMatch(page,/form\.set\("proof",proof\)/);
   assertJsMatch(page,/function SettlementStatus/);
   assertJsMatch(page,/order\.receivedAt&&!order\.settled&&<button className="settlement-action"/);
   assertJsMatch(page,/function SettlementSheet/);
   assertJsMatch(page,/结款状态独立记录，不会发货、扣减库存或改变当前发货状态/);
   assertJsMatch(page,/上传结款截图（选填）/);
+  assertJsMatch(page,/实际结款金额 <em>必填<\/em>/);
+  assertJsMatch(page,/fetch\("\/api\/settlements\/recognize",\{method:"POST",body:form\}\)/);
+  assertJsMatch(page,/正在识别结款金额/);
   assertJsMatch(page,/order\.settled&&<OrderImages images=\{order\.settlementProofs\} title="结款截图" variant="settlement"/);
   assertJsMatch(page,/emptyText="本次结款未上传截图"/);
   assertJsMatch(page,/canManage&&order\.receivedAt&&!order\.settled&&<button className="primary-button settlement-confirm-button"/);
   assert.match(settlementRoute,/requireAdmin\(user\)/);
   assert.match(settlementRoute,/form\.get\("proof"\)/);
+  assert.match(settlementRoute,/form\.get\("amount"\)/);
+  assert.match(settlementRoute,/settledAmountCents: amountCents/);
   assert.match(settlementRoute,/proof\.size > 5 \* 1024 \* 1024/);
   assert.match(settlementRoute,/kind: "settlement"/);
   assert.match(settlementRoute,/if \(!order\.receivedAt\) throw conflict\("采购单尚未入库，不能结款"\)/);
   assert.match(settlementRoute,/proofImageId: image\?\.id \?\? null/);
+  assert.match(recognizeRoute,/requireAdmin\(user\)/);
+  assert.match(recognizeRoute,/recognizeSettlementImage\(image\)/);
+  assert.match(vision,/export const settlementPrompt/);
+  assert.match(vision,/不要把账户余额、优惠金额、商品原价/);
+  assert.match(vision,/export function normalizeSettlementAmount/);
+  assert.match(vision,/export async function recognizeSettlementImage/);
   assert.match(settlementRoute,/if \(storedFile\) await unlink\(storedFile\)/);
   const proofSettleBlock=settlementRoute.slice(settlementRoute.indexOf("await db.transaction"),settlementRoute.indexOf("storedFile = null"));
   assert.doesNotMatch(proofSettleBlock,/update\(purchaseOrders\)\.set\(\{[^}]*status:/);
-  assert.match(exportRoute,/"结款状态","结款时间"/);
+  assert.match(exportRoute,/"结款状态","实际结款金额","结款时间"/);
   assert.match(exportRoute,/order\.settled\?"已结款":"未结款"/);
   assertCssMatch(styles,/\.order-settlement\{/);
   assertCssMatch(styles,/\.order-settlement\.settled\{/);
   assertCssMatch(styles,/\.settlement-confirm-card\{/);
+  assertCssMatch(styles,/\.settlement-amount-field\{/);
+  assertCssMatch(styles,/\.settlement-recognition\.success\{/);
   assertCssMatch(styles,/\.settlement-proof-upload\{/);
   assertCssMatch(styles,/\.settlement-proof-clear\{/);
   assertCssMatch(styles,/\.settlement-proof-gallery\{/);
