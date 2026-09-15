@@ -4652,6 +4652,14 @@ button:active {
     font-size: 10px
 }
 
+.order-images-head small {
+    display: block;
+    margin-top: 3px;
+    color: #8a95a3;
+    font-size: 7.5px;
+    font-weight: 500
+}
+
 .order-images-head span {
     color: #7b8795;
     font-size: 8px
@@ -4690,6 +4698,70 @@ button:active {
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 7.5px
+}
+
+.settlement-proof-gallery {
+    position: relative;
+    overflow: hidden;
+    border-color: #e8cb8a;
+    background: linear-gradient(145deg, #fffefa, #fff8e8);
+    box-shadow: 0 7px 18px #b87a1410
+}
+
+.settlement-proof-gallery::before {
+    content: "¥";
+    position: absolute;
+    right: -7px;
+    top: -18px;
+    color: #c18a2630;
+    font-size: 58px;
+    font-weight: 900;
+    line-height: 1
+}
+
+.settlement-proof-gallery .order-images-head {
+    position: relative;
+    z-index: 1
+}
+
+.settlement-proof-gallery .order-images-head h3 {
+    color: #865913
+}
+
+.settlement-proof-gallery .order-images-head small {
+    color: #aa7d37
+}
+
+.settlement-proof-gallery .order-images-head > span {
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #fff3cf;
+    color: #956713;
+    font-weight: 700
+}
+
+.settlement-proof-gallery .order-images-grid button {
+    border-color: #ead7ac;
+    background: #fffdf7
+}
+
+.order-images-empty {
+    min-height: 62px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px dashed #dfc58d;
+    border-radius: 11px;
+    background: #ffffff8f;
+    color: #9c8052;
+    font-size: 8.5px
+}
+
+.order-images-empty i {
+    font-style: normal;
+    font-size: 15px;
+    opacity: .7
 }
 
 .image-preview {

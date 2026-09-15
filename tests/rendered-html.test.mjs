@@ -798,7 +798,8 @@ test("purchase settlement starts after receipt, supports an optional proof, and 
   assertJsMatch(page,/function SettlementSheet/);
   assertJsMatch(page,/结款状态独立记录，不会发货、扣减库存或改变当前发货状态/);
   assertJsMatch(page,/上传结款截图（选填）/);
-  assertJsMatch(page,/<OrderImages images=\{order\.settlementProofs\} title="结款凭证"\/>/);
+  assertJsMatch(page,/order\.settled&&<OrderImages images=\{order\.settlementProofs\} title="结款截图" variant="settlement"/);
+  assertJsMatch(page,/emptyText="本次结款未上传截图"/);
   assertJsMatch(page,/canManage&&order\.receivedAt&&!order\.settled&&<button className="primary-button settlement-confirm-button"/);
   assert.match(settlementRoute,/requireAdmin\(user\)/);
   assert.match(settlementRoute,/form\.get\("proof"\)/);
@@ -816,6 +817,8 @@ test("purchase settlement starts after receipt, supports an optional proof, and 
   assertCssMatch(styles,/\.settlement-confirm-card\{/);
   assertCssMatch(styles,/\.settlement-proof-upload\{/);
   assertCssMatch(styles,/\.settlement-proof-clear\{/);
+  assertCssMatch(styles,/\.settlement-proof-gallery\{/);
+  assertCssMatch(styles,/\.order-images-empty\{/);
 });
 
 test("multi-item entry and detail views carry dedicated visual styles",async()=>{

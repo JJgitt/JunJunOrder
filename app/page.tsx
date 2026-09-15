@@ -1451,7 +1451,13 @@ function ScanSheet({
     </Modal>;
 }
 
-function OrderImages({images, title = "订单图片"}: { images: OrderImage[]; title?: string }) {
+function OrderImages({
+                         images,
+                         title = "订单图片",
+                         variant = "order",
+                         subtitle,
+                         emptyText
+                     }: { images: OrderImage[]; title?: string; variant?: "order" | "settlement"; subtitle?: string; emptyText?: string }) {
     const [selected, setSelected] = useState<number | null>(null);
     const [zoomed, setZoomed] = useState(false);
     const dialog = useRef<HTMLDialogElement>(null);
@@ -1460,13 +1466,15 @@ function OrderImages({images, title = "订单图片"}: { images: OrderImage[]; t
         if (selected !== null && element && !element.open) element.showModal();
         if (selected === null && element?.open) element.close();
     }, [selected]);
-    if (!images.length) return null;
-    return <section className="order-images">
-        <div className="order-images-head"><h3>{title}</h3><span>{images.length} 张</span></div>
-        <div className="order-images-grid">{images.map((image, index) => <button type="button" key={image.id}
+    if (!images.length && !emptyText) return null;
+    return <section className={`order-images ${variant === "settlement" ? "settlement-proof-gallery" : ""}`}>
+        <div className="order-images-head"><div><h3>{title}</h3>{subtitle && <small>{subtitle}</small>}</div>
+            <span>{images.length ? `${images.length} 张` : "未上传"}</span></div>
+        {images.length ? <div className="order-images-grid">{images.map((image, index) => <button type="button" key={image.id}
             onClick={() => {setZoomed(false); setSelected(index);}} aria-label={`预览图片 ${index + 1}`} title={image.fileName}><Image
             src={image.url} alt={image.fileName} width={180} height={132}
-            unoptimized/><small>{image.uploadedBy}上传</small></button>)}</div>
+            unoptimized/><small>{image.uploadedBy}上传</small></button>)}</div> :
+            <div className="order-images-empty"><i>▧</i><span>{emptyText}</span></div>}
         <dialog ref={dialog} className="image-preview" aria-label="订单图片预览"
             onCancel={() => setSelected(null)} onClose={() => setSelected(null)}>
             {selected !== null && <div className="image-preview-layout">
@@ -1578,7 +1586,8 @@ function OrderDetail({
             </div>)}
         </div>
         <OrderImages images={order.images}/>
-        <OrderImages images={order.settlementProofs} title="结款凭证"/>
+        {order.settled && <OrderImages images={order.settlementProofs} title="结款截图" variant="settlement"
+                                      subtitle={`已结款 · ${dateTime(order.settledAt)}`} emptyText="本次结款未上传截图"/>}
         <div className="timeline-card"><h3>流转记录</h3>
             <ol>
                 <li><b>{order.createdAt}</b><span>{order.purchaser}上传订单</span></li>
