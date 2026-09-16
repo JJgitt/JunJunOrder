@@ -819,6 +819,18 @@ test("dashboard notice date and content can be edited with existing dates backfi
   assert.match(styles,/\.dashboard-notice-edit input \{[^}]*font-size: 16px/);
 });
 
+test("notice editing fields keep their original values and are not sized like checkboxes",async()=>{
+  const [page,styles]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/workspace-ui.css",import.meta.url),"utf8"),
+  ]);
+  assert.match(page,/setEditContent\(notice.content\)/);
+  assert.match(page,/setEditDate\(notice.noticeDate\)/);
+  assert.match(styles,/\.dashboard-notice-list input\[type="checkbox"\] \{[^}]*width: 20px/);
+  assert.doesNotMatch(styles,/\.dashboard-notice-list input \{/);
+  assert.match(styles,/\.dashboard-notice-edit input \{[^}]*width: 100%/);
+});
+
 test("admin order list offers mutually exclusive three-state time sorting",async()=>{
   const [page,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
