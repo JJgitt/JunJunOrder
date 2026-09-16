@@ -74,6 +74,12 @@ button:disabled { cursor: not-allowed; }
 .buyer-filter-trigger, .select-row select { min-width: 0; min-height: 46px; border-radius: 12px; padding: 0 12px; box-shadow: none; }
 .buyer-filter-trigger { font-size: 16px; }
 .buyer-filter-trigger > b { min-width: 22px; height: 22px; font-size: 11px; }
+.order-filter-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding: 10px 12px; border: 1px solid #e3e8f0; border-radius: 12px; background: #f8fafc; color: var(--muted); }
+.order-filter-actions.active { border-color: #cbd9f5; background: #f1f5ff; color: #465777; }
+.order-filter-actions span { min-width: 0; font-size: 12px; }
+.order-filter-actions button { flex: none; min-height: 40px; padding: 8px 13px; border: 1px solid #b9cbef; border-radius: 10px; background: #fff; color: var(--primary-dark); font-size: 13px; font-weight: 700; }
+.order-filter-actions button:disabled { border-color: #e0e5ec; background: #f3f5f8; color: #9ba5b5; opacity: 1; }
+.order-filter-actions button i { margin-right: 3px; font-style: normal; }
 .buyer-filter-options button { min-height: 46px; }
 .buyer-filter-done { height: 44px; box-shadow: none; }
 .status-filter-summary { box-shadow: none; }
@@ -261,6 +267,8 @@ button:disabled { cursor: not-allowed; }
     .field-grid { gap: 10px; }
     .order-sort-button { gap: 4px; padding-inline: 5px; }
     .order-sort-button b { font-size: 11px; }
+    .order-filter-actions { align-items: stretch; flex-direction: column; }
+    .order-filter-actions button { width: 100%; }
     .login-card { padding: 24px; }
     .finance-card { grid-template-columns: 1fr; }
 }

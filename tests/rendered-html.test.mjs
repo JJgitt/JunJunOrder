@@ -750,6 +750,23 @@ test("admin and buyer order lists filter by settlement status",async()=>{
   assertCssMatch(touchStyles,/\.select-row\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
 });
 
+test("administrator can clear every order filter and sorting state at once",async()=>{
+  const [page,styles]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/workspace-ui.css",import.meta.url),"utf8"),
+  ]);
+  for(const reset of [
+    /setQuery\(""\)/, /setStatuses\(\[\]\)/, /setPlatform\("全部渠道"\)/,
+    /setBuyers\(\[\]\)/, /setBuyerOpen\(false\)/, /setDateDays\(30\)/,
+    /setSettlement\("全部结款状态"\)/, /setSort\(null\)/,
+  ]) assertJsMatch(page,reset);
+  assertJsMatch(page,/const activeFilterCount=/);
+  assertJsMatch(page,/disabled=\{!activeFilterCount\} onClick=\{clearAllFilters\}/);
+  assert.match(page,/清除全部筛选/);
+  assertCssMatch(styles,/\.order-filter-actions\{/);
+  assertCssMatch(styles,/\.order-filter-actions button:disabled\{/);
+});
+
 test("admin order list offers mutually exclusive three-state time sorting",async()=>{
   const [page,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),

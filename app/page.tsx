@@ -745,6 +745,18 @@ function AdminOrders({
     const buyerSummary = buyers.length === 0 ? "全部采购员" : buyers.length <= 2 ? buyers.join("、") : `${buyers[0]} 等 ${buyers.length} 人`;
     const toggleBuyer = (name: string) => setBuyers(current => current.includes(name) ? current.filter(item => item !== name) : [...current, name]);
     const cycleSort = (key: OrderSortKey) => setSort(current => current?.key !== key ? {key, direction: "desc"} : current.direction === "desc" ? {key, direction: "asc"} : null);
+    const activeFilterCount = Number(Boolean(query.trim())) + Number(statuses.length > 0) + Number(platform !== "全部渠道") +
+        Number(buyers.length > 0) + Number(dateDays !== 30) + Number(settlement !== "全部结款状态") + Number(sort !== null);
+    const clearAllFilters = () => {
+        setQuery("");
+        setStatuses([]);
+        setPlatform("全部渠道");
+        setBuyers([]);
+        setBuyerOpen(false);
+        setDateDays(30);
+        setSettlement("全部结款状态");
+        setSort(null);
+    };
     const visible = useMemo(() => sortPurchaseOrders(orders.filter(order => dateKey(order.createdAt, timeZone) >= dateStart && dateKey(order.createdAt, timeZone) <= dateEnd && matchesStatusFilter(order, statuses) && (platform === "全部渠道" || order.platform === platform) && (settlement === "全部结款状态" || order.settled === (settlement === "已结款")) && (buyers.length === 0 || buyers.includes(order.purchaser)) && `${order.id}${order.platformNo}${order.items.map(item => `${item.title}${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}${item.outboundCourier ?? ""}`).join("")}`.toLowerCase().includes(query.toLowerCase())), sort), [orders, query, statuses, platform, settlement, buyers, dateStart, dateEnd, timeZone, sort]);
     const selectedSet = new Set(selectedIds), selectedOrders = orders.filter(order => selectedSet.has(order.id)),
         selectedReady = selectedOrders.filter(order => readyToShip(order.status)),
@@ -806,6 +818,12 @@ function AdminOrders({
                 <option>已结款</option>
                 <option>未结款</option>
             </select></div>
+        <div className={`order-filter-actions ${activeFilterCount ? "active" : ""}`}>
+            <span>{activeFilterCount ? `当前已应用 ${activeFilterCount} 项筛选或排序` : "当前使用默认筛选条件"}</span>
+            <button type="button" disabled={!activeFilterCount} onClick={clearAllFilters}>
+                <i aria-hidden="true">↺</i> 清除全部筛选
+            </button>
+        </div>
         {buyerOpen && <div className="buyer-filter-panel" role="group" aria-label="按采购员筛选">
             <div className="buyer-filter-head">
                 <b>选择采购员</b><span>可多选 · {buyers.length ? `已选 ${buyers.length} 位` : "未选择时显示全部"}</span>{buyers.length > 0 &&
