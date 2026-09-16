@@ -204,6 +204,24 @@ export default function Home() {
         return json;
     }
 
+    async function refreshOrderData() {
+        try {
+            const response = await fetch("/api/app", {cache: "no-store"});
+            if (response.status === 401) {
+                router.replace("/login");
+                throw new Error("登录已过期");
+            }
+            const json = await response.json() as Snapshot & { error?: string };
+            if (!response.ok) throw new Error(json.error || "刷新失败");
+            applySnapshot(json);
+            notify("订单数据已刷新");
+            return true;
+        } catch (error) {
+            notify(error instanceof Error ? error.message : "刷新失败");
+            return false;
+        }
+    }
+
     async function uploadOrderFiles(orderId: string, files: File[]) {
         const form = new FormData();
         form.set("orderId", orderId);
@@ -453,7 +471,7 @@ export default function Home() {
             }} onEdit={(id) => {
                 setSelectedId(id);
                 setAdminTab("upload");
-            }} onDelete={deleteOrders} onBatchShip={batchShip} onBatchSettle={batchSettle} onOpen={openOrder} onApprove={approve}
+            }} onRefresh={refreshOrderData} onDelete={deleteOrders} onBatchShip={batchShip} onBatchSettle={batchSettle} onOpen={openOrder} onApprove={approve}
                                                                        onReceive={(id) => {
                                                                            setSelectedId(id);
                                                                            setOverlay("manual-receive");
@@ -713,9 +731,10 @@ function StockPage({stock, onSuggest}: { stock: StockItem[]; onSuggest: () => vo
 }
 
 function AdminOrders({
-                         orders,
-                         onCreate,
-                         onEdit,
+                          orders,
+                          onCreate,
+                          onRefresh,
+                          onEdit,
                          onDelete,
                          onBatchShip,
                          onBatchSettle,
@@ -725,7 +744,7 @@ function AdminOrders({
                          onReject,
                          onShip,
                          onSettle
-                     }: { orders: PurchaseOrder[]; onCreate: () => void; onEdit: (id: string) => void; onDelete: (ids: string[]) => Promise<boolean>; onBatchShip: (shipments: Array<{ orderId: string; courier: string; company: string }>) => Promise<boolean>; onBatchSettle: (ids: string[]) => Promise<boolean>; onOpen: (id: string) => void; onApprove: (id: string) => void; onReceive: (id: string) => void; onReject: (id: string) => void; onShip: (id: string) => void; onSettle: (id: string) => void }) {
+                      }: { orders: PurchaseOrder[]; onCreate: () => void; onRefresh: () => Promise<boolean>; onEdit: (id: string) => void; onDelete: (ids: string[]) => Promise<boolean>; onBatchShip: (shipments: Array<{ orderId: string; courier: string; company: string }>) => Promise<boolean>; onBatchSettle: (ids: string[]) => Promise<boolean>; onOpen: (id: string) => void; onApprove: (id: string) => void; onReceive: (id: string) => void; onReject: (id: string) => void; onShip: (id: string) => void; onSettle: (id: string) => void }) {
     const [query, setQuery] = useState("");
     const [statuses, setStatuses] = useState<string[]>([]);
     const [platform, setPlatform] = useState("全部渠道");
@@ -738,6 +757,7 @@ function AdminOrders({
     const [batchSettleOpen, setBatchSettleOpen] = useState(false);
     const [dateDays, setDateDays] = useState(30);
     const [sort, setSort] = useState<OrderSort>(null);
+    const [refreshing, setRefreshing] = useState(false);
     const {now, timeZone} = useServerClock();
     const {start: dateStart, end: dateEnd} = dayRange(now, timeZone, dateDays);
     const readyCount = orders.filter(order => readyToShip(order.status)).length;
@@ -777,6 +797,16 @@ function AdminOrders({
         if (await onBatchShip(shipments)) {
             setSelectedIds(current => current.filter(id => !shipments.some(item => item.orderId === id)));
             setBatchShipOpen(false);
+        }
+    }
+
+    async function refreshOrders() {
+        if (refreshing) return;
+        setRefreshing(true);
+        try {
+            await onRefresh();
+        } finally {
+            setRefreshing(false);
         }
     }
 
@@ -820,9 +850,15 @@ function AdminOrders({
             </select></div>
         <div className={`order-filter-actions ${activeFilterCount ? "active" : ""}`}>
             <span>{activeFilterCount ? `当前已应用 ${activeFilterCount} 项筛选或排序` : "当前使用默认筛选条件"}</span>
-            <button type="button" disabled={!activeFilterCount} onClick={clearAllFilters}>
-                <i aria-hidden="true">↺</i> 清除全部筛选
-            </button>
+            <div className="order-filter-buttons">
+                <button type="button" disabled={!activeFilterCount} onClick={clearAllFilters}>
+                    <i aria-hidden="true">↺</i> 清除全部筛选
+                </button>
+                <button type="button" className={`order-refresh-button ${refreshing ? "busy" : ""}`}
+                        disabled={refreshing} aria-busy={refreshing} onClick={() => void refreshOrders()}>
+                    <i aria-hidden="true">⟳</i> {refreshing ? "正在刷新" : "刷新订单数据"}
+                </button>
+            </div>
         </div>
         {buyerOpen && <div className="buyer-filter-panel" role="group" aria-label="按采购员筛选">
             <div className="buyer-filter-head">

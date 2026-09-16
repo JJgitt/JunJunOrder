@@ -767,6 +767,20 @@ test("administrator can clear every order filter and sorting state at once",asyn
   assertCssMatch(styles,/\.order-filter-actions button:disabled\{/);
 });
 
+test("administrator can explicitly refresh order data from the database",async()=>{
+  const [page,styles]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/workspace-ui.css",import.meta.url),"utf8"),
+  ]);
+  assertJsMatch(page,/async function refreshOrderData\(\).*fetch\("\/api\/app",\{cache:"no-store"\}\)/s);
+  assertJsMatch(page,/onRefresh=\{refreshOrderData\}/);
+  assertJsMatch(page,/aria-busy=\{refreshing\}/);
+  assert.match(page,/刷新订单数据/);
+  assert.match(page,/正在刷新/);
+  assertCssMatch(styles,/\.order-filter-buttons\{/);
+  assertCssMatch(styles,/\.order-refresh-button\.busy i\{/);
+});
+
 test("admin order list offers mutually exclusive three-state time sorting",async()=>{
   const [page,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
