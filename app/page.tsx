@@ -34,9 +34,10 @@ type PurchaseOrder = {
 
 type RecognizedOrder = { platform: string; platformNo: string; courierCompany: string; courierNo: string; items: Array<{ title: string; sku: string; size: string; qty: number; amount: number | null }>; notes: string[] };
 type StockItem = { sku: string; title: string; size: string; count: number; locations: string[]; lastSold?: string };
+type DashboardNotice = { id: string; content: string; completed: boolean; createdAt: string };
 type ApprovalStatus = "pending" | "approved" | "rejected";
 type AppUser = { id: string; wechatId: string; phone: string; name: string; role: Role; active: boolean; approvalStatus: ApprovalStatus };
-type Snapshot = { clock: ServerClock; user: AppUser; orders: PurchaseOrder[]; stock: StockItem[]; users: AppUser[] };
+type Snapshot = { clock: ServerClock; user: AppUser; orders: PurchaseOrder[]; stock: StockItem[]; notices: DashboardNotice[]; users: AppUser[] };
 
 const statusTone: Record<OrderStatus, string> = {
     "待审核": "gray",
@@ -133,6 +134,7 @@ export default function Home() {
     const [buyerTab, setBuyerTab] = useState<BuyerTab>("home");
     const [orders, setOrders] = useState<PurchaseOrder[]>([]);
     const [stock, setStock] = useState<StockItem[]>([]);
+    const [notices, setNotices] = useState<DashboardNotice[]>([]);
     const [overlay, setOverlay] = useState<Overlay>(null);
     const [selectedId, setSelectedId] = useState("");
     const [selectedItemId, setSelectedItemId] = useState("");
@@ -162,6 +164,7 @@ export default function Home() {
         setPeople(data.users);
         setOrders(data.orders);
         setStock(data.stock);
+        setNotices(data.notices);
     }, []);
     const load = useCallback(async () => {
         setLoading(true);
@@ -218,6 +221,28 @@ export default function Home() {
             return true;
         } catch (error) {
             notify(error instanceof Error ? error.message : "刷新失败");
+            return false;
+        }
+    }
+
+    async function createNotice(content: string) {
+        try {
+            await mutate("create-dashboard-notice", {content});
+            notify("注意事项已添加");
+            return true;
+        } catch (error) {
+            notify(error instanceof Error ? error.message : "添加失败");
+            return false;
+        }
+    }
+
+    async function setNoticeCompleted(noticeId: string, completed: boolean) {
+        try {
+            await mutate("set-dashboard-notice-completed", {noticeId, completed});
+            notify(completed ? "已标记完成" : "已恢复为未完成");
+            return true;
+        } catch (error) {
+            notify(error instanceof Error ? error.message : "更新失败");
             return false;
         }
     }
@@ -458,7 +483,7 @@ export default function Home() {
 
         <div className="page-stage">
             {role === "admin" && adminTab === "dashboard" &&
-                <AdminDashboard orders={orders} stock={stock} onCreate={() => {
+                <AdminDashboard orders={orders} stock={stock} notices={notices} onAddNotice={createNotice} onSetNoticeCompleted={setNoticeCompleted} onCreate={() => {
                     startNewUpload();
                     setAdminTab("upload");
                 }} onReceipt={() => setOverlay("receipt")} onOrders={() => setAdminTab("orders")}
@@ -594,13 +619,18 @@ function AppHeader({user, page}: { user: AppUser; page: string }) {
 }
 
 function AdminDashboard({
-                            orders,
-                            stock,
-                            onCreate,
+                             orders,
+                             stock,
+                             notices,
+                             onAddNotice,
+                             onSetNoticeCompleted,
+                             onCreate,
                             onReceipt,
                             onOrders,
                             onStock
-                        }: { orders: PurchaseOrder[]; stock: StockItem[]; onCreate: () => void; onReceipt: () => void; onOrders: () => void; onStock: () => void }) {
+                         }: { orders: PurchaseOrder[]; stock: StockItem[]; notices: DashboardNotice[]; onAddNotice: (content: string) => Promise<boolean>; onSetNoticeCompleted: (id: string, completed: boolean) => Promise<boolean>; onCreate: () => void; onReceipt: () => void; onOrders: () => void; onStock: () => void }) {
+    const [noticeDraft, setNoticeDraft] = useState("");
+    const [noticeBusy, setNoticeBusy] = useState(false);
     const {now, timeZone} = useServerClock();
     const today = dateKey(now, timeZone);
     const pendingOrders = orders.filter(o => o.status === "待审核");
@@ -611,6 +641,26 @@ function AdminDashboard({
     const inToday = orders.filter(o => o.receivedAt && dateKey(o.receivedAt, timeZone) === today).length;
     const purchase = orders.reduce((sum, o) => sum + o.amount, 0);
     const sales = orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + (i.salePrice ?? 0), 0), 0);
+    async function submitNotice(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        const content = noticeDraft.trim();
+        if (!content || noticeBusy) return;
+        setNoticeBusy(true);
+        try {
+            if (await onAddNotice(content)) setNoticeDraft("");
+        } finally {
+            setNoticeBusy(false);
+        }
+    }
+    async function toggleNotice(notice: DashboardNotice) {
+        if (noticeBusy) return;
+        setNoticeBusy(true);
+        try {
+            await onSetNoticeCompleted(notice.id, !notice.completed);
+        } finally {
+            setNoticeBusy(false);
+        }
+    }
     return <section className="dashboard-page enter">
         <div className="date-row">
             <div><span>{new Intl.DateTimeFormat("zh-CN", {timeZone, month:"long", day:"numeric", weekday:"short"}).format(now)}</span><h2>采购管理看板</h2></div>
@@ -642,6 +692,19 @@ function AdminDashboard({
                                                                                                             onClick={onOrders}/><Task
             icon="!" tone="blue" title={`${stock.filter(s => s.count <= 2).length} 个 SKU 库存偏低`} note="建议生成补货清单"
             action="查看" onClick={onStock}/></div>
+        <section className="dashboard-notices" aria-label="注意事项清单">
+            <div className="dashboard-notices-head"><h3>注意事项清单</h3><span>{notices.filter(notice => !notice.completed).length} 项未完成</span></div>
+            <form className="dashboard-notice-form" onSubmit={submitNotice}>
+                <input aria-label="新增注意事项" placeholder="填写需要记住或处理的事项" value={noticeDraft}
+                       maxLength={300} onChange={event => setNoticeDraft(event.target.value)}/>
+                <button type="submit" disabled={noticeBusy || !noticeDraft.trim()}>添加</button>
+            </form>
+            {notices.length ? <ul className="dashboard-notice-list">{notices.map(notice =>
+                <li key={notice.id} className={notice.completed ? "completed" : ""}>
+                    <label><input type="checkbox" checked={notice.completed} disabled={noticeBusy}
+                                  onChange={() => void toggleNotice(notice)}/><span>{notice.content}</span></label>
+                </li>)}</ul> : <p className="dashboard-notice-empty">暂无注意事项，添加后会保存在数据库中。</p>}
+        </section>
         <SectionHead title="订单概览" note="当前已加载订单"/>
         <div className="finance-card">
             <div><span>采购总额</span><b>{money(purchase)}</b></div>

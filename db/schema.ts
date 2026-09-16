@@ -125,3 +125,12 @@ export const auditLogs = pgTable("audit_logs", {
   detailJson: text("detail_json").notNull().default("{}"),
   createdAt: createdAt(),
 }, (table) => [index("idx_audit_entity_created").on(table.entityType, table.entityId, table.createdAt)]);
+
+export const dashboardNotices = pgTable("dashboard_notices", {
+  id: text("id").primaryKey(),
+  content: text("content").notNull(),
+  completed: boolean("completed").notNull().default(false),
+  createdBy: text("created_by").notNull().references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [index("idx_dashboard_notices_created").on(table.createdAt)]);

@@ -781,6 +781,24 @@ test("administrator can explicitly refresh order data from the database",async()
   assertCssMatch(styles,/\.order-refresh-button\.busy i\{/);
 });
 
+test("administrator dashboard notice checklist is persisted and completed items are crossed out",async()=>{
+  const [page,route,schema,migration,styles]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
+    readFile(new URL("../drizzle/0012_dashboard_notices.sql",import.meta.url),"utf8"),
+    readFile(new URL("../app/workspace-ui.css",import.meta.url),"utf8"),
+  ]);
+  assert.match(schema,/export const dashboardNotices = pgTable\("dashboard_notices"/);
+  assert.match(migration,/CREATE TABLE "dashboard_notices"/);
+  assert.match(route,/action==="create-dashboard-notice"/);
+  assert.match(route,/action==="set-dashboard-notice-completed"/);
+  assert.match(page,/注意事项清单/);
+  assert.match(page,/onAddNotice=\{createNotice\}/);
+  assert.match(page,/type="checkbox" checked=\{notice.completed\}/);
+  assert.match(styles,/\.dashboard-notice-list \.completed span \{[^}]*text-decoration: line-through/);
+});
+
 test("admin order list offers mutually exclusive three-state time sorting",async()=>{
   const [page,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
