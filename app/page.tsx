@@ -34,7 +34,7 @@ type PurchaseOrder = {
 
 type RecognizedOrder = { platform: string; platformNo: string; courierCompany: string; courierNo: string; items: Array<{ title: string; sku: string; size: string; qty: number; amount: number | null }>; notes: string[] };
 type StockItem = { sku: string; title: string; size: string; count: number; locations: string[]; lastSold?: string };
-type DashboardNotice = { id: string; content: string; completed: boolean; createdAt: string };
+type DashboardNotice = { id: string; content: string; noticeDate: string; completed: boolean; createdAt: string };
 type ApprovalStatus = "pending" | "approved" | "rejected";
 type AppUser = { id: string; wechatId: string; phone: string; name: string; role: Role; active: boolean; approvalStatus: ApprovalStatus };
 type Snapshot = { clock: ServerClock; user: AppUser; orders: PurchaseOrder[]; stock: StockItem[]; notices: DashboardNotice[]; users: AppUser[] };
@@ -225,13 +225,24 @@ export default function Home() {
         }
     }
 
-    async function createNotice(content: string) {
+    async function createNotice(content: string, noticeDate: string) {
         try {
-            await mutate("create-dashboard-notice", {content});
+            await mutate("create-dashboard-notice", {content, noticeDate});
             notify("注意事项已添加");
             return true;
         } catch (error) {
             notify(error instanceof Error ? error.message : "添加失败");
+            return false;
+        }
+    }
+
+    async function updateNotice(noticeId: string, content: string, noticeDate: string) {
+        try {
+            await mutate("update-dashboard-notice", {noticeId, content, noticeDate});
+            notify("注意事项已更新");
+            return true;
+        } catch (error) {
+            notify(error instanceof Error ? error.message : "编辑失败");
             return false;
         }
     }
@@ -483,7 +494,7 @@ export default function Home() {
 
         <div className="page-stage">
             {role === "admin" && adminTab === "dashboard" &&
-                <AdminDashboard orders={orders} stock={stock} notices={notices} onAddNotice={createNotice} onSetNoticeCompleted={setNoticeCompleted} onCreate={() => {
+                <AdminDashboard orders={orders} stock={stock} notices={notices} onAddNotice={createNotice} onUpdateNotice={updateNotice} onSetNoticeCompleted={setNoticeCompleted} onCreate={() => {
                     startNewUpload();
                     setAdminTab("upload");
                 }} onReceipt={() => setOverlay("receipt")} onOrders={() => setAdminTab("orders")}
@@ -623,16 +634,21 @@ function AdminDashboard({
                              stock,
                              notices,
                              onAddNotice,
+                             onUpdateNotice,
                              onSetNoticeCompleted,
                              onCreate,
                             onReceipt,
                             onOrders,
                             onStock
-                         }: { orders: PurchaseOrder[]; stock: StockItem[]; notices: DashboardNotice[]; onAddNotice: (content: string) => Promise<boolean>; onSetNoticeCompleted: (id: string, completed: boolean) => Promise<boolean>; onCreate: () => void; onReceipt: () => void; onOrders: () => void; onStock: () => void }) {
+                         }: { orders: PurchaseOrder[]; stock: StockItem[]; notices: DashboardNotice[]; onAddNotice: (content: string, noticeDate: string) => Promise<boolean>; onUpdateNotice: (id: string, content: string, noticeDate: string) => Promise<boolean>; onSetNoticeCompleted: (id: string, completed: boolean) => Promise<boolean>; onCreate: () => void; onReceipt: () => void; onOrders: () => void; onStock: () => void }) {
     const [noticeDraft, setNoticeDraft] = useState("");
     const [noticeBusy, setNoticeBusy] = useState(false);
     const {now, timeZone} = useServerClock();
     const today = dateKey(now, timeZone);
+    const [noticeDate, setNoticeDate] = useState(today);
+    const [editingNoticeId, setEditingNoticeId] = useState<string | null>(null);
+    const [editContent, setEditContent] = useState("");
+    const [editDate, setEditDate] = useState("");
     const pendingOrders = orders.filter(o => o.status === "待审核");
     const earliest = pendingOrders.map(o => o.createdAt).sort((a,b) => timestamp(a)-timestamp(b))[0];
     const pending = pendingOrders.length;
@@ -644,10 +660,26 @@ function AdminDashboard({
     async function submitNotice(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         const content = noticeDraft.trim();
-        if (!content || noticeBusy) return;
+        if (!content || !noticeDate || noticeBusy) return;
         setNoticeBusy(true);
         try {
-            if (await onAddNotice(content)) setNoticeDraft("");
+            if (await onAddNotice(content, noticeDate)) setNoticeDraft("");
+        } finally {
+            setNoticeBusy(false);
+        }
+    }
+    function startEditNotice(notice: DashboardNotice) {
+        setEditingNoticeId(notice.id);
+        setEditContent(notice.content);
+        setEditDate(notice.noticeDate);
+    }
+    async function saveNotice(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        const content = editContent.trim();
+        if (!editingNoticeId || !content || !editDate || noticeBusy) return;
+        setNoticeBusy(true);
+        try {
+            if (await onUpdateNotice(editingNoticeId, content, editDate)) setEditingNoticeId(null);
         } finally {
             setNoticeBusy(false);
         }
@@ -697,12 +729,29 @@ function AdminDashboard({
             <form className="dashboard-notice-form" onSubmit={submitNotice}>
                 <input aria-label="新增注意事项" placeholder="填写需要记住或处理的事项" value={noticeDraft}
                        maxLength={300} onChange={event => setNoticeDraft(event.target.value)}/>
-                <button type="submit" disabled={noticeBusy || !noticeDraft.trim()}>添加</button>
+                <input type="date" aria-label="事项日期" required value={noticeDate}
+                       onChange={event => setNoticeDate(event.target.value)}/>
+                <button type="submit" disabled={noticeBusy || !noticeDraft.trim() || !noticeDate}>添加</button>
             </form>
             {notices.length ? <ul className="dashboard-notice-list">{notices.map(notice =>
                 <li key={notice.id} className={notice.completed ? "completed" : ""}>
-                    <label><input type="checkbox" checked={notice.completed} disabled={noticeBusy}
-                                  onChange={() => void toggleNotice(notice)}/><span>{notice.content}</span></label>
+                    {editingNoticeId === notice.id ? <form className="dashboard-notice-edit" onSubmit={saveNotice}>
+                        <input aria-label="编辑事项内容" maxLength={300} required value={editContent}
+                               onChange={event => setEditContent(event.target.value)}/>
+                        <input type="date" aria-label="编辑事项日期" required value={editDate}
+                               onChange={event => setEditDate(event.target.value)}/>
+                        <div className="dashboard-notice-edit-actions">
+                            <button type="button" disabled={noticeBusy} onClick={() => setEditingNoticeId(null)}>取消</button>
+                            <button type="submit" disabled={noticeBusy || !editContent.trim() || !editDate}>保存</button>
+                        </div>
+                    </form> : <div className="dashboard-notice-row">
+                        <label><input type="checkbox" checked={notice.completed} disabled={noticeBusy}
+                                      onChange={() => void toggleNotice(notice)}/><span className="sr-only">标记事项完成</span>
+                            <span className="dashboard-notice-info"><span className="dashboard-notice-text">{notice.content}</span>
+                                <time dateTime={notice.noticeDate}>{notice.noticeDate}</time></span></label>
+                        <button type="button" className="dashboard-notice-edit-button" disabled={noticeBusy}
+                                onClick={() => startEditNotice(notice)}>编辑</button>
+                    </div>}
                 </li>)}</ul> : <p className="dashboard-notice-empty">暂无注意事项，添加后会保存在数据库中。</p>}
         </section>
         <SectionHead title="订单概览" note="当前已加载订单"/>

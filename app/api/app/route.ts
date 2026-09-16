@@ -15,6 +15,7 @@ const now=()=>new Date().toISOString();
 const uid=(prefix:string)=>`${prefix}_${crypto.randomUUID()}`;
 const orderId=()=>{const clock=serverClock();return `PO${dateKey(clock.now,clock.timeZone).replaceAll("-","")}-${crypto.randomUUID().slice(0,6).toUpperCase()}`;};
 const string=(value:unknown)=>typeof value==="string"?value.trim():"";
+const validNoticeDate=(value:string)=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(`${value}T00:00:00Z`))&&new Date(`${value}T00:00:00Z`).toISOString().slice(0,10)===value;
 const positiveInt=(value:unknown,fallback=1)=>Math.max(1,Math.floor(Number(value)||fallback));
 const cents=(value:unknown)=>Math.max(0,Math.round(Number(value)*100));
 const optionalPositiveCents=(value:unknown)=>{const text=typeof value==="number"?String(value):string(value);if(!text)return null;const amount=Math.round(Number(text)*100);return Number.isFinite(amount)&&amount>0&&amount<=2_147_483_647?amount:undefined};
@@ -95,9 +96,20 @@ export async function POST(request:Request){
 
     if(action==="create-dashboard-notice"){
       requireAdmin(user);
-      const content=string(body.content);
+      const content=string(body.content),noticeDate=string(body.noticeDate);
       if(!content||content.length>300)return Response.json({error:"注意事项需填写 1～300 个字"},{status:400});
-      await db.insert(dashboardNotices).values({id:uid("notice"),content,createdBy:user.id});
+      if(!validNoticeDate(noticeDate))return Response.json({error:"请选择有效的事项日期"},{status:400});
+      await db.insert(dashboardNotices).values({id:uid("notice"),content,noticeDate,createdBy:user.id});
+      return Response.json({data:await snapshot(user)});
+    }
+
+    if(action==="update-dashboard-notice"){
+      requireAdmin(user);
+      const id=string(body.noticeId),content=string(body.content),noticeDate=string(body.noticeDate);
+      if(!id||!content||content.length>300)return Response.json({error:"注意事项需填写 1～300 个字"},{status:400});
+      if(!validNoticeDate(noticeDate))return Response.json({error:"请选择有效的事项日期"},{status:400});
+      const changed=await db.update(dashboardNotices).set({content,noticeDate,updatedAt:now()}).where(eq(dashboardNotices.id,id)).returning({id:dashboardNotices.id});
+      if(!changed.length)return Response.json({error:"注意事项不存在"},{status:404});
       return Response.json({data:await snapshot(user)});
     }
 

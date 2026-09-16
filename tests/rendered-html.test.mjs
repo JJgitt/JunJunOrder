@@ -796,7 +796,27 @@ test("administrator dashboard notice checklist is persisted and completed items 
   assert.match(page,/注意事项清单/);
   assert.match(page,/onAddNotice=\{createNotice\}/);
   assert.match(page,/type="checkbox" checked=\{notice.completed\}/);
-  assert.match(styles,/\.dashboard-notice-list \.completed span \{[^}]*text-decoration: line-through/);
+  assert.match(styles,/\.dashboard-notice-list \.completed \.dashboard-notice-text \{[^}]*text-decoration: line-through/);
+});
+
+test("dashboard notice date and content can be edited with existing dates backfilled",async()=>{
+  const [page,route,schema,migration,styles]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
+    readFile(new URL("../drizzle/0013_dashboard_notice_date.sql",import.meta.url),"utf8"),
+    readFile(new URL("../app/workspace-ui.css",import.meta.url),"utf8"),
+  ]);
+  assert.match(schema,/noticeDate: date\("notice_date", \{ mode: "string" \}\)\.notNull\(\)/);
+  assert.match(migration,/AT TIME ZONE 'Asia\/Shanghai'/);
+  assert.match(migration,/ALTER COLUMN "notice_date" SET NOT NULL/);
+  assert.match(route,/action==="update-dashboard-notice"/);
+  assert.match(route,/validNoticeDate\(noticeDate\)/);
+  assert.match(page,/onUpdateNotice=\{updateNotice\}/);
+  assert.match(page,/aria-label="事项日期"/);
+  assert.match(page,/aria-label="编辑事项日期"/);
+  assert.match(page,/<time dateTime=\{notice.noticeDate\}>/);
+  assert.match(styles,/\.dashboard-notice-edit input \{[^}]*font-size: 16px/);
 });
 
 test("admin order list offers mutually exclusive three-state time sorting",async()=>{

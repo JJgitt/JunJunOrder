@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow();
@@ -129,6 +129,7 @@ export const auditLogs = pgTable("audit_logs", {
 export const dashboardNotices = pgTable("dashboard_notices", {
   id: text("id").primaryKey(),
   content: text("content").notNull(),
+  noticeDate: date("notice_date", { mode: "string" }).notNull(),
   completed: boolean("completed").notNull().default(false),
   createdBy: text("created_by").notNull().references(() => users.id),
   createdAt: createdAt(),
