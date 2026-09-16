@@ -676,6 +676,7 @@ function Task({
 }
 
 function StockPage({stock, onSuggest}: { stock: StockItem[]; onSuggest: () => void }) {
+    const {dateTime} = useServerClock();
     const [query, setQuery] = useState("");
     const [filter, setFilter] = useState("全部");
     const visible = stock.filter(item => {
@@ -704,7 +705,7 @@ function StockPage({stock, onSuggest}: { stock: StockItem[]; onSuggest: () => vo
                                                                label="商品货号"/><span>· {item.title}</span></div>
                         <Badge tone={tone}>{label}</Badge></div>
                     <p>{item.size}码 · 库存 <b>{item.count}</b> 件</p>
-                    <small>{item.locations.length ? `库位 ${item.locations.join(" / ")}` : `最近售出 ${item.lastSold}`}</small>
+                    <small>{item.locations.length ? `库位 ${item.locations.join(" / ")}` : item.lastSold ? `最近售出 ${dateTime(item.lastSold)}` : "暂无库位记录"}</small>
                 </div>
                 {item.count === 0 && <button onClick={onSuggest}>采购建议</button>}</article>
         })}</div>
@@ -966,6 +967,9 @@ function BuyerHome({
                        onMine,
                        onEdit
                    }: { buyerName: string; orders: PurchaseOrder[]; onUpload: () => void; onMine: () => void; onEdit: (id: string) => void }) {
+    const {now, timeZone} = useServerClock();
+    const month = dateKey(now, timeZone).slice(0, 7);
+    const monthCount = orders.filter(order => dateKey(order.createdAt, timeZone).slice(0, 7) === month && timestamp(order.createdAt) <= now).length;
     const rejected = orders.find(o => o.status === "已驳回");
     const count = (status: OrderStatus) => orders.filter(o => o.status === status).length;
     return <section className="enter buyer-home">
@@ -974,7 +978,7 @@ function BuyerHome({
             <button onClick={onMine}><b>{count("待审核")}</b><span>待审核</span></button>
             <button onClick={onMine}><b>{count("在途")}</b><span>在途</span></button>
             <button onClick={onMine}><b>{count("已入库")}</b><span>已入库</span></button>
-            <button onClick={onMine}><b>{orders.length}</b><span>本月单数</span></button>
+            <button onClick={onMine}><b>{monthCount}</b><span>本月单数</span></button>
         </div>
         {rejected && <div className="rejected-alert">
             <div><span>!</span><b>有订单被驳回</b></div>
