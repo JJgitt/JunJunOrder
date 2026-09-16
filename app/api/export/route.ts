@@ -2,6 +2,8 @@ import { asc, desc } from "drizzle-orm";
 import { getDb } from "@/db";
 import { orderItems, purchaseOrders, users } from "@/db/schema";
 import { requireAdmin, requireAppUser, routeError } from "@/lib/auth";
+import { serverClock } from "@/lib/server-time";
+import { dateKey, formatDateTime } from "@/lib/time";
 
 export const dynamic="force-dynamic";
 const csv=(value:unknown)=>`"${String(value??"").replaceAll('"','""')}"`;
@@ -10,6 +12,7 @@ export async function GET(request:Request){
   try{
     const user=await requireAppUser(request);
     requireAdmin(user);
+    const clock=serverClock();
     const db=getDb();
     const [orders,items,people]=await Promise.all([
       db.select().from(purchaseOrders).orderBy(desc(purchaseOrders.createdAt)),
@@ -28,11 +31,11 @@ export async function GET(request:Request){
       const lines=itemsByOrder.get(order.id)??[];
       return lines.map(item=>{
         const status=order.status==="已入库"?(item.shippedAt?"已发货":"待发货"):order.status;
-        return [order.id,order.platform,order.platformOrderNo,item.title,item.sku,item.size,item.qty,(item.amountCents/100).toFixed(2),item.purchaseCourierCompany||order.courierCompany,item.purchaseCourierNo||order.courierNo,status,order.settled?"已结款":"未结款",order.settledAmountCents==null?"":(order.settledAmountCents/100).toFixed(2),order.settledAt??"",names.get(order.purchaserId),order.location,item.resaleOrderNo,item.salePriceCents==null?"":(item.salePriceCents/100).toFixed(2),item.outboundCourierNo,order.createdAt];
+        return [order.id,order.platform,order.platformOrderNo,item.title,item.sku,item.size,item.qty,(item.amountCents/100).toFixed(2),item.purchaseCourierCompany||order.courierCompany,item.purchaseCourierNo||order.courierNo,status,order.settled?"已结款":"未结款",order.settledAmountCents==null?"":(order.settledAmountCents/100).toFixed(2),order.settledAt?formatDateTime(order.settledAt,clock.timeZone):"",names.get(order.purchaserId),order.location,item.resaleOrderNo,item.salePriceCents==null?"":(item.salePriceCents/100).toFixed(2),item.outboundCourierNo,formatDateTime(order.createdAt,clock.timeZone)];
       });
     });
     const content="\uFEFF"+[header,...rows].map(row=>row.map(csv).join(",")).join("\r\n");
-    return new Response(content,{headers:{"content-type":"text/csv; charset=utf-8","content-disposition":`attachment; filename="junjun-orders-${new Date().toISOString().slice(0,10)}.csv"`,"cache-control":"no-store"}});
+    return new Response(content,{headers:{"content-type":"text/csv; charset=utf-8","content-disposition":`attachment; filename="junjun-orders-${dateKey(clock.now,clock.timeZone)}.csv"`,"cache-control":"no-store"}});
   }catch(error){
     return routeError(error);
   }

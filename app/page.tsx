@@ -5,6 +5,8 @@ import {createPortal} from "react-dom";
 import {useRouter} from "next/navigation";
 import Image from "next/image";
 import {findOrdersByCourierNo, findTransitCandidatesByCourierTail, normalizeCourierNo} from "@/lib/courier";
+import {dateKey, dayRange, timestamp, waitingLabel, type ServerClock} from "@/lib/time";
+import {ServerClockProvider, useServerClock} from "./server-clock";
 
 type Role = "admin" | "buyer";
 type AdminTab = "dashboard" | "stock" | "orders" | "upload" | "profile";
@@ -24,7 +26,7 @@ type OrderItemDraft = { id: string; title: string; sku: string; size: string; qt
 
 type PurchaseOrder = {
     id: string; platform: string; platformNo: string; courierCompany: string; courierNo: string; status: OrderStatus;
-    purchaser: string; purchaserId?: string; purchaserPhone?: string; purchaserWechatId?: string; createdAt: string; location?: string; receivedAt?: string; rejectReason?: string;
+    purchaser: string; purchaserId?: string; purchaserPhone?: string; purchaserWechatId?: string; createdAt: string; approvedAt?: string; location?: string; receivedAt?: string; rejectReason?: string;
     settled: boolean; settledAt?: string; settledByName?: string; settledAmount?: number;
     title: string; itemCount: number; amount: number; items: OrderItem[];
     images: OrderImage[]; settlementProofs: OrderImage[];
@@ -34,7 +36,7 @@ type RecognizedOrder = { platform: string; platformNo: string; courierCompany: s
 type StockItem = { sku: string; title: string; size: string; count: number; locations: string[]; lastSold?: string };
 type ApprovalStatus = "pending" | "approved" | "rejected";
 type AppUser = { id: string; wechatId: string; phone: string; name: string; role: Role; active: boolean; approvalStatus: ApprovalStatus };
-type Snapshot = { user: AppUser; orders: PurchaseOrder[]; stock: StockItem[]; users: AppUser[] };
+type Snapshot = { clock: ServerClock; user: AppUser; orders: PurchaseOrder[]; stock: StockItem[]; users: AppUser[] };
 
 const statusTone: Record<OrderStatus, string> = {
     "待审核": "gray",
@@ -49,7 +51,6 @@ const canRejectOrder = (order: PurchaseOrder) => !order.settled && ["待审核",
 const buyerCanEditOrder = (status: OrderStatus) => status === "待审核" || status === "在途" || status === "已驳回";
 const statusLabel = (status: OrderStatus) => readyToShip(status) ? "待发货" : status;
 const money = (value: number) => `¥${value.toLocaleString("zh-CN", {minimumFractionDigits: 2})}`;
-const dateTime = (value?: string) => value ? new Date(value).toLocaleString("zh-CN", {hour12: false}) : "未记录";
 /** 订单列表右上角的汇总文案：订单笔数 + 商品件数（各商品行数量之和）。 */
 const orderListSummary = (list: PurchaseOrder[]) => `${list.length} 笔 · ${list.reduce((sum, order) => sum + order.items.reduce((qty, item) => qty + item.qty, 0), 0)} 件`;
 const orderSortOptions: Array<{ key: OrderSortKey; label: string }> = [
@@ -58,8 +59,8 @@ const orderSortOptions: Array<{ key: OrderSortKey; label: string }> = [
     {key: "shippedAt", label: "发货时间"}
 ];
 const validTimestamp = (value?: string) => {
-    const timestamp = value ? new Date(value).getTime() : Number.NaN;
-    return Number.isFinite(timestamp) ? timestamp : null;
+    const parsed = value ? timestamp(value) : Number.NaN;
+    return Number.isFinite(parsed) ? parsed : null;
 };
 const orderSortTimestamp = (order: PurchaseOrder, key: OrderSortKey) => {
     if (key === "createdAt") return validTimestamp(order.createdAt);
@@ -126,6 +127,7 @@ async function copyText(value: string) {
 export default function Home() {
     const router = useRouter();
     const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+    const [clock, setClock] = useState<ServerClock | null>(null);
     const [people, setPeople] = useState<AppUser[]>([]);
     const [adminTab, setAdminTab] = useState<AdminTab>("dashboard");
     const [buyerTab, setBuyerTab] = useState<BuyerTab>("home");
@@ -155,6 +157,7 @@ export default function Home() {
         setUploadNonce(value => value + 1);
     };
     const applySnapshot = useCallback((data: Snapshot) => {
+        setClock(data.clock);
         setCurrentUser(data.user);
         setPeople(data.users);
         setOrders(data.orders);
@@ -425,14 +428,14 @@ export default function Home() {
     if (loading) return <main className="app-frame system-state">
         <div className="system-loader"/>
         <h2>正在连接业务数据</h2><p>正在验证登录状态并载入订单、库存与权限。</p></main>;
-    if (fatalError || !currentUser) return <main className="app-frame system-state">
+    if (fatalError || !currentUser || !clock) return <main className="app-frame system-state">
         <div className="system-error">!</div>
         <h2>系统暂时不可用</h2><p>{fatalError || "无法识别当前用户"}</p>
         <button className="primary-button" onClick={() => void load()}>重新连接</button>
     </main>;
     const role = currentUser.role;
 
-    return <main className="app-frame">
+    return <ServerClockProvider initial={clock}><main className="app-frame">
         <AppHeader user={currentUser} page={role === "admin" ? adminTab : buyerTab}/>
 
         <div className="page-stage">
@@ -549,10 +552,11 @@ export default function Home() {
                                                                                                        onClose={() => setOverlay(null)}
                                                                                                        onSubmit={ship}/>}
         {toast && <div className="toast" role="status"><span>✓</span>{toast}</div>}
-    </main>;
+    </main></ServerClockProvider>;
 }
 
 function AppHeader({user, page}: { user: AppUser; page: string }) {
+    const {timeZone} = useServerClock();
     const labels: Record<string, string> = {
         dashboard: "管理看板",
         stock: "库存管理",
@@ -565,7 +569,7 @@ function AppHeader({user, page}: { user: AppUser; page: string }) {
     return <header className="app-header">
         <div className="logo">鸿</div>
         <div className="header-copy"><h1>{labels[page]}</h1>
-            <span>{user.role === "admin" ? "多渠道采购转卖 · 管理员" : `采购员 · ${user.name}`}</span></div>
+            <span>{user.role === "admin" ? "管理员" : "采购员"} · 服务器时区 {timeZone}</span></div>
         <div className="identity-pill"><b>{user.name.slice(0, 1)}</b><span>{user.wechatId}</span><a
             className="identity-logout" href="/api/auth/logout">退出</a></div>
     </header>;
@@ -579,22 +583,26 @@ function AdminDashboard({
                             onOrders,
                             onStock
                         }: { orders: PurchaseOrder[]; stock: StockItem[]; onCreate: () => void; onReceipt: () => void; onOrders: () => void; onStock: () => void }) {
-    const pending = orders.filter(o => o.status === "待审核").length;
+    const {now, timeZone} = useServerClock();
+    const today = dateKey(now, timeZone);
+    const pendingOrders = orders.filter(o => o.status === "待审核");
+    const earliest = pendingOrders.map(o => o.createdAt).sort((a,b) => timestamp(a)-timestamp(b))[0];
+    const pending = pendingOrders.length;
     const transit = orders.filter(o => o.status === "在途").length;
     const shipping = orders.filter(o => readyToShip(o.status)).length;
-    const inToday = orders.filter(o => o.receivedAt).length;
+    const inToday = orders.filter(o => o.receivedAt && dateKey(o.receivedAt, timeZone) === today).length;
     const purchase = orders.reduce((sum, o) => sum + o.amount, 0);
     const sales = orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + (i.salePrice ?? 0), 0), 0);
     return <section className="dashboard-page enter">
         <div className="date-row">
-            <div><span>8月24日 · 周一</span><h2>下午好，管理员</h2></div>
+            <div><span>{new Intl.DateTimeFormat("zh-CN", {timeZone, month:"long", day:"numeric", weekday:"short"}).format(now)}</span><h2>采购管理看板</h2></div>
             <button aria-label="通知">🔔<i/></button>
         </div>
         <div className="stat-grid">
             <button onClick={onOrders}><b>{pending}</b><span>待审核</span><em>需处理</em></button>
             <button onClick={onReceipt}><b>{transit}</b><span>在途</span><em>待收货</em></button>
             <button onClick={onOrders}><b>{shipping}</b><span>待发货</span><em>更新信息</em></button>
-            <button><b>{inToday}</b><span>今日入库</span><em>较昨日 +2</em></button>
+            <button><b>{inToday}</b><span>今日入库</span><em>按服务器日期</em></button>
         </div>
         <button className="admin-create-entry" onClick={onCreate}>
             <i>＋</i><span><b>新增采购订单</b><small>管理员可直接录入采购与物流信息</small></span><em>立即创建 ›</em></button>
@@ -607,7 +615,7 @@ function AdminDashboard({
         <div className="task-card"><Task icon="📦" tone="green" title={`${transit} 笔在途待收货`} note="按快递单号自动关联采购订单"
                                          action="拍照识别" onClick={onReceipt}/><Task icon="✓" tone="orange"
                                                                                   title={`${pending} 笔新订单待审核`}
-                                                                                  note="最早一笔已等待 42 分钟" action="去审核"
+                                                                                  note={waitingLabel(earliest, now)} action="去审核"
                                                                                   onClick={onOrders}/><Task icon="🚚"
                                                                                                             tone="purple"
                                                                                                             title={`${shipping} 笔已入库待发货`}
@@ -616,7 +624,7 @@ function AdminDashboard({
                                                                                                             onClick={onOrders}/><Task
             icon="!" tone="blue" title={`${stock.filter(s => s.count <= 2).length} 个 SKU 库存偏低`} note="建议生成补货清单"
             action="查看" onClick={onStock}/></div>
-        <SectionHead title="本月概览" note="截至今日"/>
+        <SectionHead title="订单概览" note="当前已加载订单"/>
         <div className="finance-card">
             <div><span>采购总额</span><b>{money(purchase)}</b></div>
             <div><span>销售总额</span><b>{money(sales)}</b></div>
@@ -729,19 +737,14 @@ function AdminOrders({
     const [batchSettleOpen, setBatchSettleOpen] = useState(false);
     const [dateDays, setDateDays] = useState(30);
     const [sort, setSort] = useState<OrderSort>(null);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const rangeStart = new Date(today);
-    rangeStart.setDate(rangeStart.getDate() - dateDays + 1);
-    const rangeEnd = new Date(today);
-    rangeEnd.setDate(rangeEnd.getDate() + 1);
-    const dateStart = rangeStart.getTime(), dateEnd = rangeEnd.getTime();
+    const {now, timeZone} = useServerClock();
+    const {start: dateStart, end: dateEnd} = dayRange(now, timeZone, dateDays);
     const readyCount = orders.filter(order => readyToShip(order.status)).length;
     const purchasers = useMemo(() => Array.from(new Set(orders.map(order => order.purchaser))).sort((a, b) => a.localeCompare(b, "zh-CN")), [orders]);
     const buyerSummary = buyers.length === 0 ? "全部采购员" : buyers.length <= 2 ? buyers.join("、") : `${buyers[0]} 等 ${buyers.length} 人`;
     const toggleBuyer = (name: string) => setBuyers(current => current.includes(name) ? current.filter(item => item !== name) : [...current, name]);
     const cycleSort = (key: OrderSortKey) => setSort(current => current?.key !== key ? {key, direction: "desc"} : current.direction === "desc" ? {key, direction: "asc"} : null);
-    const visible = useMemo(() => sortPurchaseOrders(orders.filter(order => new Date(order.createdAt).getTime() >= dateStart && new Date(order.createdAt).getTime() < dateEnd && matchesStatusFilter(order, statuses) && (platform === "全部渠道" || order.platform === platform) && (settlement === "全部结款状态" || order.settled === (settlement === "已结款")) && (buyers.length === 0 || buyers.includes(order.purchaser)) && `${order.id}${order.platformNo}${order.items.map(item => `${item.title}${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}${item.outboundCourier ?? ""}`).join("")}`.toLowerCase().includes(query.toLowerCase())), sort), [orders, query, statuses, platform, settlement, buyers, dateStart, dateEnd, sort]);
+    const visible = useMemo(() => sortPurchaseOrders(orders.filter(order => dateKey(order.createdAt, timeZone) >= dateStart && dateKey(order.createdAt, timeZone) <= dateEnd && matchesStatusFilter(order, statuses) && (platform === "全部渠道" || order.platform === platform) && (settlement === "全部结款状态" || order.settled === (settlement === "已结款")) && (buyers.length === 0 || buyers.includes(order.purchaser)) && `${order.id}${order.platformNo}${order.items.map(item => `${item.title}${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}${item.outboundCourier ?? ""}`).join("")}`.toLowerCase().includes(query.toLowerCase())), sort), [orders, query, statuses, platform, settlement, buyers, dateStart, dateEnd, timeZone, sort]);
     const selectedSet = new Set(selectedIds), selectedOrders = orders.filter(order => selectedSet.has(order.id)),
         selectedReady = selectedOrders.filter(order => readyToShip(order.status)),
         selectedSettleReady = selectedOrders.filter(order => order.receivedAt && !order.settled),
@@ -875,6 +878,7 @@ function OrderCard({
                        showPurchaserContact = false,
                        showLocation = false
                    }: { order: PurchaseOrder; onOpen: () => void; actions?: React.ReactNode; selectable?: boolean; selected?: boolean; onSelect?: () => void; showOutbound?: boolean; normalizeStatus?: boolean; showPurchaserContact?: boolean; showLocation?: boolean }) {
+    const {dateTime} = useServerClock();
     const totalQuantity = order.items.reduce((sum, item) => sum + item.qty, 0);
     const listTitle = order.itemCount > 1 ? `${order.title} 等${order.itemCount}款 · 共${totalQuantity}件` : `${order.title} · ${order.items[0]?.size}码`;
     return <article className={`order-card edge-${statusTone[order.status]} ${selected ? "selected" : ""}`}>
@@ -894,7 +898,7 @@ function OrderCard({
             </div>
             <div className="order-meta secondary">{order.platformNo ?
                 <CopyNumber value={order.platformNo} label="平台订单号"/> : <span>平台单号未填写</span>}
-                <time>{order.createdAt}</time>
+                <time>{dateTime(order.createdAt)}</time>
             </div>
             {showPurchaserContact && <div className="order-contact"><span>采购员联系方式</span>
                 <div>{order.purchaserWechatId &&
@@ -920,6 +924,7 @@ function OrderCard({
 }
 
 function SettlementStatus({order}: { order: PurchaseOrder }) {
+    const {dateTime} = useServerClock();
     return <div className={`order-settlement ${order.settled ? "settled" : "pending"}`}>
         <span>采购结款</span><b>{order.settled ? <><em>已结款{order.settledAmount != null ? ` · ${money(order.settledAmount)}` : " · 金额未记录"}</em><time>{dateTime(order.settledAt)}</time></> :
         <em>{order.receivedAt ? "待结款" : "入库后可结款"}</em>}</b>
@@ -927,6 +932,7 @@ function SettlementStatus({order}: { order: PurchaseOrder }) {
 }
 
 function OutboundOrderInfo({order}: { order: PurchaseOrder }) {
+    const {dateTime} = useServerClock();
     const shippedItems = order.items.filter(item => item.shipped);
     if (order.status !== "已发货") return <div className={`order-courier outbound ${shippedItems.length ? "" : "empty"}`}>
         <span>发货进度</span><b><span>{shippedItems.reduce((sum, item) => sum + item.qty, 0)}/{order.items.reduce((sum, item) => sum + item.qty, 0)} 件已发货</span></b>
@@ -1438,6 +1444,7 @@ function ReceiptSheet({
                           onManual,
                           onNotify
                       }: { orders: PurchaseOrder[]; recentLocations: string[]; onClose: () => void; onReceive: (id: string, loc: string) => void; onManual: () => void; onNotify: (t: string) => void }) {
+    const {dateTime} = useServerClock();
     const [stage, setStage] = useState<"capture" | "result">("capture"), [courier, setCourier] = useState(""), [location, setLocation] = useState(""), [busy, setBusy] = useState(false);
     const [lookedUp, setLookedUp] = useState<PurchaseOrder[]>([]), [pickedId, setPickedId] = useState("");
     const matches = useMemo(() => {
@@ -1505,7 +1512,7 @@ function ReceiptSheet({
                                                                                                            value={`${match.platform} · ${match.platformNo || "未填写"}`}
                                                                                                            copyValue={match.platformNo || undefined}/><KeyValue
             label="采购物流" value={<PurchaseCourierList items={match.items} showItem/>}/><KeyValue label="采购员 / 时间"
-                                                                                                value={`${match.purchaser} · ${match.createdAt}`}/><KeyValue
+                                                                                                value={`${match.purchaser} · ${dateTime(match.createdAt)}`}/><KeyValue
             label="采购金额" value={money(match.amount)}/><LocationPicker location={location} recentLocations={recentLocations} onChange={setLocation}/>
             <button className="primary-button" disabled={!location.trim()} onClick={() => location.trim() && onReceive(match.id, location.trim())}>核对无误，确认入库
             </button>
@@ -1667,6 +1674,7 @@ function OrderDetail({
                          onSettlementProof,
                          onShipItem
                      }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onReject: () => void; onSettle: () => void; onSettlementAmount: () => void; onSettlementProof: () => void; onShipItem: (itemId: string) => void }) {
+    const {dateTime} = useServerClock();
     return <Modal title="订单详情" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
         <div className={`detail-card edge-${statusTone[order.status]}`}>
             <div className="detail-title">
@@ -1676,7 +1684,7 @@ function OrderDetail({
             <KeyValue label="采购渠道" value={order.platform}/><KeyValue label="平台单号" value={order.platformNo || "未填写"}
                                                                      copyValue={order.platformNo || undefined}/><KeyValue
             label="采购总额" value={money(order.amount)}/><KeyValue label="采购员"
-                                                                value={`${order.purchaser} · ${order.createdAt}`}/>{canManage && order.purchaserWechatId &&
+                                                                value={`${order.purchaser} · ${dateTime(order.createdAt)}`}/>{canManage && order.purchaserWechatId &&
             <KeyValue label="采购员微信号" value={order.purchaserWechatId}
                       copyValue={order.purchaserWechatId}/>} {canManage && order.purchaserPhone &&
             <KeyValue label="采购员手机号" value={order.purchaserPhone} copyValue={order.purchaserPhone}/>}<KeyValue
@@ -1719,11 +1727,11 @@ function OrderDetail({
         {canManage && order.settled && <button className="settlement-amount-edit" onClick={onSettlementAmount}>¥ 编辑结款金额</button>}
         <div className="timeline-card"><h3>流转记录</h3>
             <ol>
-                <li><b>{order.createdAt}</b><span>{order.purchaser}上传订单</span></li>
+                <li><b>{dateTime(order.createdAt)}</b><span>{order.purchaser}上传订单</span></li>
                 {order.status !== "待审核" && order.status !== "已驳回" &&
-                    <li><b>08-24 15:01</b><span>管理员审核通过</span></li>}{order.receivedAt &&
+                    <li><b>{dateTime(order.approvedAt)}</b><span>管理员审核通过</span></li>}{order.receivedAt &&
                 <li><b>{dateTime(order.receivedAt)}</b><span>收货入库{showLocation && order.location ? ` · ${order.location}` : ""}</span></li>}{canManage && order.items.some(item => item.resaleNo) &&
-                <li><b>08-24 17:40</b><span>二级平台售出</span></li>}{order.settled &&
+                <li><b>未记录</b><span>二级平台成交时间未单独记录</span></li>}{order.settled &&
                 <li><b>{dateTime(order.settledAt)}</b><span>{order.settledByName || "管理员"}完成采购结款{order.settledAmount != null ? ` · ${money(order.settledAmount)}` : ""}</span></li>}</ol>
         </div>
         {canManage && canRejectOrder(order) && order.status !== "待审核" &&

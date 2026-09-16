@@ -5,13 +5,15 @@ import { getDb } from "@/db";
 import { auditLogs, inventory, inventoryLots, inventoryMovements, orderImages, orderItems, purchaseOrders, users } from "@/db/schema";
 import { assertSameOrigin, requireAdmin, requireAppUser, routeError } from "@/lib/auth";
 import { uploadPath } from "@/lib/file-storage";
+import { serverClock } from "@/lib/server-time";
+import { dateKey } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const now=()=>new Date().toISOString();
 const uid=(prefix:string)=>`${prefix}_${crypto.randomUUID()}`;
-const orderId=()=>`PO${new Date().toISOString().slice(0,10).replaceAll("-","")}-${crypto.randomUUID().slice(0,6).toUpperCase()}`;
+const orderId=()=>{const clock=serverClock();return `PO${dateKey(clock.now,clock.timeZone).replaceAll("-","")}-${crypto.randomUUID().slice(0,6).toUpperCase()}`;};
 const string=(value:unknown)=>typeof value==="string"?value.trim():"";
 const positiveInt=(value:unknown,fallback=1)=>Math.max(1,Math.floor(Number(value)||fallback));
 const cents=(value:unknown)=>Math.max(0,Math.round(Number(value)*100));
@@ -39,6 +41,9 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
   const wechatIds=new Map(people.map(person=>[person.id,person.wechatId]));
   const imageRows=rows.length?await db.select({id:orderImages.id,orderId:orderImages.orderId,kind:orderImages.kind,fileName:orderImages.fileName,uploadedBy:orderImages.uploadedBy,createdAt:orderImages.createdAt}).from(orderImages).where(inArray(orderImages.orderId,rows.map(row=>row.id))):[];
   const itemRows=rows.length?await db.select().from(orderItems).where(inArray(orderItems.orderId,rows.map(row=>row.id))):[];
+  const approvals=rows.length?await db.select({orderId:auditLogs.entityId,createdAt:auditLogs.createdAt}).from(auditLogs).where(and(eq(auditLogs.entityType,"purchase_order"),eq(auditLogs.action,"approve"),inArray(auditLogs.entityId,rows.map(row=>row.id)))).orderBy(desc(auditLogs.createdAt)):[];
+  const approvedAt=new Map<string,string>();
+  for(const event of approvals)if(!approvedAt.has(event.orderId))approvedAt.set(event.orderId,event.createdAt);
   const orders=rows.map(row=>{
     const rawItems=itemRows.filter(item=>item.orderId===row.id);
     const allShipped=rawItems.length>0&&rawItems.every(item=>item.shippedAt);
@@ -57,6 +62,7 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
     return {
       id:row.id,platform:row.platform,platformNo:row.platformOrderNo,courierCompany:row.courierCompany,courierNo:row.courierNo,status,rejectReason:row.rejectReason??undefined,
       purchaserId:row.purchaserId,purchaser:names.get(row.purchaserId)??"采购员",createdAt:row.createdAt,
+      approvedAt:approvedAt.get(row.id),
       settled:row.settled,settledAt:row.settledAt??undefined,settledAmount:row.settledAmountCents==null?undefined:row.settledAmountCents/100,receivedAt:row.receivedAt??undefined,
       ...(isAdmin?{purchaserPhone:phones.get(row.purchaserId)??"",purchaserWechatId:wechatIds.get(row.purchaserId)??""}:{}),
       title:items[0]?.title??"",itemCount:items.length,amount:items.reduce((sum,item)=>sum+item.amount,0),items,
@@ -70,7 +76,7 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
     const [items,lots]=await Promise.all([db.select().from(inventory),db.select().from(inventoryLots).where(isNull(inventoryLots.shippedAt))]);
     stock=items.map(item=>({sku:item.sku,title:item.title,size:item.size,count:item.quantity,locations:Array.from(new Set(lots.filter(lot=>lot.sku===item.sku&&lot.size===item.size).map(lot=>lot.location)))}));
   }
-  return {user,orders,stock,users:people.map(person=>({id:person.id,wechatId:person.wechatId,phone:person.phone,name:person.name,role:person.role,active:person.active,approvalStatus:person.approvalStatus}))};
+  return {clock:serverClock(),user,orders,stock,users:people.map(person=>({id:person.id,wechatId:person.wechatId,phone:person.phone,name:person.name,role:person.role,active:person.active,approvalStatus:person.approvalStatus}))};
 }
 
 export async function GET(request:Request){

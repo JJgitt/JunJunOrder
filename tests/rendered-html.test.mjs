@@ -739,7 +739,7 @@ test("admin and buyer order lists filter by settlement status",async()=>{
   ]);
   assertJsMatch(page,/const \[settlement,setSettlement\] = useState\("全部结款状态"\)/);
   assertJsMatch(page,/\(settlement === "全部结款状态" \|\| order\.settled === \(settlement === "已结款"\)\)/);
-  assertJsMatch(page,/\[orders,query,statuses,platform,settlement,buyers,dateStart,dateEnd,sort\]/);
+  assertJsMatch(page,/\[orders,query,statuses,platform,settlement,buyers,dateStart,dateEnd,timeZone,sort\]/);
   assertJsMatch(page,/<select aria-label="结款状态" value=\{settlement\}/);
   assertJsMatch(page,/<option>全部结款状态<\/option><option>已结款<\/option><option>未结款<\/option>/);
   assertJsMatch(page,/setSettlement\("全部结款状态"\)/);

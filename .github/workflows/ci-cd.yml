@@ -46,7 +46,7 @@ jobs:
       - run: npm run lint
       - run: npm run build -- --webpack
       - run: npx tsc --noEmit
-      - run: node --experimental-strip-types --test tests/rendered-html.test.mjs tests/vision-normalization.test.mjs tests/courier-match.test.mjs tests/deploy-image-ref.test.mjs
+      - run: node --experimental-strip-types --test tests/rendered-html.test.mjs tests/vision-normalization.test.mjs tests/courier-match.test.mjs tests/deploy-image-ref.test.mjs tests/time.test.mjs
       - run: node scripts/bootstrap.mjs
       - run: node tests/order-uniqueness.integration.mjs
       - run: bash -n deploy/ci/deploy.sh deploy/ci/ssh-entry.sh deploy/ci/install-server-deploy.sh
