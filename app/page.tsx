@@ -4,7 +4,7 @@ import {FormEvent, useCallback, useEffect, useMemo, useRef, useState} from "reac
 import {createPortal} from "react-dom";
 import {useRouter} from "next/navigation";
 import Image from "next/image";
-import {findOrdersByCourierNo, findTransitCandidatesByCourierTail, normalizeCourierNo} from "@/lib/courier";
+import {courierTrackingUrl, findOrdersByCourierNo, findTransitCandidatesByCourierTail, normalizeCourierNo} from "@/lib/courier";
 import {dateKey, dayRange, timestamp, waitingLabel, type ServerClock} from "@/lib/time";
 import {ServerClockProvider, useServerClock} from "./server-clock";
 
@@ -1866,7 +1866,8 @@ function OrderDetail({
                       copyValue={order.purchaserWechatId}/>} {canManage && order.purchaserPhone &&
             <KeyValue label="采购员手机号" value={order.purchaserPhone} copyValue={order.purchaserPhone}/>}<KeyValue
             label="采购物流" value={<PurchaseCourierList items={order.items}
-                                                     showItem={order.items.length > 1}/>}/>{showLocation && order.location &&
+                                                     showItem={order.items.length > 1}/>}/>{order.items.some(item => item.purchaseCourierNo) &&
+            <KeyValue label="物流轨迹" value={<TrackingLinks items={order.items}/>}/>}{showLocation && order.location &&
             <KeyValue label="库位" value={order.location}/>}<KeyValue label="采购结款"
             value={order.settled ? `已结款 · ${order.settledAmount != null ? money(order.settledAmount) : "金额未记录"} · ${dateTime(order.settledAt)}` : order.receivedAt ? "待结款" : "入库后可结款"}
             highlight={order.settled}/></div>
@@ -2397,6 +2398,14 @@ function CopyNumber({value, label}: { value: string; label: string }) {
 function SkuList({items}: { items: OrderItem[] }) {
     return <span className="sku-copy-list">{items.map(item => <span key={item.id}><CopyNumber value={item.sku}
                                                                                               label="商品货号"/><small>{item.size}码 · ×{item.qty}</small></span>)}</span>;
+}
+
+function TrackingLinks({items}: { items: OrderItem[] }) {
+    const trackable = items.filter(item => item.purchaseCourierNo);
+    return <span className="tracking-links">{trackable.map(item => <a key={item.id}
+                                                                       href={courierTrackingUrl(item.purchaseCourierCompany, item.purchaseCourierNo)}
+                                                                       target="_blank"
+                                                                       rel="noreferrer">{trackable.length > 1 ? `${item.sku} 物流 ↗` : "查看物流 ↗"}</a>)}</span>;
 }
 
 function PurchaseCourierList({items, showItem = false}: { items: OrderItem[]; showItem?: boolean }) {

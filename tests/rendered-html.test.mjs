@@ -317,6 +317,21 @@ test("displayed order and courier numbers provide direct copy actions",async()=>
   assertCssMatch(styles,/\.copy-button\.copied\{/);
 });
 
+test("order detail provides zero-cost tracking links to courier web query",async()=>{
+  const [page,styles,courier]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
+    readFile(new URL("../lib/courier.ts",import.meta.url),"utf8"),
+  ]);
+  assertJsMatch(page,/function TrackingLinks/);
+  assertJsMatch(page,/href=\{courierTrackingUrl\(item\.purchaseCourierCompany,item\.purchaseCourierNo\)\}/);
+  assertJsMatch(page,/label="物流轨迹" value=\{<TrackingLinks items=\{order\.items\}\/>\}/);
+  assertJsMatch(page,/target="_blank"/);
+  assert.match(courier,/export function courierTrackingUrl/);
+  assert.match(courier,/kuaidi100\.com\/chaxun/);
+  assertCssMatch(styles,/\.tracking-links a\{/);
+});
+
 test("displayed product SKUs provide direct copy actions",async()=>{
   const [page,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
