@@ -544,7 +544,7 @@ test("one purchase order carries multiple item rows with per-item shipping",asyn
   assertJsMatch(page,/`商品 \$\{index\+1\}`/);
   assertJsMatch(page,/className="items-total"/);
   assertJsMatch(page,/<h3>商品清单<\/h3>/);
-  assertJsMatch(page,/\$\{order\.title\} 等\$\{order\.itemCount\}件商品/);
+  assertJsMatch(page,/\$\{order\.title\} 等\$\{order\.itemCount\}款 · 共\$\{orderQuantity\(order\)\}件/);
   assert.match(exportRoute,/itemsByOrder/);
   assert.match(exportRoute,/order\.status==="已入库"\?\(item\.shippedAt\?"已发货":"待发货"\):order\.status/);
 });
@@ -569,9 +569,10 @@ test("search boxes remember up to ten recent keywords per list in local storage"
   assertCssMatch(styles,/\.search-history-remove\{/);
 });
 
-test("order list headers summarize both order count and total item quantity",async()=>{
+test("order list headers summarize visible orders, purchased quantity, and paid amount",async()=>{
   const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
-  assertJsMatch(page,/const orderListSummary = \(list:PurchaseOrder\[\]\) => `\$\{list\.length\} 笔 · \$\{list\.reduce\(\(sum,order\)=>sum\+order\.items\.reduce\(\(qty,item\)=>qty\+item\.qty,0\),0\)\} 件`/);
+  assertJsMatch(page,/const orderQuantity = \(order:PurchaseOrder\) => order\.items\.reduce\(\(sum,item\)=>sum\+item\.qty,0\)/);
+  assertJsMatch(page,/const orderListSummary = \(list:PurchaseOrder\[\]\) => `\$\{list\.length\} 笔 · \$\{list\.reduce\(\(sum,order\)=>sum\+orderQuantity\(order\),0\)\} 件 · 金额 \$\{money\(list\.reduce\(\(sum,order\)=>sum\+order\.amount,0\)\)\}`/);
   assertJsMatch(page,/<SectionHead title="采购订单" note=\{orderListSummary\(visible\)\} \/>/);
   assertJsMatch(page,/<SectionHead title="我的采购订单" note=\{orderListSummary\(visible\)\} \/>/);
   assertJsNotMatch(page,/note=\{`\$\{visible\.length\} 笔`\}/);
@@ -579,10 +580,16 @@ test("order list headers summarize both order count and total item quantity",asy
 
 test("multi-product order card titles show styles and total quantity",async()=>{
   const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
-  assertJsMatch(page,/const totalQuantity=order\.items\.reduce\(\(sum,item\)=>sum\+item\.qty,0\)/);
+  assertJsMatch(page,/const totalQuantity=orderQuantity\(order\)/);
   assertJsMatch(page,/const listTitle=order\.itemCount>1/);
   assertJsMatch(page,/等\$\{order\.itemCount\}款 · 共\$\{totalQuantity\}件/);
   assertJsMatch(page,/<h4 title=\{listTitle\}>\{listTitle\}<\/h4>/);
+});
+
+test("order details count units rather than style rows",async()=>{
+  const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
+  assertJsMatch(page,/<div className="items-card-head"><h3>商品清单<\/h3><span>\{orderQuantity\(order\)\} 件 · \{money\(order\.amount\)\}<\/span><\/div>/);
+  assertJsNotMatch(page,/<div className="items-card-head"><h3>商品清单<\/h3><span>\{order\.itemCount\} 件/);
 });
 
 test("admin batch selection summarizes selected orders and item quantity",async()=>{

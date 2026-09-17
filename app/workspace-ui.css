@@ -37,9 +37,9 @@ button:disabled { cursor: not-allowed; }
 .identity-pill span { max-width: 110px; font-size: 11px; }
 .identity-logout { display: grid; place-items: center; min-width: 44px; min-height: 44px; border-radius: 12px; padding: 8px; font-size: 12px; box-shadow: none; }
 .page-stage > section { min-width: 0; }
-.section-head { align-items: center; gap: 10px; margin: 24px 0 12px; }
+.section-head { align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 24px 0 12px; }
 .section-head h3 { font-size: 17px; letter-spacing: -.025em; }
-.section-head > span { text-align: right; font-size: 12px; color: var(--muted); }
+.section-head > span { min-width: 0; margin-left: auto; text-align: right; overflow-wrap: anywhere; font-size: 12px; color: var(--muted); }
 
 .date-row { padding: 8px 0 18px; }
 .date-row h2 { font-size: 26px; }
