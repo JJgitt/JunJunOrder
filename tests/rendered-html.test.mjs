@@ -544,7 +544,7 @@ test("one purchase order carries multiple item rows with per-item shipping",asyn
   assertJsMatch(page,/`商品 \$\{index\+1\}`/);
   assertJsMatch(page,/className="items-total"/);
   assertJsMatch(page,/<h3>商品清单<\/h3>/);
-  assertJsMatch(page,/\$\{order\.title\} 等\$\{order\.itemCount\}款 · 共\$\{orderQuantity\(order\)\}件/);
+  assertJsMatch(page,/\$\{order\.title\} 等\$\{order\.itemCount\}款 · 共\$\{quantity\}件/);
   assert.match(exportRoute,/itemsByOrder/);
   assert.match(exportRoute,/order\.status==="已入库"\?\(item\.shippedAt\?"已发货":"待发货"\):order\.status/);
 });
@@ -578,12 +578,15 @@ test("order list headers summarize visible orders, purchased quantity, and paid 
   assertJsNotMatch(page,/note=\{`\$\{visible\.length\} 笔`\}/);
 });
 
-test("multi-product order card titles show styles and total quantity",async()=>{
+test("order titles show quantity for repeated single styles and total units for multiple styles",async()=>{
   const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
-  assertJsMatch(page,/const totalQuantity=orderQuantity\(order\)/);
-  assertJsMatch(page,/const listTitle=order\.itemCount>1/);
-  assertJsMatch(page,/等\$\{order\.itemCount\}款 · 共\$\{totalQuantity\}件/);
+  assertJsMatch(page,/const orderTitleWithQuantity = \(order:PurchaseOrder\) =>/);
+  assertJsMatch(page,/const quantity=orderQuantity\(order\)/);
+  assertJsMatch(page,/等\$\{order\.itemCount\}款 · 共\$\{quantity\}件/);
+  assertJsMatch(page,/\$\{order\.items\[0\]\?\.size\}码\$\{quantity>1\?`等\$\{quantity\}件`:""\}/);
+  assertJsMatch(page,/const listTitle=orderTitleWithQuantity\(order\)/);
   assertJsMatch(page,/<h4 title=\{listTitle\}>\{listTitle\}<\/h4>/);
+  assert.equal((page.match(/<h3>\{orderTitleWithQuantity\(order\)\}<\/h3>/g)??[]).length,2);
 });
 
 test("order details count units rather than style rows",async()=>{

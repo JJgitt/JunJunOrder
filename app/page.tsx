@@ -54,6 +54,12 @@ const statusLabel = (status: OrderStatus) => readyToShip(status) ? "待发货" :
 const money = (value: number) => `¥${value.toLocaleString("zh-CN", {minimumFractionDigits: 2})}`;
 /** 每个商品行代表一种款式，件数是所有款式数量之和。 */
 const orderQuantity = (order: PurchaseOrder) => order.items.reduce((sum, item) => sum + item.qty, 0);
+const orderTitleWithQuantity = (order: PurchaseOrder) => {
+    const quantity = orderQuantity(order);
+    return order.itemCount > 1
+        ? `${order.title} 等${order.itemCount}款 · 共${quantity}件`
+        : `${order.title} · ${order.items[0]?.size}码${quantity > 1 ? `等${quantity}件` : ""}`;
+};
 /** 金额使用订单实付总额，不能再乘数量，否则会重复计算。 */
 const orderListSummary = (list: PurchaseOrder[]) => `${list.length} 笔 · ${list.reduce((sum, order) => sum + orderQuantity(order), 0)} 件 · 金额 ${money(list.reduce((sum, order) => sum + order.amount, 0))}`;
 const orderSortOptions: Array<{ key: OrderSortKey; label: string }> = [
@@ -1048,8 +1054,7 @@ function OrderCard({
                        showLocation = false
                    }: { order: PurchaseOrder; onOpen: () => void; actions?: React.ReactNode; selectable?: boolean; selected?: boolean; onSelect?: () => void; showOutbound?: boolean; normalizeStatus?: boolean; showPurchaserContact?: boolean; showLocation?: boolean }) {
     const {dateTime} = useServerClock();
-    const totalQuantity = orderQuantity(order);
-    const listTitle = order.itemCount > 1 ? `${order.title} 等${order.itemCount}款 · 共${totalQuantity}件` : `${order.title} · ${order.items[0]?.size}码`;
+    const listTitle = orderTitleWithQuantity(order);
     return <article className={`order-card edge-${statusTone[order.status]} ${selected ? "selected" : ""}`}>
         {selectable &&
             <label className="order-select"><input type="checkbox" aria-label={`选择订单 ${order.id}`} checked={selected}
@@ -1817,7 +1822,7 @@ function ManualReceiveSheet({
     return <Modal title="手动确认入库" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
         <div className="detail-card edge-orange">
             <div className="detail-title">
-                <h3>{order.itemCount > 1 ? `${order.title} 等${order.itemCount}款 · 共${orderQuantity(order)}件` : `${order.title} · ${order.items[0]?.size}码`}</h3>
+                <h3>{orderTitleWithQuantity(order)}</h3>
                 <Badge tone="orange">在途</Badge></div>
             <KeyValue label="采购渠道 / 单号" value={`${order.platform} · ${order.platformNo || "未填写"}`}
                       copyValue={order.platformNo || undefined}/><KeyValue label="商品清单" value={<SkuList
@@ -1850,7 +1855,7 @@ function OrderDetail({
     return <Modal title="订单详情" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
         <div className={`detail-card edge-${statusTone[order.status]}`}>
             <div className="detail-title">
-                <h3>{order.itemCount > 1 ? `${order.title} 等${order.itemCount}款 · 共${orderQuantity(order)}件` : `${order.title} · ${order.items[0]?.size}码`}</h3>
+                <h3>{orderTitleWithQuantity(order)}</h3>
                 <Badge tone={statusTone[order.status]}>{canManage ? statusLabel(order.status) : order.status}</Badge>
             </div>
             <KeyValue label="采购渠道" value={order.platform}/><KeyValue label="平台单号" value={order.platformNo || "未填写"}
