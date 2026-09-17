@@ -8,6 +8,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+## Project knowledge for agents
+
+- Before changing business behavior, read [docs/wiki/README.md](docs/wiki/README.md) and follow its topic-specific links.
+- Treat code, `db/schema.ts`, and applied `drizzle/*.sql` as the source of truth when a document is stale; update the Wiki with the change.
+- Preserve unrelated working-tree changes. Never put credentials or production data in documentation.
+
 ## Delivery workflow
 
 - After completing a code change and its relevant local checks pass, commit the scoped changes, push them to `main`, and monitor the existing CI/CD workflow until the production deployment succeeds.
