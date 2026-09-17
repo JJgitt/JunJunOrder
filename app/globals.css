@@ -2403,14 +2403,150 @@ button:active {
     background: #fff
 }
 
-.tracking-links {
+.tracking-panel {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 4px
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%
 }
 
-.tracking-links a {
+.key-value:has(.tracking-panel) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px
+}
+
+.key-value:has(.tracking-panel) > b {
+    width: 100%
+}
+
+.tracking-query {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%
+}
+
+.tracking-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px
+}
+
+.tracking-tail {
+    width: 104px;
+    padding: 4px 8px;
+    border: 1px solid #cbdaf3;
+    border-radius: 7px;
+    background: #fff;
+    color: #334155;
+    font-size: 12px;
+    text-align: center
+}
+
+.tracking-button {
+    border: 1px solid #cbdaf3;
+    border-radius: 7px;
+    background: #f4f8ff;
+    color: #2464c7;
+    padding: 4px 9px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap
+}
+
+.tracking-button:disabled {
+    opacity: .55
+}
+
+.tracking-result {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    width: 100%
+}
+
+.tracking-state {
+    font-size: 11px;
+    font-weight: 700;
+    color: #2464c7
+}
+
+.tracking-empty {
+    font-size: 11.5px;
+    color: #75808e
+}
+
+.tracking-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-left: 2px solid #dfe7f3;
+    padding: 2px 0 2px 12px;
+    text-align: left;
+    width: 100%
+}
+
+.tracking-node {
+    position: relative;
+    display: block
+}
+
+.tracking-node::before {
+    content: "";
+    position: absolute;
+    left: -17px;
+    top: 3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #b6c2d2
+}
+
+.tracking-node.latest::before {
+    background: #2464c7;
+    box-shadow: 0 0 0 3px rgba(36, 100, 199, .14)
+}
+
+.tracking-time {
+    display: block;
+    font-size: 11px;
+    color: #93a0b1
+}
+
+.tracking-station {
+    display: block;
+    font-size: 12px;
+    color: #47566c;
+    line-height: 1.5
+}
+
+.tracking-node.latest .tracking-station {
+    color: #17223a;
+    font-weight: 600
+}
+
+.tracking-failed {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    text-align: right
+}
+
+.tracking-failed-text {
+    font-size: 11.5px;
+    color: #b4232a;
+    line-height: 1.5
+}
+
+.tracking-failed a {
     border: 1px solid #cbdaf3;
     border-radius: 7px;
     background: #f4f8ff;

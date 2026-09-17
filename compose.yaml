@@ -41,6 +41,8 @@ services:
       DEWU_SYNC_ENDPOINT: ${DEWU_SYNC_ENDPOINT:-}
       DEWU_APP_KEY: ${DEWU_APP_KEY:-}
       DEWU_APP_SECRET: ${DEWU_APP_SECRET:-}
+      KDNIAO_EBUSINESS_ID: ${KDNIAO_EBUSINESS_ID:-}
+      KDNIAO_API_KEY: ${KDNIAO_API_KEY:-}
     volumes:
       - app_uploads:/app/data/uploads
     healthcheck:

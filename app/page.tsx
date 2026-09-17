@@ -1867,7 +1867,7 @@ function OrderDetail({
             <KeyValue label="采购员手机号" value={order.purchaserPhone} copyValue={order.purchaserPhone}/>}<KeyValue
             label="采购物流" value={<PurchaseCourierList items={order.items}
                                                      showItem={order.items.length > 1}/>}/>{order.items.some(item => item.purchaseCourierNo) &&
-            <KeyValue label="物流轨迹" value={<TrackingLinks items={order.items}/>}/>}{showLocation && order.location &&
+            <KeyValue label="物流轨迹" value={<TrackingPanel items={order.items}/>}/>}{showLocation && order.location &&
             <KeyValue label="库位" value={order.location}/>}<KeyValue label="采购结款"
             value={order.settled ? `已结款 · ${order.settledAmount != null ? money(order.settledAmount) : "金额未记录"} · ${dateTime(order.settledAt)}` : order.receivedAt ? "待结款" : "入库后可结款"}
             highlight={order.settled}/></div>
@@ -2400,12 +2400,55 @@ function SkuList({items}: { items: OrderItem[] }) {
                                                                                               label="商品货号"/><small>{item.size}码 · ×{item.qty}</small></span>)}</span>;
 }
 
-function TrackingLinks({items}: { items: OrderItem[] }) {
+type TrackingTrace = { time: string; station: string };
+type TrackingQueryOutcome = { ok: boolean; message?: string; error?: string; stateLabel?: string; traces?: TrackingTrace[] };
+
+/** 订单详情「物流轨迹」：优先走快递鸟 API 应用内查询（/api/tracking），失败时回退快递100网页跳转。 */
+function TrackingPanel({items}: { items: OrderItem[] }) {
     const trackable = items.filter(item => item.purchaseCourierNo);
-    return <span className="tracking-links">{trackable.map(item => <a key={item.id}
-                                                                       href={courierTrackingUrl(item.purchaseCourierCompany, item.purchaseCourierNo)}
-                                                                       target="_blank"
-                                                                       rel="noreferrer">{trackable.length > 1 ? `${item.sku} 物流 ↗` : "查看物流 ↗"}</a>)}</span>;
+    return <span className="tracking-panel">{trackable.map(item => <TrackingQuery key={item.id}
+                                                                                  label={trackable.length > 1 ? `${item.sku} 物流` : "查询物流"}
+                                                                                  company={item.purchaseCourierCompany}
+                                                                                  courierNo={item.purchaseCourierNo}/>)}</span>;
+}
+
+function TrackingQuery({label, company, courierNo}: { label: string; company: string; courierNo: string }) {
+    const [busy, setBusy] = useState(false);
+    const [tail, setTail] = useState("");
+    const [outcome, setOutcome] = useState<TrackingQueryOutcome | null>(null);
+    const needTail = company === "顺丰速运";
+    async function query() {
+        setBusy(true);
+        try {
+            const params = new URLSearchParams({company, no: courierNo});
+            if (needTail) params.set("tail", tail.trim());
+            const response = await fetch(`/api/tracking?${params.toString()}`, {headers: {"cache-control": "no-store"}});
+            const data = await response.json() as TrackingQueryOutcome | null;
+            setOutcome(data?.ok === true ? data : {ok: false, message: data?.message ?? data?.error ?? "查询失败"});
+        } catch {
+            setOutcome({ok: false, message: "网络异常，请稍后重试"});
+        }
+        setBusy(false);
+    }
+    return <span className="tracking-query">
+        <span className="tracking-actions">
+            {needTail && <input className="tracking-tail" inputMode="numeric" maxLength={4} placeholder="手机后4位"
+                                 aria-label="收件人或寄件人手机号后四位" value={tail}
+                                 onChange={event => setTail(event.target.value.replace(/\D/g, "").slice(0, 4))}/>}
+            <button type="button" className="tracking-button" disabled={busy} onClick={() => void query()}>{busy ? "查询中…" : `${label} ↗`}</button>
+        </span>
+        {outcome && (outcome.ok ? <span className="tracking-result">
+            <span className="tracking-state">{outcome.stateLabel}{outcome.traces?.length ? ` · ${outcome.traces.length} 条轨迹` : ""}</span>
+            {outcome.traces?.length ? <span className="tracking-timeline">{outcome.traces.slice().reverse().map((trace, index) => <span
+                key={`${trace.time}-${index}`} className={`tracking-node${index === 0 ? " latest" : ""}`}>
+                <span className="tracking-time">{trace.time}</span>
+                <span className="tracking-station">{trace.station}</span>
+            </span>)}</span> : <span className="tracking-empty">暂无轨迹信息</span>}
+        </span> : <span className="tracking-failed">
+            <span className="tracking-failed-text">{outcome.message}</span>
+            <a href={courierTrackingUrl(company, courierNo)} target="_blank" rel="noreferrer">改用快递100网页查询 ↗</a>
+        </span>)}
+    </span>;
 }
 
 function PurchaseCourierList({items, showItem = false}: { items: OrderItem[]; showItem?: boolean }) {

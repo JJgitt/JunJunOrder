@@ -317,19 +317,36 @@ test("displayed order and courier numbers provide direct copy actions",async()=>
   assertCssMatch(styles,/\.copy-button\.copied\{/);
 });
 
-test("order detail provides zero-cost tracking links to courier web query",async()=>{
-  const [page,styles,courier]=await Promise.all([
+test("order detail queries in-app kdniao tracking with kuaidi100 web fallback",async()=>{
+  const [page,styles,courier,trackingRoute,trackingLib]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
     readFile(new URL("../lib/courier.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/tracking/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../lib/tracking.ts",import.meta.url),"utf8"),
   ]);
-  assertJsMatch(page,/function TrackingLinks/);
-  assertJsMatch(page,/href=\{courierTrackingUrl\(item\.purchaseCourierCompany,item\.purchaseCourierNo\)\}/);
-  assertJsMatch(page,/label="物流轨迹" value=\{<TrackingLinks items=\{order\.items\}\/>\}/);
+  assertJsMatch(page,/function TrackingPanel/);
+  assertJsMatch(page,/function TrackingQuery/);
+  assertJsMatch(page,/label="物流轨迹" value=\{<TrackingPanel items=\{order\.items\}\/>\}/);
+  assertJsMatch(page,/fetch\(`\/api\/tracking\?\$\{params\.toString\(\)\}`/);
+  assertJsMatch(page,/params\.set\("tail",tail\.trim\(\)\)/);
+  assertJsMatch(page,/aria-label="收件人或寄件人手机号后四位"/);
+  assertJsMatch(page,/outcome\.traces\.slice\(\)\.reverse\(\)\.map/);
+  assertJsMatch(page,/href=\{courierTrackingUrl\(company,courierNo\)\}/);
   assertJsMatch(page,/target="_blank"/);
+  assertJsMatch(page,/改用快递100网页查询/);
+  assert.match(trackingRoute,/requireAppUser\(request\)/);
+  assert.match(trackingRoute,/status: 501/);
+  assert.match(trackingRoute,/normalizeCourierNo\(params\.get\("no"\)/);
+  assert.match(trackingLib,/EbusinessOrderHandle\.aspx/);
+  assert.match(trackingLib,/kdniaoDataSign/);
+  assert.match(trackingLib,/AbortSignal\.timeout/);
   assert.match(courier,/export function courierTrackingUrl/);
   assert.match(courier,/kuaidi100\.com\/chaxun/);
-  assertCssMatch(styles,/\.tracking-links a\{/);
+  assertCssMatch(styles,/\.tracking-panel\{/);
+  assertCssMatch(styles,/\.tracking-timeline\{/);
+  assertCssMatch(styles,/\.tracking-node\.latest::before\{/);
+  assertCssMatch(styles,/\.tracking-failed a\{/);
 });
 
 test("displayed product SKUs provide direct copy actions",async()=>{
