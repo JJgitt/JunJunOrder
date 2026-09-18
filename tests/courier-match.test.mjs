@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { courierTrackingUrl, findOrdersByCourierNo, findTransitCandidatesByCourierTail, kdniaoShipperCode, normalizeCourierNo, orderMatchesCourierNo } from "../lib/courier.ts";
+import { courierTrackingUrl, findOrdersByCourierNo, findTransitCandidatesByCourierTail, kdniaoBackUrl, kdniaoShipperCode, normalizeCourierNo, orderMatchesCourierNo } from "../lib/courier.ts";
 
 test("courier numbers compare without spaces, dashes or letter case", () => {
   assert.equal(normalizeCourierNo("sf 1234-5678"), "SF12345678");
@@ -42,11 +42,23 @@ test("kdniao shipper codes map app courier companies to official codes", () => {
 test("tracking links open the free kdniao result page for known couriers", () => {
   assert.equal(courierTrackingUrl("顺丰速运", "sf 1392-0415 8866"),
     "https://www.kdniao.com/JSInvoke/MSearchResult.aspx?expCode=SF&expNo=SF139204158866");
-  assert.equal(courierTrackingUrl("京东物流", "JD014892367120", "http://113.46.133.47/?tab=orders"),
-    "https://www.kdniao.com/JSInvoke/MSearchResult.aspx?expCode=JD&expNo=JD014892367120&backUrl=http%3A%2F%2F113.46.133.47%2F%3Ftab%3Dorders");
+  assert.equal(courierTrackingUrl("京东物流", "JD014892367120", "https://order.example.com/"),
+    "https://www.kdniao.com/JSInvoke/MSearchResult.aspx?expCode=JD&expNo=JD014892367120&backUrl=https%3A%2F%2Forder.example.com%2F");
   assert.equal(courierTrackingUrl("极兔速递", "JT5001234567890"),
     "https://www.kdniao.com/JSInvoke/MSearchResult.aspx?expCode=JTSD&expNo=JT5001234567890");
   assert.equal(courierTrackingUrl("顺丰速运", ""), "");
+});
+
+test("bare-IP back URLs are rewritten so kdniao's WAF stops returning 403", () => {
+  // 快递鸟对 backUrl=http://<IP> 直接 403；单斜杠形式浏览器仍按 http://<IP>/ 打开。
+  assert.equal(kdniaoBackUrl("http://113.46.133.47/"), "http:/113.46.133.47/");
+  assert.equal(kdniaoBackUrl("https://113.46.133.47:8443/?tab=orders"), "https:/113.46.133.47:8443/?tab=orders");
+  assert.equal(kdniaoBackUrl("https://order.example.com/"), "https://order.example.com/");
+  assert.equal(kdniaoBackUrl("http://1234.5.6.7/"), "http://1234.5.6.7/");
+  assert.equal(kdniaoBackUrl(""), "");
+  assert.equal(new URL(kdniaoBackUrl("http://113.46.133.47/")).href, "http://113.46.133.47/");
+  assert.equal(courierTrackingUrl("京东物流", "JD0260198734110", "http://113.46.133.47/"),
+    "https://www.kdniao.com/JSInvoke/MSearchResult.aspx?expCode=JD&expNo=JD0260198734110&backUrl=http%3A%2F113.46.133.47%2F");
 });
 
 test("tracking links fall back to kuaidi100 number recognition for unknown couriers", () => {

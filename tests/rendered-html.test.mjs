@@ -328,7 +328,8 @@ test("order detail tracking is a pure web redirect without any paid API",async()
   assertJsMatch(page,/function TrackingPanel/);
   assertJsMatch(page,/label="物流轨迹" value=\{<TrackingPanel items=\{order\.items\}\/>\}/);
   assertJsMatch(page,/href=\{courierTrackingUrl\(item\.purchaseCourierCompany,item\.purchaseCourierNo\)\}/);
-  assertJsMatch(page,/window\.open\(courierTrackingUrl\(item\.purchaseCourierCompany,item\.purchaseCourierNo,window\.location\.href\),"_blank","noopener,noreferrer"\)/);
+  assertJsMatch(page,/window\.open\(courierTrackingUrl\(item\.purchaseCourierCompany,item\.purchaseCourierNo,`\$\{window\.location\.origin\}\/`\),"_blank","noopener,noreferrer"\)/);
+  assert.match(courier,/export function kdniaoBackUrl/);
   assertJsMatch(page,/target="_blank" rel="noreferrer"/);
   assertJsNotMatch(page,/\/api\/tracking/);
   assertJsNotMatch(page,/function TrackingQuery/);

@@ -42,6 +42,13 @@ export function kdniaoShipperCode(company: unknown): string | null {
   return kdniaoShipperCodes[String(company ?? "").trim()] ?? null;
 }
 
+/** 快递鸟的 WAF 会对查询参数里「http(s)://裸 IP」的完整地址直接返 403（域名地址不受影响）。
+ *  线上目前用 IP 访问，所以把 `http://1.2.3.4/` 写成 `http:/1.2.3.4/`：浏览器按 WHATWG URL 规则会把它当成 `http://1.2.3.4/` 打开，
+ *  返回键仍能回到本系统。换成域名后原样透传。 */
+export function kdniaoBackUrl(url: unknown) {
+  return String(url ?? "").trim().replace(/^(https?:)\/\/(?=\d{1,3}(?:\.\d{1,3}){3}(?:[/:?#]|$))/i, "$1/");
+}
+
 /** 跳转查询物流的网页地址（纯跳转，不调用任何付费 API）。
  *  已知快递公司：快递鸟对外免费的移动端结果页（服务端直出轨迹，无验证码、登录和 App 引导），
  *  backUrl 让页面左上角返回键回到本系统。
@@ -52,6 +59,7 @@ export function courierTrackingUrl(company: unknown, courierNo: unknown, backUrl
   const code = kdniaoShipperCode(company);
   if (!code) return `https://www.kuaidi100.com/chaxun?nu=${encodeURIComponent(no)}`;
   const params = new URLSearchParams({ expCode: code, expNo: no });
-  if (backUrl) params.set("backUrl", backUrl);
+  const back = kdniaoBackUrl(backUrl);
+  if (back) params.set("backUrl", back);
   return `https://www.kdniao.com/JSInvoke/MSearchResult.aspx?${params.toString()}`;
 }

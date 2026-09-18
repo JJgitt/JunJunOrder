@@ -2430,9 +2430,9 @@ function TrackingPanel({items}: { items: OrderItem[] }) {
                                                                      href={courierTrackingUrl(item.purchaseCourierCompany, item.purchaseCourierNo)}
                                                                      target="_blank" rel="noreferrer"
                                                                      onClick={event => {
-                                                                         // 点击时才读当前地址作为返回地址，渲染阶段不碰 window，避免服务端/客户端输出不一致。
+                                                                         // 点击时才读站点地址作为返回地址，渲染阶段不碰 window，避免服务端/客户端输出不一致。
                                                                          event.preventDefault();
-                                                                         window.open(courierTrackingUrl(item.purchaseCourierCompany, item.purchaseCourierNo, window.location.href), "_blank", "noopener,noreferrer");
+                                                                         window.open(courierTrackingUrl(item.purchaseCourierCompany, item.purchaseCourierNo, `${window.location.origin}/`), "_blank", "noopener,noreferrer");
                                                                      }}>{trackable.length > 1 ? `${item.sku} 物流` : "查询物流"} ↗</a>)}</span>;
 }
 
