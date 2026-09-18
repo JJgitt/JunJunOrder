@@ -2422,55 +2422,18 @@ function SkuList({items}: { items: OrderItem[] }) {
                                                                                               label="商品货号"/><small>{item.size}码 · ×{item.qty}</small></span>)}</span>;
 }
 
-type TrackingTrace = { time: string; station: string };
-type TrackingQueryOutcome = { ok: boolean; message?: string; error?: string; stateLabel?: string; traces?: TrackingTrace[] };
-
-/** 订单详情「物流轨迹」：优先走快递鸟 API 应用内查询（/api/tracking），失败时回退快递100网页跳转。 */
+/** 订单详情「物流轨迹」：纯网页跳转，不调用任何付费 API。
+ *  已知快递公司打开快递鸟免费结果页并带上返回地址；未收录的公司打开快递100 按单号识别。新窗口打开，不丢当前订单弹层。 */
 function TrackingPanel({items}: { items: OrderItem[] }) {
     const trackable = items.filter(item => item.purchaseCourierNo);
-    return <span className="tracking-panel">{trackable.map(item => <TrackingQuery key={item.id}
-                                                                                  label={trackable.length > 1 ? `${item.sku} 物流` : "查询物流"}
-                                                                                  company={item.purchaseCourierCompany}
-                                                                                  courierNo={item.purchaseCourierNo}/>)}</span>;
-}
-
-function TrackingQuery({label, company, courierNo}: { label: string; company: string; courierNo: string }) {
-    const [busy, setBusy] = useState(false);
-    const [tail, setTail] = useState("");
-    const [outcome, setOutcome] = useState<TrackingQueryOutcome | null>(null);
-    const needTail = company === "顺丰速运";
-    async function query() {
-        setBusy(true);
-        try {
-            const params = new URLSearchParams({company, no: courierNo});
-            if (needTail) params.set("tail", tail.trim());
-            const response = await fetch(`/api/tracking?${params.toString()}`, {headers: {"cache-control": "no-store"}});
-            const data = await response.json() as TrackingQueryOutcome | null;
-            setOutcome(data?.ok === true ? data : {ok: false, message: data?.message ?? data?.error ?? "查询失败"});
-        } catch {
-            setOutcome({ok: false, message: "网络异常，请稍后重试"});
-        }
-        setBusy(false);
-    }
-    return <span className="tracking-query">
-        <span className="tracking-actions">
-            {needTail && <input className="tracking-tail" inputMode="numeric" maxLength={4} placeholder="手机后4位"
-                                 aria-label="收件人或寄件人手机号后四位" value={tail}
-                                 onChange={event => setTail(event.target.value.replace(/\D/g, "").slice(0, 4))}/>}
-            <button type="button" className="tracking-button" disabled={busy} onClick={() => void query()}>{busy ? "查询中…" : `${label} ↗`}</button>
-        </span>
-        {outcome && (outcome.ok ? <span className="tracking-result">
-            <span className="tracking-state">{outcome.stateLabel}{outcome.traces?.length ? ` · ${outcome.traces.length} 条轨迹` : ""}</span>
-            {outcome.traces?.length ? <span className="tracking-timeline">{outcome.traces.slice().reverse().map((trace, index) => <span
-                key={`${trace.time}-${index}`} className={`tracking-node${index === 0 ? " latest" : ""}`}>
-                <span className="tracking-time">{trace.time}</span>
-                <span className="tracking-station">{trace.station}</span>
-            </span>)}</span> : <span className="tracking-empty">暂无轨迹信息</span>}
-        </span> : <span className="tracking-failed">
-            <span className="tracking-failed-text">{outcome.message}</span>
-            <a href={courierTrackingUrl(company, courierNo)} target="_blank" rel="noreferrer">改用快递100网页查询 ↗</a>
-        </span>)}
-    </span>;
+    return <span className="tracking-panel">{trackable.map(item => <a key={item.id} className="tracking-button"
+                                                                     href={courierTrackingUrl(item.purchaseCourierCompany, item.purchaseCourierNo)}
+                                                                     target="_blank" rel="noreferrer"
+                                                                     onClick={event => {
+                                                                         // 点击时才读当前地址作为返回地址，渲染阶段不碰 window，避免服务端/客户端输出不一致。
+                                                                         event.preventDefault();
+                                                                         window.open(courierTrackingUrl(item.purchaseCourierCompany, item.purchaseCourierNo, window.location.href), "_blank", "noopener,noreferrer");
+                                                                     }}>{trackable.length > 1 ? `${item.sku} 物流` : "查询物流"} ↗</a>)}</span>;
 }
 
 function PurchaseCourierList({items, showItem = false}: { items: OrderItem[]; showItem?: boolean }) {

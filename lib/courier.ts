@@ -24,22 +24,34 @@ export function findTransitCandidatesByCourierTail<T extends { status: string; c
   )).slice(0, 5);
 }
 
-/** 跳转查询物流的网页地址（零成本方案）：快递100网页版查询页。
- *  已知快递公司携带 com 参数预选公司，其他/自填公司仅传单号，由页面按单号智能识别。 */
-const trackingCompanyCodes: Record<string, string> = {
-  "顺丰速运": "shunfeng",
-  "京东物流": "jd",
-  "中通快递": "zhongtong",
-  "圆通速递": "yuantong",
-  "申通快递": "shentong",
-  "韵达快递": "yunda",
-  "极兔速递": "jtexpress",
-  "邮政EMS": "ems",
+/** 应用内快递公司名 → 快递鸟 ShipperCode，只用于拼快递鸟网页查询地址。 */
+const kdniaoShipperCodes: Record<string, string> = {
+  "顺丰速运": "SF",
+  "京东物流": "JD",
+  "中通快递": "ZTO",
+  "圆通速递": "YTO",
+  "申通快递": "STO",
+  "韵达快递": "YD",
+  "极兔速递": "JTSD",
+  "邮政EMS": "EMS",
+  "德邦物流": "DBL",
+  "德邦快递": "DBL",
 };
 
-export function courierTrackingUrl(company: unknown, courierNo: unknown) {
+export function kdniaoShipperCode(company: unknown): string | null {
+  return kdniaoShipperCodes[String(company ?? "").trim()] ?? null;
+}
+
+/** 跳转查询物流的网页地址（纯跳转，不调用任何付费 API）。
+ *  已知快递公司：快递鸟对外免费的移动端结果页（服务端直出轨迹，无验证码、登录和 App 引导），
+ *  backUrl 让页面左上角返回键回到本系统。
+ *  未收录的公司：快递100 网页版，仅传单号由页面按单号识别快递公司。 */
+export function courierTrackingUrl(company: unknown, courierNo: unknown, backUrl = "") {
   const no = normalizeCourierNo(courierNo);
   if (!no) return "";
-  const com = trackingCompanyCodes[String(company ?? "").trim()];
-  return `https://www.kuaidi100.com/chaxun?${com ? `com=${com}&` : ""}nu=${encodeURIComponent(no)}`;
+  const code = kdniaoShipperCode(company);
+  if (!code) return `https://www.kuaidi100.com/chaxun?nu=${encodeURIComponent(no)}`;
+  const params = new URLSearchParams({ expCode: code, expNo: no });
+  if (backUrl) params.set("backUrl", backUrl);
+  return `https://www.kdniao.com/JSInvoke/MSearchResult.aspx?${params.toString()}`;
 }

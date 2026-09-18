@@ -317,36 +317,30 @@ test("displayed order and courier numbers provide direct copy actions",async()=>
   assertCssMatch(styles,/\.copy-button\.copied\{/);
 });
 
-test("order detail queries in-app kdniao tracking with kuaidi100 web fallback",async()=>{
-  const [page,styles,courier,trackingRoute,trackingLib]=await Promise.all([
+test("order detail tracking is a pure web redirect without any paid API",async()=>{
+  const [page,styles,courier,compose,envExample]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
     readFile(new URL("../lib/courier.ts",import.meta.url),"utf8"),
-    readFile(new URL("../app/api/tracking/route.ts",import.meta.url),"utf8"),
-    readFile(new URL("../lib/tracking.ts",import.meta.url),"utf8"),
+    readFile(new URL("../compose.yaml",import.meta.url),"utf8"),
+    readFile(new URL("../.env.example",import.meta.url),"utf8"),
   ]);
   assertJsMatch(page,/function TrackingPanel/);
-  assertJsMatch(page,/function TrackingQuery/);
   assertJsMatch(page,/label="物流轨迹" value=\{<TrackingPanel items=\{order\.items\}\/>\}/);
-  assertJsMatch(page,/fetch\(`\/api\/tracking\?\$\{params\.toString\(\)\}`/);
-  assertJsMatch(page,/params\.set\("tail",tail\.trim\(\)\)/);
-  assertJsMatch(page,/aria-label="收件人或寄件人手机号后四位"/);
-  assertJsMatch(page,/outcome\.traces\.slice\(\)\.reverse\(\)\.map/);
-  assertJsMatch(page,/href=\{courierTrackingUrl\(company,courierNo\)\}/);
-  assertJsMatch(page,/target="_blank"/);
-  assertJsMatch(page,/改用快递100网页查询/);
-  assert.match(trackingRoute,/requireAppUser\(request\)/);
-  assert.match(trackingRoute,/status: 501/);
-  assert.match(trackingRoute,/normalizeCourierNo\(params\.get\("no"\)/);
-  assert.match(trackingLib,/EbusinessOrderHandle\.aspx/);
-  assert.match(trackingLib,/kdniaoDataSign/);
-  assert.match(trackingLib,/AbortSignal\.timeout/);
+  assertJsMatch(page,/href=\{courierTrackingUrl\(item\.purchaseCourierCompany,item\.purchaseCourierNo\)\}/);
+  assertJsMatch(page,/window\.open\(courierTrackingUrl\(item\.purchaseCourierCompany,item\.purchaseCourierNo,window\.location\.href\),"_blank","noopener,noreferrer"\)/);
+  assertJsMatch(page,/target="_blank" rel="noreferrer"/);
+  assertJsNotMatch(page,/\/api\/tracking/);
+  assertJsNotMatch(page,/function TrackingQuery/);
   assert.match(courier,/export function courierTrackingUrl/);
+  assert.match(courier,/kdniao\.com\/JSInvoke\/MSearchResult\.aspx/);
   assert.match(courier,/kuaidi100\.com\/chaxun/);
+  assert.doesNotMatch(compose,/KDNIAO_/);
+  assert.doesNotMatch(envExample,/KDNIAO_/);
+  await assert.rejects(access(new URL("../app/api/tracking/route.ts",import.meta.url)));
+  await assert.rejects(access(new URL("../lib/tracking.ts",import.meta.url)));
   assertCssMatch(styles,/\.tracking-panel\{/);
-  assertCssMatch(styles,/\.tracking-timeline\{/);
-  assertCssMatch(styles,/\.tracking-node\.latest::before\{/);
-  assertCssMatch(styles,/\.tracking-failed a\{/);
+  assertCssMatch(styles,/\.tracking-button\{[^}]*text-decoration:none/);
 });
 
 test("displayed product SKUs provide direct copy actions",async()=>{
