@@ -877,6 +877,7 @@ function AdminOrders({
     const [batchSettleOpen, setBatchSettleOpen] = useState(false);
     const [dateDays, setDateDays] = useState(30);
     const [sort, setSort] = useState<OrderSort>(null);
+    const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const {now, timeZone} = useServerClock();
     const {start: dateStart, end: dateEnd} = dayRange(now, timeZone, dateDays);
@@ -887,6 +888,8 @@ function AdminOrders({
     const cycleSort = (key: OrderSortKey) => setSort(current => current?.key !== key ? {key, direction: "desc"} : current.direction === "desc" ? {key, direction: "asc"} : null);
     const activeFilterCount = Number(Boolean(query.trim())) + Number(statuses.length > 0) + Number(platform !== "全部渠道") +
         Number(buyers.length > 0) + Number(dateDays !== 30) + Number(settlement !== "全部结款状态") + Number(sort !== null);
+    const advancedFilterCount = Number(dateDays !== 30) + Number(settlement !== "全部结款状态") + Number(sort !== null);
+    const advancedFilterSummary = `${dateDays === 1 ? "今天" : `近${dateDays}天`} · ${settlement} · ${sort ? `${orderSortOptions.find(option => option.key === sort.key)?.label}${sort.direction === "desc" ? "倒序" : "顺序"}` : "默认排序"}`;
     const clearAllFilters = () => {
         setQuery("");
         setStatuses([]);
@@ -950,36 +953,13 @@ function AdminOrders({
         }}><i>🚚</i><span><b>{readyCount} 笔订单等待更新发货信息</b><small>可单笔更新，或勾选多笔订单批量填写发货物流</small></span><em>查看 ›</em>
         </button>}
         <StatusFilter options={["全部", "待审核", "在途", "待发货", "已发货", "已驳回"]} value={statuses} onChange={setStatuses}/>
-        <div className="select-row order-filter-row"><select aria-label="采购渠道" value={platform} onChange={e => setPlatform(e.target.value)}>
+        <div className="select-row order-filter-row order-primary-filter-row"><select aria-label="采购渠道" value={platform} onChange={e => setPlatform(e.target.value)}>
             <option>全部渠道</option>
             {purchaseChannels.map(channel => <option key={channel}>{channel}</option>)}</select>
             <button type="button"
                     className={`buyer-filter-trigger ${buyers.length ? "active" : ""} ${buyerOpen ? "open" : ""}`}
                     aria-expanded={buyerOpen} aria-haspopup="true" onClick={() => setBuyerOpen(value => !value)}>
-                <span>{buyerSummary}</span>{buyers.length > 0 && <b>{buyers.length}</b>}<i>▾</i></button>
-            <select aria-label="日期" value={dateDays} onChange={e => setDateDays(Number(e.target.value))}>
-                <option value={30}>近30天</option>
-                <option value={7}>近7天</option>
-                <option value={1}>今天</option>
-                <option value={90}>近90天</option>
-            </select>
-            <select aria-label="结款状态" value={settlement} onChange={e => setSettlement(e.target.value)}>
-                <option>全部结款状态</option>
-                <option>已结款</option>
-                <option>未结款</option>
-            </select></div>
-        <div className={`order-filter-actions ${activeFilterCount ? "active" : ""}`}>
-            <span>{activeFilterCount ? `当前已应用 ${activeFilterCount} 项筛选或排序` : "当前使用默认筛选条件"}</span>
-            <div className="order-filter-buttons">
-                <button type="button" disabled={!activeFilterCount} onClick={clearAllFilters}>
-                    <i aria-hidden="true">↺</i> 清除全部筛选
-                </button>
-                <button type="button" className={`order-refresh-button ${refreshing ? "busy" : ""}`}
-                        disabled={refreshing} aria-busy={refreshing} onClick={() => void refreshOrders()}>
-                    <i aria-hidden="true">⟳</i> {refreshing ? "正在刷新" : "刷新订单数据"}
-                </button>
-            </div>
-        </div>
+                <span>{buyerSummary}</span>{buyers.length > 0 && <b>{buyers.length}</b>}<i>▾</i></button></div>
         {buyerOpen && <div className="buyer-filter-panel" role="group" aria-label="按采购员筛选">
             <div className="buyer-filter-head">
                 <b>选择采购员</b><span>可多选 · {buyers.length ? `已选 ${buyers.length} 位` : "未选择时显示全部"}</span>{buyers.length > 0 &&
@@ -993,20 +973,54 @@ function AdminOrders({
             })}</div>
             <button type="button" className="buyer-filter-done" onClick={() => setBuyerOpen(false)}>完成</button>
         </div>}
-        <div className="order-sort-controls" role="group" aria-label="订单时间排序">
-            <div className="order-sort-copy"><b>排序方式</b><span>点击按钮依次切换倒序、顺序和默认</span></div>
-            <div className="order-sort-buttons">{orderSortOptions.map(option => {
-                const direction = sort?.key === option.key ? sort.direction : null;
-                const active = direction !== null;
-                const stateLabel = direction === "asc" ? "顺序" : direction === "desc" ? "倒序" : "默认";
-                return <button type="button" key={option.key}
-                               className={`order-sort-button ${active ? `active ${direction}` : ""}`}
-                               aria-pressed={active} aria-label={`${option.label}：${stateLabel}`}
-                               onClick={() => cycleSort(option.key)}>
-                    <i>{direction === "asc" ? "↑" : direction === "desc" ? "↓" : "↕"}</i>
-                    <span><b>{option.label}</b><small>{stateLabel}</small></span>
-                </button>;
-            })}</div>
+        <button type="button" className={`order-more-filters-toggle ${advancedFilterCount ? "active" : ""}`}
+                aria-expanded={moreFiltersOpen} aria-controls="admin-order-advanced-filters"
+                onClick={() => setMoreFiltersOpen(open => !open)}>
+            <span className="order-more-filters-icon" aria-hidden="true">⚙</span>
+            <span className="order-more-filters-copy"><b>更多筛选{advancedFilterCount > 0 && <em>{advancedFilterCount}</em>}</b><small>{advancedFilterSummary}</small></span>
+            <span className="order-more-filters-chevron" aria-hidden="true">{moreFiltersOpen ? "收起⌃" : "展开⌄"}</span>
+        </button>
+        <div id="admin-order-advanced-filters" className="order-advanced-panel" hidden={!moreFiltersOpen}>
+            <div className="select-row order-advanced-row">
+                <select aria-label="日期" value={dateDays} onChange={e => setDateDays(Number(e.target.value))}>
+                    <option value={30}>近30天</option>
+                    <option value={7}>近7天</option>
+                    <option value={1}>今天</option>
+                    <option value={90}>近90天</option>
+                </select>
+                <select aria-label="结款状态" value={settlement} onChange={e => setSettlement(e.target.value)}>
+                    <option>全部结款状态</option>
+                    <option>已结款</option>
+                    <option>未结款</option>
+                </select>
+            </div>
+            <div className="order-sort-controls" role="group" aria-label="订单时间排序">
+                <div className="order-sort-copy"><b>排序方式</b><span>点击按钮依次切换倒序、顺序和默认</span></div>
+                <div className="order-sort-buttons">{orderSortOptions.map(option => {
+                    const direction = sort?.key === option.key ? sort.direction : null;
+                    const active = direction !== null;
+                    const stateLabel = direction === "asc" ? "顺序" : direction === "desc" ? "倒序" : "默认";
+                    return <button type="button" key={option.key}
+                                   className={`order-sort-button ${active ? `active ${direction}` : ""}`}
+                                   aria-pressed={active} aria-label={`${option.label}：${stateLabel}`}
+                                   onClick={() => cycleSort(option.key)}>
+                        <i>{direction === "asc" ? "↑" : direction === "desc" ? "↓" : "↕"}</i>
+                        <span><b>{option.label}</b><small>{stateLabel}</small></span>
+                    </button>;
+                })}</div>
+            </div>
+        </div>
+        <div className={`order-filter-actions ${activeFilterCount ? "active" : ""}`}>
+            <span>{activeFilterCount ? `当前已应用 ${activeFilterCount} 项筛选或排序` : "当前使用默认筛选条件"}</span>
+            <div className="order-filter-buttons">
+                <button type="button" disabled={!activeFilterCount} onClick={clearAllFilters}>
+                    <i aria-hidden="true">↺</i> 清除全部筛选
+                </button>
+                <button type="button" className={`order-refresh-button ${refreshing ? "busy" : ""}`}
+                        disabled={refreshing} aria-busy={refreshing} onClick={() => void refreshOrders()}>
+                    <i aria-hidden="true">⟳</i> {refreshing ? "正在刷新" : "刷新订单数据"}
+                </button>
+            </div>
         </div>
         <SectionHead title="采购订单" note={orderListSummary(visible)}/>
         <div className="batch-toolbar"><label><input type="checkbox" checked={allVisibleSelected} onChange={toggleAll}/><span>{allVisibleSelected ? "取消全选" : "全选当前结果"}</span></label><b>{selectedIds.length ? `已选择 ${selectedIds.length} 笔 · 共 ${selectedItemQuantity} 件` : "可批量选择订单"}</b>
@@ -1414,6 +1428,7 @@ function BuyerOrders({
     const [query, setQuery] = useState("");
     const [platform, setPlatform] = useState("全部渠道");
     const [settlement, setSettlement] = useState("全部结款状态");
+    const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
     const visible = orders.filter(o => matchesStatusFilter(o, statuses) && (platform === "全部渠道" || o.platform === platform) && (settlement === "全部结款状态" || o.settled === (settlement === "已结款")) && `${o.title}${o.items.map(item => `${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}`).join("")}${o.platformNo}`.toLowerCase().includes(query.toLowerCase()));
     return <section className="enter"><Search value={query} onChange={setQuery} placeholder="搜索商品 / 订单号 / 快递单号"
                                               historyKey="buyer-orders"/><StatusFilter
@@ -1421,10 +1436,17 @@ function BuyerOrders({
         <div className="chip-row scroll">{["全部渠道", ...purchaseChannels].map(v => <button key={v}
                                                                                          className={platform === v ? "active" : ""}
                                                                                          onClick={() => setPlatform(v)}>{v}</button>)}</div>
-        <label className="buyer-settlement-filter"><span>结款状态</span>
+        <button type="button" className={`order-more-filters-toggle ${settlement !== "全部结款状态" ? "active" : ""}`}
+                aria-expanded={moreFiltersOpen} aria-controls="buyer-order-advanced-filters"
+                onClick={() => setMoreFiltersOpen(open => !open)}>
+            <span className="order-more-filters-icon" aria-hidden="true">⚙</span>
+            <span className="order-more-filters-copy"><b>更多筛选{settlement !== "全部结款状态" && <em>1</em>}</b><small>{settlement}</small></span>
+            <span className="order-more-filters-chevron" aria-hidden="true">{moreFiltersOpen ? "收起⌃" : "展开⌄"}</span>
+        </button>
+        <div id="buyer-order-advanced-filters" className="order-advanced-panel" hidden={!moreFiltersOpen}><label className="buyer-settlement-filter"><span>结款状态</span>
             <select aria-label="结款状态" value={settlement} onChange={event => setSettlement(event.target.value)}>
                 <option>全部结款状态</option><option>已结款</option><option>未结款</option>
-            </select></label>
+            </select></label></div>
         <SectionHead title="我的采购订单" note={orderListSummary(visible)}/>
         <div className="order-list">{visible.map(order => <BuyerOrderCard key={order.id} order={order}
                                                                           onOpen={() => onOpen(order.id)}

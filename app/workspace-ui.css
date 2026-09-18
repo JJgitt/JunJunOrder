@@ -105,6 +105,20 @@ button:disabled { cursor: not-allowed; }
 .buyer-filter-trigger, .select-row select { min-width: 0; min-height: 46px; border-radius: 12px; padding: 0 12px; box-shadow: none; }
 .buyer-filter-trigger { font-size: 16px; }
 .buyer-filter-trigger > b { min-width: 22px; height: 22px; font-size: 11px; }
+.order-filter-row.order-primary-filter-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.order-more-filters-toggle { display: flex; align-items: center; width: 100%; min-height: 58px; gap: 10px; margin-top: 10px; padding: 9px 12px; border: 1px solid #dce5f2; border-radius: 13px; background: #f8fbff; color: #31445f; text-align: left; }
+.order-more-filters-toggle.active { border-color: #9fbbec; background: #f0f5ff; }
+.order-more-filters-icon { display: grid; flex: none; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: #e9f0fc; color: var(--primary-dark); font-size: 17px; }
+.order-more-filters-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+.order-more-filters-copy b { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.order-more-filters-copy em { display: grid; place-items: center; min-width: 19px; height: 19px; padding: 0 4px; border-radius: 8px; background: var(--primary); color: #fff; font-size: 11px; font-style: normal; }
+.order-more-filters-copy small { overflow: hidden; color: #74839a; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.order-more-filters-chevron { flex: none; color: var(--primary-dark); font-size: 12px; font-weight: 700; }
+.order-advanced-panel { margin-top: 7px; padding: 11px; border: 1px solid #e3eaf5; border-radius: 13px; background: #fbfcff; }
+.order-advanced-panel[hidden] { display: none; }
+.order-advanced-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.order-advanced-panel .order-sort-controls { margin: 10px 0 0; }
+.order-advanced-panel .buyer-settlement-filter { margin: 0; }
 .order-filter-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding: 10px 12px; border: 1px solid #e3e8f0; border-radius: 12px; background: #f8fafc; color: var(--muted); }
 .order-filter-actions.active { border-color: #cbd9f5; background: #f1f5ff; color: #465777; }
 .order-filter-actions span { min-width: 0; font-size: 12px; }

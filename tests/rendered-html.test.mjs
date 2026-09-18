@@ -792,6 +792,22 @@ test("admin and buyer order lists filter by settlement status",async()=>{
   assertCssMatch(touchStyles,/\.select-row\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
 });
 
+test("order list advanced filters start collapsed without clearing their values",async()=>{
+  const [page,styles]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/workspace-ui.css",import.meta.url),"utf8"),
+  ]);
+  assert.match(page,/function AdminOrders\([\s\S]*?const \[moreFiltersOpen, setMoreFiltersOpen\] = useState\(false\)/);
+  assert.match(page,/function BuyerOrders\([\s\S]*?const \[moreFiltersOpen, setMoreFiltersOpen\] = useState\(false\)/);
+  assert.match(page,/aria-expanded=\{moreFiltersOpen\} aria-controls="admin-order-advanced-filters"/);
+  assert.match(page,/id="admin-order-advanced-filters" className="order-advanced-panel" hidden=\{!moreFiltersOpen\}/);
+  assert.match(page,/id="buyer-order-advanced-filters" className="order-advanced-panel" hidden=\{!moreFiltersOpen\}/);
+  assert.match(page,/const advancedFilterCount = Number\(dateDays !== 30\) \+ Number\(settlement !== "全部结款状态"\) \+ Number\(sort !== null\)/);
+  assert.match(page,/const advancedFilterSummary =/);
+  assert.match(styles,/\.order-advanced-panel\[hidden\] \{ display: none; \}/);
+  assert.match(styles,/\.order-filter-row\.order-primary-filter-row \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+});
+
 test("administrator can clear every order filter and sorting state at once",async()=>{
   const [page,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
