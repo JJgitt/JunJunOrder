@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 
-/** 快递鸟「即时查询」接口（RequestType=1002）：POST api.kdniao.com/Ebusiness/EbusinessOrderHandle.aspx。
- *  官方签名规则：DataSign = URLEncode(Base64(MD5(RequestData + APIKey)))，MD5 取 UTF-8 小写 32 位 hex。
+/** 快递鸟「在途监控即时查询」接口（RequestType=8001）：POST 官方 HTTPS 地址。
+ *  按快递鸟 Go 示例：DataSign = Base64(MD5(RequestData + APIKey) 的原始 16 字节)，
+ *  URLSearchParams 对 DataSign 和 RequestData 各做一次表单 URL 编码。
  *  环境变量：KDNIAO_EBUSINESS_ID（用户 ID）、KDNIAO_API_KEY（API 密钥）。 */
 const KDNIAO_ENDPOINT = "https://api.kdniao.com/Ebusiness/EbusinessOrderHandle.aspx";
-const KDNIAO_REQUEST_TYPE_INSTANT = "1002";
+const KDNIAO_REQUEST_TYPE_INSTANT = "8001";
 
 /** 应用内快递公司名 → 快递鸟 ShipperCode。未收录的公司走前端快递100网页跳转兜底。 */
 const kdniaoShipperCodes: Record<string, string> = {
@@ -37,8 +38,7 @@ export function kdniaoConfigured(): boolean {
 }
 
 export function kdniaoDataSign(requestData: string, apiKey: string): string {
-    const md5Hex = createHash("md5").update(`${requestData}${apiKey}`, "utf8").digest("hex");
-    return encodeURIComponent(Buffer.from(md5Hex, "utf8").toString("base64"));
+    return createHash("md5").update(`${requestData}${apiKey}`, "utf8").digest("base64");
 }
 
 export type TrackingTrace = { time: string; station: string; location: string };
@@ -60,8 +60,8 @@ export async function queryTracking({company, logisticCode, customerName = ""}: 
     const cacheKey = `${shipperCode}:${logisticCode}:${customerName}`;
     const cached = trackingCache.get(cacheKey);
     if (cached && Date.now() - cached.at < TRACKING_CACHE_TTL_MS) return cached.result;
-    // 顺丰要求收/寄件人手机号后 4 位；京东个人件需青龙配送编码（应用内多半查不到，由前端网页兜底）。
-    const requestData = JSON.stringify({ OrderCode: "", ShipperCode: shipperCode, LogisticCode: logisticCode, CustomerName: customerName });
+    // 8001 的基本字段与 Go 示例一致；有校验信息时才附加 CustomerName。
+    const requestData = JSON.stringify({ ShipperCode: shipperCode, LogisticCode: logisticCode, ...(customerName ? { CustomerName: customerName } : {}) });
     const body = new URLSearchParams({
         RequestData: requestData,
         EBusinessID: process.env.KDNIAO_EBUSINESS_ID ?? "",

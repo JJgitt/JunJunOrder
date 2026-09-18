@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { courierTrackingUrl, findOrdersByCourierNo, findTransitCandidatesByCourierTail, normalizeCourierNo, orderMatchesCourierNo } from "../lib/courier.ts";
-import { kdniaoDataSign, kdniaoShipperCode } from "../lib/tracking.ts";
+import { kdniaoDataSign, kdniaoShipperCode, queryTracking } from "../lib/tracking.ts";
 
 test("courier numbers compare without spaces, dashes or letter case", () => {
   assert.equal(normalizeCourierNo("sf 1234-5678"), "SF12345678");
@@ -52,10 +52,43 @@ test("kdniao shipper codes map app courier companies to official codes", () => {
   assert.equal(kdniaoShipperCode(""), null);
 });
 
-test("kdniao data sign follows URLEncode(Base64(MD5(requestData + apiKey)))", () => {
-  // 回归向量：MD5 取 UTF-8 小写 32 位 hex → Base64 → URL 编码，防止签名算法被误改。
-  const requestData = JSON.stringify({ OrderCode: "", ShipperCode: "SF", LogisticCode: "SF139204158866", CustomerName: "8866" });
-  assert.equal(kdniaoDataSign(requestData, "test-api-key"), "YjVjNjU3NmI0YjMzOWZhMzE2NmJhODBkMDYwZjdhYjk%3D");
-  // 签名必须区分密钥：换 key 结果必须变化。
-  assert.notEqual(kdniaoDataSign(requestData, "another-key"), "YjVjNjU3NmI0YjMzOWZhMzE2NmJhODBkMDYwZjdhYjk%3D");
+test("kdniao 8001 data sign matches the Go sample's raw MD5 bytes then Base64", () => {
+  const requestData = JSON.stringify({ ShipperCode: "STO", LogisticCode: "773367326370601" });
+  assert.equal(kdniaoDataSign(requestData, "test-api-key"), "bUSNBDTvb9SicbW3itLicQ==");
+  assert.notEqual(kdniaoDataSign(requestData, "another-key"), "bUSNBDTvb9SicbW3itLicQ==");
+});
+
+test("kdniao 8001 posts a single URL-encoded form to the official HTTPS API", async () => {
+  const oldFetch = globalThis.fetch;
+  const oldId = process.env.KDNIAO_EBUSINESS_ID;
+  const oldKey = process.env.KDNIAO_API_KEY;
+  process.env.KDNIAO_EBUSINESS_ID = "synthetic-account";
+  process.env.KDNIAO_API_KEY = "test-api-key";
+  let calls = 0;
+  globalThis.fetch = async (url, options) => {
+    calls++;
+    assert.equal(url, "https://api.kdniao.com/Ebusiness/EbusinessOrderHandle.aspx");
+    assert.equal(options.method, "POST");
+    assert.equal(options.headers["content-type"], "application/x-www-form-urlencoded;charset=utf-8");
+    const form = new URLSearchParams(options.body);
+    assert.equal(form.get("EBusinessID"), "synthetic-account");
+    assert.equal(form.get("RequestType"), "8001");
+    assert.equal(form.get("DataType"), "2");
+    assert.equal(form.get("RequestData"), '{"ShipperCode":"STO","LogisticCode":"773367326370601"}');
+    assert.equal(form.get("DataSign"), kdniaoDataSign(form.get("RequestData"), "test-api-key"));
+    return new Response(JSON.stringify({ Success: true, State: "2", Traces: [{ AcceptTime: "2026-09-18 10:00:00", AcceptStation: "运输中" }] }), { status: 200 });
+  };
+  try {
+    const result = await queryTracking({ company: "申通快递", logisticCode: "773367326370601" });
+    assert.equal(calls, 1);
+    assert.equal(result.ok, true);
+    assert.equal(result.stateLabel, "在途中");
+    assert.equal(result.traces.length, 1);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldId === undefined) delete process.env.KDNIAO_EBUSINESS_ID;
+    else process.env.KDNIAO_EBUSINESS_ID = oldId;
+    if (oldKey === undefined) delete process.env.KDNIAO_API_KEY;
+    else process.env.KDNIAO_API_KEY = oldKey;
+  }
 });

@@ -5,7 +5,7 @@ import { kdniaoConfigured, kdniaoShipperCode, queryTracking } from "@/lib/tracki
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-/** 订单详情「物流轨迹」应用内查询：登录后即可调用快递鸟「即时查询」（RequestType=1002）。
+/** 订单详情「物流轨迹」应用内查询：登录后调用快递鸟「在途监控即时查询」（RequestType=8001）。
  *  未配置 KDNIAO_*、快递公司未收录或快递鸟返回业务失败时给 ok:false + 原因，由前端回退到快递100网页跳转。
  *  顺丰单号需带 tail 参数（收/寄件人手机号后 4 位），前端已提供输入框。 */
 export async function GET(request: Request) {
