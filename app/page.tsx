@@ -2422,18 +2422,13 @@ function SkuList({items}: { items: OrderItem[] }) {
                                                                                               label="商品货号"/><small>{item.size}码 · ×{item.qty}</small></span>)}</span>;
 }
 
-/** 订单详情「物流轨迹」：纯网页跳转，不调用任何付费 API。
- *  已知快递公司打开快递鸟免费结果页并带上返回地址；未收录的公司打开快递100 按单号识别。新窗口打开，不丢当前订单弹层。 */
+/** 订单详情「物流轨迹」：直接打开快递100 网页，不调用物流 API。 */
 function TrackingPanel({items}: { items: OrderItem[] }) {
     const trackable = items.filter(item => item.purchaseCourierNo);
     return <span className="tracking-panel">{trackable.map(item => <a key={item.id} className="tracking-button"
-                                                                     href={courierTrackingUrl(item.purchaseCourierCompany, item.purchaseCourierNo)}
-                                                                     target="_blank" rel="noreferrer"
-                                                                     onClick={event => {
-                                                                         // 点击时才读站点地址作为返回地址，渲染阶段不碰 window，避免服务端/客户端输出不一致。
-                                                                         event.preventDefault();
-                                                                         window.open(courierTrackingUrl(item.purchaseCourierCompany, item.purchaseCourierNo, `${window.location.origin}/`), "_blank", "noopener,noreferrer");
-                                                                     }}>{trackable.length > 1 ? `${item.sku} 物流` : "查询物流"} ↗</a>)}</span>;
+                                                                     href={courierTrackingUrl(item.purchaseCourierNo)}
+                                                                     target="_blank" rel="noopener noreferrer"
+                                                                     aria-label={`${item.sku} 查物流`}>{trackable.length > 1 ? `${item.sku} 物流` : "查物流"} ↗</a>)}</span>;
 }
 
 function PurchaseCourierList({items, showItem = false}: { items: OrderItem[]; showItem?: boolean }) {

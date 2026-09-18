@@ -327,21 +327,21 @@ test("order detail tracking is a pure web redirect without any paid API",async()
   ]);
   assertJsMatch(page,/function TrackingPanel/);
   assertJsMatch(page,/label="物流轨迹" value=\{<TrackingPanel items=\{order\.items\}\/>\}/);
-  assertJsMatch(page,/href=\{courierTrackingUrl\(item\.purchaseCourierCompany,item\.purchaseCourierNo\)\}/);
-  assertJsMatch(page,/window\.open\(courierTrackingUrl\(item\.purchaseCourierCompany,item\.purchaseCourierNo,`\$\{window\.location\.origin\}\/`\),"_blank","noopener,noreferrer"\)/);
-  assert.match(courier,/export function kdniaoBackUrl/);
-  assertJsMatch(page,/target="_blank" rel="noreferrer"/);
+  assertJsMatch(page,/href=\{courierTrackingUrl\(item\.purchaseCourierNo\)\}/);
+  assertJsMatch(page,/target="_blank" rel="noopener noreferrer"/);
+  assertJsNotMatch(page,/window\.open\(courierTrackingUrl/);
   assertJsNotMatch(page,/\/api\/tracking/);
   assertJsNotMatch(page,/function TrackingQuery/);
   assert.match(courier,/export function courierTrackingUrl/);
-  assert.match(courier,/kdniao\.com\/JSInvoke\/MSearchResult\.aspx/);
   assert.match(courier,/kuaidi100\.com\/chaxun/);
+  assert.doesNotMatch(courier,/kdniao\.com/);
   assert.doesNotMatch(compose,/KDNIAO_/);
   assert.doesNotMatch(envExample,/KDNIAO_/);
   await assert.rejects(access(new URL("../app/api/tracking/route.ts",import.meta.url)));
   await assert.rejects(access(new URL("../lib/tracking.ts",import.meta.url)));
   assertCssMatch(styles,/\.tracking-panel\{/);
   assertCssMatch(styles,/\.tracking-button\{[^}]*text-decoration:none/);
+  assertCssMatch(styles,/\.tracking-button\{[^}]*padding:2px 5px/);
 });
 
 test("displayed product SKUs provide direct copy actions",async()=>{
