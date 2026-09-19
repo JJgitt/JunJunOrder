@@ -22,6 +22,13 @@ test("deploy script accepts the GHCR and Huawei SWR digest refs only", async () 
   assert.match(deploy, /hongyun-order-app:latest/);
   assert.match(deploy, /docker image ls --no-trunc --format '\{\{\.ID\}\} \{\{\.Repository\}\}'/);
   assert.doesNotMatch(deploy, /docker image prune -/);
+  assert.match(deploy, /pull_timeout_seconds=300/);
+  assert.match(deploy, /pull_attempts=3/);
+  assert.match(
+    deploy,
+    /timeout --signal=TERM --kill-after="\$\{pull_kill_after_seconds\}s" "\$\{pull_timeout_seconds\}s" docker pull "\$image"/,
+  );
+  assert.match(deploy, /Image pull failed; running service unchanged/);
 });
 
 test("workflow keeps GHCR publish and optional SWR mirror", async () => {

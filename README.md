@@ -69,7 +69,7 @@ docker compose up -d --build
 
 ## 生产发布
 
-线上地址：`http://113.46.133.47`。推送到 `main` 后由 GitHub Actions 跑测试、构建镜像并发布。默认仍推送到 GitHub Container Registry（GHCR），服务器从 GHCR 按 digest 拉镜像。华为云 SWR（`swr.cn-north-4.myhuaweicloud.com/junjunorder/junjunorder`）已作为可选镜像仓库接好：凭证只放在 GitHub Secrets，默认不切换生产拉取源。未更新服务器发布脚本前，不要把 Variable `IMAGE_REGISTRY` 设为 `swr`。细节、启用顺序和回滚见 [deploy/ci/README.md](deploy/ci/README.md)。
+线上地址：`http://113.46.133.47`。推送到 `main` 后由 GitHub Actions 跑测试、构建镜像并发布。镜像同时发布到 GitHub Container Registry（GHCR）并同步到华为云 SWR（`swr.cn-north-4.myhuaweicloud.com/junjunorder/junjunorder`）；生产服务器当前从 SWR 按 digest 拉取，凭证只放在 GitHub Secrets。部署脚本对单次镜像拉取设置 5 分钟超时并最多重试 3 次，全部失败时保持线上应用不变。细节、启用顺序和回滚见 [deploy/ci/README.md](deploy/ci/README.md)。
 
 ## 备份与恢复
 

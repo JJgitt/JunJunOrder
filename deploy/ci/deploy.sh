@@ -24,6 +24,9 @@ export DEPLOY_IMAGE="$image"
 retain_rollbacks=3
 retain_backups=10
 minimum_free_kb=$((5 * 1024 * 1024))
+pull_attempts=3
+pull_timeout_seconds=300
+pull_kill_after_seconds=15
 declare -A keep_ids=()
 
 keep_project_image_id() {
@@ -122,9 +125,20 @@ IFS= read -r registry_token
 printf '%s' "$registry_token" | docker login "$registry_host" -u "$registry_user" --password-stdin
 unset registry_token
 pulled=false
-for attempt in 1 2 3; do
-  if docker pull "$image"; then pulled=true; break; fi
-  sleep 5
+for ((attempt=1; attempt<=pull_attempts; attempt++)); do
+  echo "Pulling image (attempt $attempt/$pull_attempts, timeout ${pull_timeout_seconds}s)"
+  if timeout --signal=TERM --kill-after="${pull_kill_after_seconds}s" "${pull_timeout_seconds}s" docker pull "$image"; then
+    pulled=true
+    break
+  else
+    pull_status=$?
+    if (( pull_status == 124 || pull_status == 137 )); then
+      echo "Image pull attempt $attempt timed out after ${pull_timeout_seconds}s" >&2
+    else
+      echo "Image pull attempt $attempt failed with status $pull_status" >&2
+    fi
+  fi
+  if (( attempt < pull_attempts )); then sleep 5; fi
 done
 [[ "$pulled" == true ]] || { echo 'Image pull failed; running service unchanged'; exit 1; }
 old_id=$("${compose[@]}" ps -q app)

@@ -2,12 +2,12 @@
 
 流程：推送 → 测试/数据库迁移验证 → main 构建镜像 → GHCR（必推）→ 可选镜像到华为云 SWR → SSH 按 `IMAGE_REGISTRY` 拉取摘要镜像 → 数据库备份 → 切换 → 健康检查。
 
-当前生产发布默认仍走 GHCR，避免服务器脚本未更新时中断上线。SWR 凭证只放在 GitHub Secrets，仓库里只有 2026-09-15 的 GHCR 快照：`deploy/ci/rollback/ghcr-20260915/`。
+当前生产发布走华为云 SWR，避免服务器跨境拉取 GHCR 时长时间阻塞。SWR 凭证只放在 GitHub Secrets，仓库里保留 2026-09-15 的 GHCR 快照：`deploy/ci/rollback/ghcr-20260915/`。
 
 - `.github/workflows/ci-cd.yml`：所有分支 push 和 main PR 执行测试；只有 main push / main 手动运行可以发布。
 - Actions 固定到上游提交 SHA；镜像按 Git commit 标记，生产部署按 digest 固定版本。
 - 构建在 GitHub 执行，服务器只拉取和启动。应用、PostgreSQL、上传卷仍在现有服务器。
-- GitHub 并发组 + 服务器 flock 双重串行保护。测试失败不会发布；镜像拉取失败不会切换线上应用。
+- GitHub 并发组 + 服务器 flock 双重串行保护。测试失败不会发布；每次镜像拉取最多等待 5 分钟、最多尝试 3 次，全部失败也不会切换线上应用。
 - 发布失败自动切换旧镜像，但**不自动恢复数据库**。数据库变更必须向后兼容，破坏性迁移需要人工维护窗口。
 - 每次发布会清理过期回滚标签和未再引用的本项目 digest；仍需定期看磁盘，并做异机备份。
 
@@ -35,7 +35,7 @@ Variables：
 ## 服务器
 
 - `/usr/local/bin/hongyun-ci-entry`：root 所有的 SSH 强制入口。
-- `/usr/local/sbin/hongyun-deploy`：root 所有的发布脚本。新版本同时接受 `ghcr.io/jjgitt/junjunorder@sha256:<64位摘要>` 和 `swr.cn-north-4.myhuaweicloud.com/junjunorder/junjunorder@sha256:<64位摘要>`。未执行 `deploy/ci/install-server-deploy.sh` 前，线上仍是 GHCR-only 旧脚本。
+- `/usr/local/sbin/hongyun-deploy`：root 所有的发布脚本，同时接受 `ghcr.io/jjgitt/junjunorder@sha256:<64位摘要>` 和 `swr.cn-north-4.myhuaweicloud.com/junjunorder/junjunorder@sha256:<64位摘要>`；单次 `docker pull` 超时为 5 分钟。仓库脚本更新后需要重新执行 `deploy/ci/install-server-deploy.sh` 才会安装到服务器。
 - 回滚快照：`deploy/ci/rollback/ghcr-20260915/`。服务器安装新脚本时会先写成 `/usr/local/sbin/hongyun-deploy.bak-<时间戳>`。
 - `/etc/sudoers.d/hongyun-ci`：仅允许免密执行上述发布脚本。
 - `/etc/hongyun-cicd/compose.image.yaml`：覆盖应用镜像；沿用 `/home/junjun/hongyun-order` 的 Compose 和 `.env`。
