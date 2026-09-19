@@ -4877,6 +4877,10 @@ button:active {
     background: #bf7a12
 }
 
+.batch-toolbar .batch-export-button {
+    background: #176b38
+}
+
 .batch-toolbar .batch-delete-button {
     background: var(--danger)
 }

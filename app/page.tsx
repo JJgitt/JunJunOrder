@@ -515,7 +515,7 @@ export default function Home() {
             }} onEdit={(id) => {
                 setSelectedId(id);
                 setAdminTab("upload");
-            }} onRefresh={refreshOrderData} onDelete={deleteOrders} onBatchShip={batchShip} onBatchSettle={batchSettle} onOpen={openOrder} onApprove={approve}
+            }} onRefresh={refreshOrderData} onDelete={deleteOrders} onBatchShip={batchShip} onBatchSettle={batchSettle} onOpen={openOrder} onApprove={approve} onNotify={notify}
                                                                        onReceive={(id) => {
                                                                            setSelectedId(id);
                                                                            setOverlay("manual-receive");
@@ -863,8 +863,9 @@ function AdminOrders({
                          onReceive,
                          onReject,
                          onShip,
-                         onSettle
-                      }: { orders: PurchaseOrder[]; onCreate: () => void; onRefresh: () => Promise<boolean>; onEdit: (id: string) => void; onDelete: (ids: string[]) => Promise<boolean>; onBatchShip: (shipments: Array<{ orderId: string; courier: string; company: string }>) => Promise<boolean>; onBatchSettle: (ids: string[]) => Promise<boolean>; onOpen: (id: string) => void; onApprove: (id: string) => void; onReceive: (id: string) => void; onReject: (id: string) => void; onShip: (id: string) => void; onSettle: (id: string) => void }) {
+                         onSettle,
+                         onNotify
+                      }: { orders: PurchaseOrder[]; onCreate: () => void; onRefresh: () => Promise<boolean>; onEdit: (id: string) => void; onDelete: (ids: string[]) => Promise<boolean>; onBatchShip: (shipments: Array<{ orderId: string; courier: string; company: string }>) => Promise<boolean>; onBatchSettle: (ids: string[]) => Promise<boolean>; onOpen: (id: string) => void; onApprove: (id: string) => void; onReceive: (id: string) => void; onReject: (id: string) => void; onShip: (id: string) => void; onSettle: (id: string) => void; onNotify: (text: string) => void }) {
     const [query, setQuery] = useState("");
     const [statuses, setStatuses] = useState<string[]>([]);
     const [platform, setPlatform] = useState("全部渠道");
@@ -879,6 +880,7 @@ function AdminOrders({
     const [sort, setSort] = useState<OrderSort>(null);
     const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [exporting, setExporting] = useState(false);
     const {now, timeZone} = useServerClock();
     const {start: dateStart, end: dateEnd} = dayRange(now, timeZone, dateDays);
     const readyCount = orders.filter(order => readyToShip(order.status)).length;
@@ -906,6 +908,7 @@ function AdminOrders({
         selectedSettleReady = selectedOrders.filter(order => order.receivedAt && !order.settled),
         selectedItemQuantity = selectedOrders.reduce((sum, order) => sum + order.items.reduce((qty, item) => qty + item.qty, 0), 0),
         allVisibleSelected = visible.length > 0 && visible.every(order => selectedSet.has(order.id));
+    const exportOrders = selectedIds.length ? selectedOrders : visible;
     const toggle = (id: string) => setSelectedIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
     const toggleAll = () => setSelectedIds(current => allVisibleSelected ? current.filter(id => !visible.some(order => order.id === id)) : Array.from(new Set([...current, ...visible.map(order => order.id)])));
 
@@ -930,6 +933,38 @@ function AdminOrders({
             await onRefresh();
         } finally {
             setRefreshing(false);
+        }
+    }
+
+    async function downloadExcel() {
+        if (exporting || !exportOrders.length) return;
+        setExporting(true);
+        try {
+            const response = await fetch("/api/export", {
+                method: "POST",
+                headers: {"content-type": "application/json"},
+                body: JSON.stringify({orderIds: exportOrders.map(order => order.id)})
+            });
+            if (!response.ok) {
+                const detail = await response.json().catch(() => null) as { error?: string } | null;
+                throw new Error(detail?.error || "导出失败");
+            }
+            const blob = await response.blob();
+            const disposition = response.headers.get("content-disposition") ?? "";
+            const fileName = disposition.match(/filename="([^"]+)"/)?.[1] ?? "junjun-orders.xlsx";
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 0);
+            onNotify(`已导出 ${exportOrders.length} 笔订单`);
+        } catch (error) {
+            onNotify(error instanceof Error ? error.message : "导出失败");
+        } finally {
+            setExporting(false);
         }
     }
 
@@ -1024,6 +1059,8 @@ function AdminOrders({
         </div>
         <SectionHead title="采购订单" note={orderListSummary(visible)}/>
         <div className="batch-toolbar"><label><input type="checkbox" checked={allVisibleSelected} onChange={toggleAll}/><span>{allVisibleSelected ? "取消全选" : "全选当前结果"}</span></label><b>{selectedIds.length ? `已选择 ${selectedIds.length} 笔 · 共 ${selectedItemQuantity} 件` : "可批量选择订单"}</b>
+            <button type="button" className="batch-export-button" disabled={exporting || !exportOrders.length}
+                    aria-busy={exporting} onClick={() => void downloadExcel()}>{exporting ? "正在导出…" : selectedIds.length ? `导出已选 ${selectedIds.length}` : `导出当前 ${visible.length}`}</button>
             <button className="batch-settle-button" disabled={!selectedSettleReady.length}
                     onClick={() => setBatchSettleOpen(true)}>批量结款{selectedSettleReady.length ? ` ${selectedSettleReady.length}` : ""}</button>
             <button className="batch-ship-button" disabled={!selectedReady.length}

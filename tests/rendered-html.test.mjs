@@ -605,6 +605,55 @@ test("order list headers summarize visible orders, purchased quantity, and paid 
   assertJsNotMatch(page,/note=\{`\$\{visible\.length\} 笔`\}/);
 });
 
+test("administrator exports selected orders or the current filtered result as Excel",async()=>{
+  const [page,exportRoute,workbookSource,styles,pkg]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/export/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../lib/order-export.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
+    readFile(new URL("../package.json",import.meta.url),"utf8"),
+  ]);
+  assertJsMatch(page,/const exportOrders=selectedIds\.length\?selectedOrders:visible/);
+  assertJsMatch(page,/fetch\("\/api\/export",\{method:"POST",headers:\{"content-type":"application\/json"\},body:JSON\.stringify\(\{orderIds:exportOrders\.map\(order=>order\.id\)\}\)\}\)/);
+  assertJsMatch(page,/className="batch-export-button"/);
+  assertJsMatch(page,/selectedIds\.length\?`导出已选 \$\{selectedIds\.length\}`:`导出当前 \$\{visible\.length\}`/);
+  assert.match(exportRoute,/export async function POST\(request:Request\)/);
+  assert.match(exportRoute,/assertSameOrigin\(request\)/);
+  assert.match(exportRoute,/requireAdmin\(user\)/);
+  assert.match(exportRoute,/\.slice\(0,500\)/);
+  assert.match(workbookSource,/header:"商品名"[\s\S]*header:"尺码"[\s\S]*header:"件数"[\s\S]*header:"运单号"[\s\S]*header:"订单号"/);
+  assert.match(workbookSource,/courierNo:item\.purchaseCourierNo\|\|order\.courierNo,orderNo:order\.platformOrderNo/);
+  assert.match(exportRoute,/application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/);
+  assert.match(exportRoute,/\.xlsx"`/);
+  assert.match(exportRoute,/export async function GET\(request:Request\)/,"legacy full CSV export remains available");
+  assert.match(JSON.parse(pkg).dependencies.exceljs,/^4\.4\.0$/);
+  assertCssMatch(styles,/\.batch-toolbar \.batch-export-button\{background:#176b38\}/);
+});
+
+test("generated order workbook opens with exact columns and preserves long numbers",async()=>{
+  const [{createOrdersWorkbook},{default:ExcelJS}]=await Promise.all([
+    import("../lib/order-export.ts"),
+    import("exceljs"),
+  ]);
+  const bytes=await createOrdersWorkbook(
+    [{id:"order-1",platformOrderNo:"001234567890123456",courierNo:"SF000000000001"}],
+    [
+      {orderId:"order-1",title:"测试商品",size:"42",qty:2,purchaseCourierNo:"JD000000000002"},
+      {orderId:"order-1",title:"另一商品",size:"M",qty:1,purchaseCourierNo:""},
+    ],
+    "2026-09-19T00:00:00.000Z",
+  );
+  const workbook=new ExcelJS.Workbook();
+  await workbook.xlsx.load(bytes);
+  const sheet=workbook.getWorksheet("订单数据");
+  assert.ok(sheet);
+  assert.deepEqual(sheet.getRow(1).values.slice(1),["商品名","尺码","件数","运单号","订单号"]);
+  assert.deepEqual(sheet.getRow(2).values.slice(1),["测试商品","42",2,"JD000000000002","001234567890123456"]);
+  assert.deepEqual(sheet.getRow(3).values.slice(1),["另一商品","M",1,"SF000000000001","001234567890123456"]);
+  assert.equal(sheet.getCell("D2").numFmt,"@");
+  assert.equal(sheet.getCell("E2").numFmt,"@");
+});
+
 test("order titles show quantity for repeated single styles and total units for multiple styles",async()=>{
   const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
   assertJsMatch(page,/const orderTitleWithQuantity = \(order:PurchaseOrder\) =>/);
