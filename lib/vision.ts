@@ -1,11 +1,11 @@
 /**
  * 智能识图：把电商订单截图或快递面单交给视觉大模型，抽取结构化字段。
  *
- * 适配 OpenAI 兼容的 chat/completions 协议（通义千问 VL、豆包、智谱 GLM-4V、GPT-4o 等均支持），
- * 通过环境变量配置：
- *   VISION_API_BASE  服务地址，如 https://dashscope.aliyuncs.com/compatible-mode/v1
+ * 适配 OpenAI 兼容的 chat/completions 协议，当前生产环境使用智谱 GLM-5.3-Flash，
+ * 通过服务端环境变量配置：
+ *   VISION_API_BASE  服务地址，如 https://open.bigmodel.cn/api/paas/v4
  *   VISION_API_KEY   密钥
- *   VISION_MODEL     模型名，如 qwen-vl-plus
+ *   VISION_MODEL     模型名，如 glm-5.3-flash
  *
  * 模型只负责"看图抽字段"，字段归一化（渠道名、快递公司名）在本文件用确定性规则完成，便于测试与排错。
  */

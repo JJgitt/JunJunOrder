@@ -109,7 +109,7 @@ npm run dev
 - `COOKIE_SECURE`：HTTPS 环境必须为 `true`
 - `UPLOAD_DIR`：订单图片持久化目录
 - `OCR_ENDPOINT`、`OCR_TOKEN`：可选旧版面单 OCR 适配器。未配置 `VISION_*` 时，拍照收货仍可走此接口；已配置智能识图时不会使用。
-- `VISION_API_BASE`、`VISION_API_KEY`、`VISION_MODEL`：可选智能识图服务，同时用于采购订单截图自动填写，以及管理员拍照识别快递面单。面单识别后会按运单号反查采购单（匹配订单头和商品行快递单号）。走 OpenAI 兼容的 `chat/completions` 协议，通义千问 VL（`https://dashscope.aliyuncs.com/compatible-mode/v1` + `qwen-vl-plus`）、豆包、智谱 GLM-4V、GPT-4o 等均可直接使用；`VISION_TIMEOUT_MS` 为单次识别超时（未设置时单张默认 45000，多张默认 75000）。未配置时识图入口会提示"尚未配置"，其余功能不受影响
+- `VISION_API_BASE`、`VISION_API_KEY`、`VISION_MODEL`：可选智能识图服务，同时用于采购订单截图自动填写、管理员拍照识别快递面单和结款截图金额识别。当前使用智谱 OpenAI 兼容接口（`https://open.bigmodel.cn/api/paas/v4` + `glm-5.3-flash`）；API Key 仅保存在本机或服务器环境变量，不进入代码和镜像。面单识别后会按运单号反查采购单（匹配订单头和商品行快递单号）。`VISION_TIMEOUT_MS` 为单次识别超时（未设置时单张默认 45000，多张默认 75000，部署示例统一设为 75000）。未配置时识图入口会提示"尚未配置"，其余功能不受影响
 - `DEWU_SYNC_ENDPOINT`、`DEWU_APP_KEY`、`DEWU_APP_SECRET`：可选得物服务端适配器
 
 ## 常用命令
