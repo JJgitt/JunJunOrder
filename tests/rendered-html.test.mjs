@@ -729,7 +729,7 @@ test("order entry recognizes screenshots through a vision model and prefills the
     assert.match(compose,new RegExp(`${key}: \\$\\{${key}:-\\}`));
   }
   assert.match(envExample,/^VISION_API_BASE=https:\/\/open\.bigmodel\.cn\/api\/paas\/v4$/m);
-  assert.match(envExample,/^VISION_MODEL=glm-5\.3-flash$/m);
+  assert.match(envExample,/^VISION_MODEL=glm-4\.6v$/m);
   assert.match(envExample,/^VISION_TIMEOUT_MS=75000$/m);
   assert.doesNotMatch(envExample,/dashscope|qwen-vl/i);
 });

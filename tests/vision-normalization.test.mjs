@@ -14,6 +14,32 @@ test("recognized SKUs are preserved and each item falls back independently", () 
   assert.deepEqual(result.items.map(item => item.sku), ["AB123-01", "鞋款二"]);
 });
 
+test("non-size specification text becomes the SKU when no explicit SKU was recognized", () => {
+  const result = normalizeRecognition({items:[
+    {title:"轻舒绒睡衣",sku:"",size:"颜色分类：夜影黑 / 尺码：M"},
+    {title:"复古跑鞋",size:"奶油白、41.5"},
+    {title:"羽绒服",size:"款式：短款；XL"},
+    {title:"尺码参考表",size:"M/L/XL"},
+  ]});
+  assert.deepEqual(result.items.map(item => ({sku:item.sku,size:item.size})), [
+    {sku:"夜影黑",size:"M"},
+    {sku:"奶油白",size:"41.5"},
+    {sku:"短款",size:"XL"},
+    {sku:"尺码参考表",size:"M/L/XL"},
+  ]);
+});
+
+test("explicit SKUs win over specification descriptions and plain sizes still fall back to titles", () => {
+  const result = normalizeRecognition({items:[
+    {title:"跑鞋",sku:"AB123",size:"夜影黑 / 42"},
+    {title:"针织衫",sku:"",size:"L"},
+  ]});
+  assert.deepEqual(result.items.map(item => ({sku:item.sku,size:item.size})), [
+    {sku:"AB123",size:"42"},
+    {sku:"针织衫",size:"L"},
+  ]);
+});
+
 test("missing names and SKUs are not invented", () => {
   const result = normalizeRecognition({items:[{title:"",sku:"",size:"42"},{}]});
   assert.equal(result.items.length, 1);

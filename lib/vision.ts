@@ -1,11 +1,11 @@
 /**
  * 智能识图：把电商订单截图或快递面单交给视觉大模型，抽取结构化字段。
  *
- * 适配 OpenAI 兼容的 chat/completions 协议，当前生产环境使用智谱 GLM-5.3-Flash，
+ * 适配 OpenAI 兼容的 chat/completions 协议，当前生产环境使用智谱 GLM-4.6V，
  * 通过服务端环境变量配置：
  *   VISION_API_BASE  服务地址，如 https://open.bigmodel.cn/api/paas/v4
  *   VISION_API_KEY   密钥
- *   VISION_MODEL     模型名，如 glm-5.3-flash
+ *   VISION_MODEL     模型名，如 glm-4.6v
  *
  * 模型只负责"看图抽字段"，字段归一化（渠道名、快递公司名）在本文件用确定性规则完成，便于测试与排错。
  */
@@ -34,8 +34,8 @@ export const visionPrompt = `你是采购订单录入助手。用户会上传一
   "items": [
     {
       "title": "商品名称，去掉店铺名、活动词、【】里的促销语，保留品牌与款名",
-      "sku": "图片中明确标注的货号/款号/型号，例如 DD1391-100、M9060BE1、273303；未看到或无法确认时填空字符串，不要将颜色、尺码或普通规格文字猜作货号；系统会在货号为空时自动使用商品名称",
-      "size": "尺码，如 42、41.5、XS、L、均码；没有填空字符串",
+      "sku": "优先填写图片中明确标注的货号/款号/型号，例如 DD1391-100、M9060BE1、273303；如果没有明确货号，但商品规格同时包含尺码和颜色/款式等其他描述，则把去掉尺码后的规格描述填入货号，例如规格‘夜影黑 / 42’应填‘夜影黑’；仍无法确认时填空字符串",
+      "size": "只填写规格中的尺码部分，如 42、41.5、XS、M、L、XL、均码；不要混入颜色或款式描述；没有填空字符串",
       "qty": 购买数量（整数，默认 1）,
       "amount": 该商品实付金额（数字，单位元）；优先取"实付/到手/合计"金额，找不到填 null
     }
@@ -115,6 +115,40 @@ const str = (value: unknown) => String(value ?? "").trim();
 const positiveInt = (value: unknown) => { const n = Math.floor(Number(value)); return Number.isFinite(n) && n > 0 ? n : 1; };
 const amountOrNull = (value: unknown) => { if (value === null || value === undefined || value === "") return null; const n = Number(String(value).replace(/[¥￥,，\s]/g, "")); return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null; };
 
+const sizeToken = /(?:XXXXL|XXXL|XXL|XL|XXXS|XXS|XS|FREE|均码|S|M|L|F|\d{1,3}(?:\.\d{1,2})?)/i;
+const specificationSeparator = /[\s,，/|;；·、]+/;
+
+/**
+ * 部分平台把颜色/款式与尺码放在同一个“规格”字段里。识别结果若仍把它们一起放进 size，
+ * 就保留纯尺码，并把其余描述作为缺失货号的候选值。
+ */
+export function splitRecognizedSpecification(raw: unknown): { size: string; skuCandidate: string } {
+  const value = str(raw);
+  if (!value) return { size: "", skuCandidate: "" };
+  const parts = value
+    .replace(/([：:])/g, "$1 ")
+    .split(specificationSeparator)
+    .map(part => part.trim())
+    .filter(Boolean);
+  const sizes: string[] = [];
+  const descriptions: string[] = [];
+  for (const part of parts) {
+    const normalized = part.replace(/^(?:尺码|码数|大小)[：:]?/i, "").replace(/码$/i, "").trim();
+    if (new RegExp(`^${sizeToken.source}$`, "i").test(normalized)) {
+      sizes.push(/[a-z]/i.test(normalized) ? normalized.toUpperCase() : normalized);
+      continue;
+    }
+    const description = part
+      .replace(/^(?:颜色分类|颜色|款式|规格)[：:]?/i, "")
+      .replace(/^(?:尺码|码数|大小)[：:]?/i, "")
+      .trim();
+    if (description) descriptions.push(description);
+  }
+  return sizes.length
+    ? { size: sizes.join("/"), skuCandidate: descriptions.join(" ").trim() }
+    : { size: value, skuCandidate: "" };
+}
+
 export function normalizeSettlementAmount(payload: unknown): number | null {
   const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
   const amount = amountOrNull(record.amount ?? record.paidAmount ?? record.paymentAmount ?? record.transferAmount);
@@ -127,7 +161,17 @@ export function normalizeRecognition(payload: unknown): RecognizedOrder {
   const rawItems = Array.isArray(record.items) ? record.items : [];
   const items = rawItems
     .map(item => (item && typeof item === "object" ? item as Record<string, unknown> : {}))
-    .map(item => ({ title: str(item.title), sku: str(item.sku) || str(item.title), size: str(item.size), qty: positiveInt(item.qty), amount: amountOrNull(item.amount) }))
+    .map(item => {
+      const title = str(item.title);
+      const specification = splitRecognizedSpecification(item.size);
+      return {
+        title,
+        sku: str(item.sku) || specification.skuCandidate || title,
+        size: specification.size,
+        qty: positiveInt(item.qty),
+        amount: amountOrNull(item.amount),
+      };
+    })
     .filter(item => item.title || item.sku || item.size)
     .slice(0, 20);
   const notes = (Array.isArray(record.notes) ? record.notes : []).map(str).filter(Boolean).slice(0, 5);
