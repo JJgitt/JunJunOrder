@@ -1059,8 +1059,6 @@ function AdminOrders({
         </div>
         <SectionHead title="采购订单" note={orderListSummary(visible)}/>
         <div className="batch-toolbar"><label><input type="checkbox" checked={allVisibleSelected} onChange={toggleAll}/><span>{allVisibleSelected ? "取消全选" : "全选当前结果"}</span></label><b>{selectedIds.length ? `已选择 ${selectedIds.length} 笔 · 共 ${selectedItemQuantity} 件` : "可批量选择订单"}</b>
-            <button type="button" className="batch-export-button" disabled={exporting || !exportOrders.length}
-                    aria-busy={exporting} onClick={() => void downloadExcel()}>{exporting ? "正在导出…" : selectedIds.length ? `导出已选 ${selectedIds.length}` : `导出当前 ${visible.length}`}</button>
             <button className="batch-settle-button" disabled={!selectedSettleReady.length}
                     onClick={() => setBatchSettleOpen(true)}>批量结款{selectedSettleReady.length ? ` ${selectedSettleReady.length}` : ""}</button>
             <button className="batch-ship-button" disabled={!selectedReady.length}
@@ -1068,6 +1066,8 @@ function AdminOrders({
             <button className="batch-delete-button" disabled={!selectedIds.length}
                     onClick={() => setDeleteOpen(true)}>批量删除
             </button>
+            <button type="button" className="batch-export-button" disabled={exporting || !exportOrders.length}
+                    aria-busy={exporting} onClick={() => void downloadExcel()}>{exporting ? "正在导出…" : selectedIds.length ? `导出已选 ${selectedIds.length}` : `导出当前 ${visible.length}`}</button>
         </div>
         <div className="order-list">{visible.map(order => <OrderCard key={order.id} order={order} selectable
                                                                      selected={selectedSet.has(order.id)}

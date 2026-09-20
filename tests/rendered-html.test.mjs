@@ -617,6 +617,7 @@ test("administrator exports selected orders or the current filtered result as Ex
   assertJsMatch(page,/fetch\("\/api\/export",\{method:"POST",headers:\{"content-type":"application\/json"\},body:JSON\.stringify\(\{orderIds:exportOrders\.map\(order=>order\.id\)\}\)\}\)/);
   assertJsMatch(page,/className="batch-export-button"/);
   assertJsMatch(page,/selectedIds\.length\?`导出已选 \$\{selectedIds\.length\}`:`导出当前 \$\{visible\.length\}`/);
+  assertJsMatch(page,/onClick=\{\(\) => setDeleteOpen\(true\)\}>批量删除<\/button><button type="button" className="batch-export-button"/,"export sits to the right of batch delete");
   assert.match(exportRoute,/export async function POST\(request:Request\)/);
   assert.match(exportRoute,/assertSameOrigin\(request\)/);
   assert.match(exportRoute,/requireAdmin\(user\)/);
