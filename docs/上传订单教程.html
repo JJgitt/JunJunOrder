@@ -226,12 +226,12 @@
       <tr><td><b>采购渠道 *</b></td><td>京东</td><td>截图 ① 店铺「361°运动鞋服旗舰店」所在平台</td></tr>
       <tr><td><b>平台订单号</b></td><td>3626459002730963</td><td>截图 ① 订单编号</td></tr>
       <tr><td><b>商品名称 *</b></td><td>361°男鞋运动鞋飞燃5</td><td>截图 ① 商品标题（被截断时按原文补全）</td></tr>
-      <tr><td><b>尺码 *</b></td><td>42【8.5】</td><td>截图 ① 规格「42【8.5】」，按原文填写</td></tr>
+      <tr><td><b>尺码 *</b></td><td>42</td><td>截图 ① 规格「热炼，42【8.5】」——系统自动拆出尺码部分</td></tr>
       <tr><td><b>数量 *</b></td><td>2</td><td>截图 ①「数量 ×2」</td></tr>
       <tr><td><b>实付金额 *</b></td><td>647.99</td><td>截图 ①「实付款 合计 ¥647.99」（两件合计）</td></tr>
       <tr><td><b>采购快递公司 *</b></td><td>中通快递</td><td>截图 ②「中通快递」</td></tr>
       <tr><td><b>采购快递单号 *</b></td><td>75627728167132</td><td>截图 ② 运单号</td></tr>
-      <tr><td><b>货号 *</b></td><td class="must">两张截图都没有</td><td class="must">识图会提示「未识别到：货号」，需到商品详情页查看后手动补填</td></tr>
+      <tr><td><b>货号 *</b></td><td class="must">热炼（规格描述兜底）</td><td class="must">截图没有明确货号时，系统把规格里去掉尺码的描述「热炼」填为货号——这是配色名而非货号，<b>必须到商品详情页换成真实货号</b></td></tr>
     </tbody>
   </table>
   <div class="tip info">这张运单还处于「已揽收 / 运输中」——上传后订单状态是<b>待审核</b>，管理员审核通过后才变「在途」；等包裹到仓，管理员拍照识运单即可匹配这笔订单入库。</div>
@@ -306,7 +306,8 @@
       <ul>
         <li>一单拆多张截图也行：选 3 张一起识别，长订单分段截更准。</li>
         <li>截图要拍<b>订单详情页</b>（含商品和金额），只拍物流页只能识别出快递信息。</li>
-        <li>识别时按钮显示「正在识别订单截图，请稍候」，别重复点。</li>
+        <li>识别时按钮显示「正在识别订单截图，请稍候」，别重复点；最多识别 20 个商品行。</li>
+        <li>识图服务由服务器配置（当前为智谱 GLM-4.6V，走 `VISION_*` 环境变量），识别不出时不会编造字段。</li>
       </ul>
       <div class="tip info">若提示「尚未配置智能识图服务」，说明服务器没配视觉模型，跳过本步手动填写即可，其余功能不受影响。</div>
     </div>
@@ -321,7 +322,7 @@
           <div class="dash"><i>✦</i><div><b>智能识图：上传订单截图自动填写</b><small>最多 3 张</small></div></div>
           <div class="result hot" data-badge="3">
             <b>已自动填写：采购渠道、平台订单号、快递公司、快递单号、1 个商品</b>
-            <span>未识别到：货号，请手动补充</span>
+            <span>注意：货号取自规格描述「热炼」，请核对</span>
             <em>2 张截图已加入订单附件</em>
             <svg class="arrow" viewBox="0 0 30 14"><path d="M1 7 H21" stroke="#e5484d" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M21 2 L28.5 7 L21 12 Z" fill="#e5484d"/></svg>
             <span class="tag">看这行：已填了什么、还差什么</span>
@@ -361,8 +362,8 @@
           <div class="itemcard">
             <div class="ih"><i>1</i><b>361°男鞋运动鞋飞燃5</b></div>
             <div class="row2">
-              <div class="ctrl"><span class="lb">货号 *</span><span class="ph">截图中没有，需手动补</span></div>
-              <div class="ctrl"><span class="lb">尺码 *</span><span class="val">42【8.5】</span></div>
+              <div class="ctrl"><span class="lb">货号 *</span><span class="val">热炼</span></div>
+              <div class="ctrl"><span class="lb">尺码 *</span><span class="val">42</span></div>
             </div>
           </div>
         </div>
@@ -392,8 +393,8 @@
               <span class="tag">截图标题被截断时补全全名</span>
             </div>
             <div class="row2">
-              <div class="ctrl"><span class="lb">货号 *</span><span class="ph">截图未含货号 → 手动补</span></div>
-              <div class="ctrl"><span class="lb">尺码 *</span><span class="val">42【8.5】</span></div>
+              <div class="ctrl"><span class="lb">货号 *</span><span class="val">热炼</span></div>
+              <div class="ctrl"><span class="lb">尺码 *</span><span class="val">42</span></div>
             </div>
             <div class="row2">
               <div class="ctrl"><span class="lb">数量 *</span><span class="val">2</span></div>
@@ -412,7 +413,8 @@
       <div class="step-head"><span class="num">5</span><h3>核对商品明细（每个商品都要填全）</h3></div>
       <p>一笔订单可以包含多个商品行，每一行都要独立填完这 5 项：</p>
       <ul>
-        <li><b>商品名称 *</b>、<b>货号 *</b>、<b>尺码 *</b>：按平台订单原文填，货号是后续入库和发货比对的关键。</li>
+        <li><b>商品名称 *</b>、<b>尺码 *</b>：按平台订单原文填；规格里的尺码与颜色会被自动拆分，尺码只留「42」这类纯尺码。</li>
+        <li><b>货号 *</b>：优先填商品详情页的明确货号（如 DD1391-100）。截图没有明确货号时，系统会把规格描述（本例「热炼」）兜底填进来——那只是配色名，<b>务必进商品详情页换成真实货号</b>，否则入库与发货比对会错。</li>
         <li><b>数量 *</b>：整数且 ≥ 1。</li>
         <li><b>实付金额 *</b>：填<b>元</b>，可带两位小数；系统按分保存，不会丢精度。</li>
         <li>多商品点「＋ 添加商品」新增一行，底部会自动算合计件数与合计金额。</li>
@@ -531,8 +533,8 @@
       <tr><td><b>采购渠道</b></td><td class="must">必填</td><td>京东 / 淘宝 / 抖音 / 唯品会 / 拼多多 / 其他</td></tr>
       <tr><td><b>平台订单号</b></td><td class="opt">选填</td><td>填了就不能与同渠道未驳回订单重复</td></tr>
       <tr><td><b>商品名称</b></td><td class="must">必填</td><td>按平台订单原文，如「361°男鞋运动鞋飞燃5」</td></tr>
-      <tr><td><b>货号</b></td><td class="must">必填</td><td>以商品详情页为准（截图常不含货号），入库与发货比对依据</td></tr>
-      <tr><td><b>尺码</b></td><td class="must">必填</td><td>如 42 / 41.5</td></tr>
+      <tr><td><b>货号</b></td><td class="must">必填</td><td>以商品详情页的明确货号为准；识图会用规格描述兜底，必须核对替换</td></tr>
+      <tr><td><b>尺码</b></td><td class="must">必填</td><td>只填尺码部分，如 42 / 41.5 / XL；颜色款式不要混进来</td></tr>
       <tr><td><b>数量</b></td><td class="must">必填</td><td>整数，最小 1</td></tr>
       <tr><td><b>实付金额</b></td><td class="must">必填</td><td>单位元，按实付填写，系统按分保存</td></tr>
       <tr><td><b>采购快递公司</b></td><td class="must">必填</td><td>每个商品单独填；列表外选「其他」手输</td></tr>
