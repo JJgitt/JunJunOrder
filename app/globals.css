@@ -4881,6 +4881,10 @@ button:active {
     background: #176b38
 }
 
+.batch-toolbar .batch-copy-button {
+    background: #0f766e
+}
+
 .batch-toolbar .batch-delete-button {
     background: var(--danger)
 }

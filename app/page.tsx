@@ -5,6 +5,7 @@ import {createPortal} from "react-dom";
 import {useRouter} from "next/navigation";
 import Image from "next/image";
 import {courierTrackingUrl, findOrdersByCourierNo, findTransitCandidatesByCourierTail, normalizeCourierNo} from "@/lib/courier";
+import {buildOrderCopyText} from "@/lib/order-copy";
 import {dateKey, dayRange, timestamp, waitingLabel, type ServerClock} from "@/lib/time";
 import {ServerClockProvider, useServerClock} from "./server-clock";
 
@@ -968,6 +969,26 @@ function AdminOrders({
         }
     }
 
+    /** 「导出文案」：把和导出 Excel 相同范围的订单合并成可直接粘贴的采购清单，优先写剪贴板，剪贴板不可用时下载 txt。 */
+    async function copyOrderText() {
+        if (!exportOrders.length) return;
+        const text = buildOrderCopyText(exportOrders, now, timeZone);
+        try {
+            await copyText(text);
+            onNotify(`已复制 ${exportOrders.length} 笔订单的文案，可直接粘贴`);
+        } catch {
+            const url = URL.createObjectURL(new Blob([text], {type: "text/plain;charset=utf-8"}));
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `junjun-orders-${dateKey(now, timeZone)}.txt`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 0);
+            onNotify("剪贴板不可用，已改为下载文案文件");
+        }
+    }
+
     async function confirmBatchSettle() {
         const ids = selectedSettleReady.map(order => order.id);
         if (await onBatchSettle(ids)) {
@@ -1068,6 +1089,9 @@ function AdminOrders({
             </button>
             <button type="button" className="batch-export-button" disabled={exporting || !exportOrders.length}
                     aria-busy={exporting} onClick={() => void downloadExcel()}>{exporting ? "正在导出…" : selectedIds.length ? `导出已选 ${selectedIds.length}` : `导出当前 ${visible.length}`}</button>
+            <button type="button" className="batch-copy-button" disabled={!exportOrders.length}
+                    title="按货号、商品名、尺码合并件数，复制成可粘贴的采购清单"
+                    onClick={() => void copyOrderText()}>导出文案</button>
         </div>
         <div className="order-list">{visible.map(order => <OrderCard key={order.id} order={order} selectable
                                                                      selected={selectedSet.has(order.id)}

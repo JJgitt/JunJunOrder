@@ -631,6 +631,21 @@ test("administrator exports selected orders or the current filtered result as Ex
   assertCssMatch(styles,/\.batch-toolbar \.batch-export-button\{background:#176b38\}/);
 });
 
+test("administrator copies the same export scope as a pasteable purchase list",async()=>{
+  const [page,styles]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
+  ]);
+  assertJsMatch(page,/import\{buildOrderCopyText\}from"@\/lib\/order-copy"/);
+  assertJsMatch(page,/async function copyOrderText\(\)/);
+  assertJsMatch(page,/const text=buildOrderCopyText\(exportOrders,now,timeZone\)/);
+  assertJsMatch(page,/await copyText\(text\)/);
+  assertJsMatch(page,/new Blob\(\[text\],\{type:"text\/plain;charset=utf-8"\}\)/,"clipboard failure falls back to a txt download");
+  assertJsMatch(page,/`导出当前 \$\{visible\.length\}`\}<\/button><button type="button" className="batch-copy-button" disabled=\{!exportOrders\.length\}/,"copy button sits right after the Excel export button");
+  assertJsMatch(page,/onClick=\{\(\) => void copyOrderText\(\)\}>导出文案<\/button>/);
+  assertCssMatch(styles,/\.batch-toolbar \.batch-copy-button\{background:#0f766e\}/);
+});
+
 test("generated order workbook opens with exact columns and preserves long numbers",async()=>{
   const [{createOrdersWorkbook},{default:ExcelJS}]=await Promise.all([
     import("../lib/order-export.ts"),
