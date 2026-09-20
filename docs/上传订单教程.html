@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>上传采购订单 · 操作教程 | 骏骏订单智能采购系统</title>
+<style>
+  :root{
+    --bg:#f5f6fa; --card:#ffffff; --ink:#1e2430; --ink-2:#5b6478; --ink-3:#8a93a6;
+    --line:#e5e8f0; --brand:#5b5bd6; --brand-soft:#eeeefc; --hot:#e5484d; --hot-soft:#fff0f0;
+    --ok:#12805c; --ok-soft:#e9f7f1; --warn:#b25e09; --warn-soft:#fff5e6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Segoe UI",system-ui,sans-serif;
+    line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1060px;margin:0 auto;padding:32px 20px 80px}
+
+  /* 页头 */
+  header.hero{background:linear-gradient(135deg,#5b5bd6,#7b61e8);color:#fff;border-radius:20px;
+    padding:30px 32px;box-shadow:0 12px 30px rgba(91,91,214,.22)}
+  header.hero h1{margin:0 0 6px;font-size:27px;letter-spacing:.5px}
+  header.hero p{margin:0;color:#e8e7ff;font-size:14.5px;max-width:760px}
+  .hero-meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+  .hero-meta span{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);
+    border-radius:999px;padding:4px 13px;font-size:12.5px}
+
+  /* 章节 */
+  section{margin-top:34px}
+  h2.sec{font-size:19px;margin:0 0 4px;display:flex;align-items:center;gap:9px}
+  h2.sec::before{content:"";width:4px;height:17px;border-radius:2px;background:var(--brand)}
+  .sec-note{color:var(--ink-3);font-size:13.5px;margin:0 0 18px}
+
+  /* 全流程条 */
+  .flow{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;
+    display:flex;flex-wrap:wrap;align-items:center;gap:8px;box-shadow:0 2px 10px rgba(30,36,48,.04)}
+  .fnode{border-radius:10px;padding:9px 14px;font-size:13.5px;font-weight:600;background:#f2f3f8;
+    color:var(--ink-2);border:1px solid var(--line)}
+  .fnode.me{background:var(--brand);color:#fff;border-color:var(--brand);
+    box-shadow:0 4px 12px rgba(91,91,214,.28)}
+  .fnode.admin{background:var(--brand-soft);color:var(--brand);border-color:#d7d7f5}
+  .farrow{color:var(--brand);font-size:16px;font-weight:700;opacity:.75}
+  .flow-legend{margin-top:12px;font-size:12.5px;color:var(--ink-3);display:flex;gap:16px;flex-wrap:wrap}
+  .flow-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px}
+
+  /* 步骤卡片 */
+  .step{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px 26px;
+    margin-top:20px;box-shadow:0 2px 10px rgba(30,36,48,.04);display:flex;gap:26px;align-items:flex-start}
+  .step-body{flex:1;min-width:0}
+  .step-head{display:flex;align-items:center;gap:11px;margin-bottom:10px}
+  .num{width:30px;height:30px;flex:0 0 30px;border-radius:9px;background:var(--brand);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
+  .step-head h3{margin:0;font-size:17px}
+  .step-body p{margin:0 0 10px;font-size:14.5px;color:var(--ink-2)}
+  .step-body ul{margin:0;padding-left:20px;font-size:14px;color:var(--ink-2)}
+  .step-body li{margin-bottom:5px}
+  .step-body b{color:var(--ink)}
+  .tip{margin-top:12px;border-radius:11px;padding:10px 14px;font-size:13.2px}
+  .tip.warn{background:var(--warn-soft);color:var(--warn);border:1px solid #f6dfb8}
+  .tip.info{background:var(--brand-soft);color:#4a4ac0;border:1px solid #dcdcf7}
+  .tip.ok{background:var(--ok-soft);color:var(--ok);border:1px solid #c9ecdd}
+
+  /* 手机界面示意 */
+  .phone-wrap{flex:0 0 530px;position:relative}
+  .phone{width:320px;background:#fbfbfe;border:1px solid #dfe3ee;border-radius:22px;
+    box-shadow:0 8px 22px rgba(30,36,48,.10);overflow:visible;position:relative}
+  .phone-top{padding:14px 16px 12px;border-bottom:1px solid var(--line);background:#fff;
+    border-radius:22px 22px 0 0}
+  .phone-top small{display:block;font-size:10px;letter-spacing:1.4px;color:var(--brand);font-weight:700}
+  .phone-top strong{font-size:15px}
+  .phone-top p{margin:3px 0 0;font-size:11px;color:var(--ink-3);line-height:1.45}
+  .phone-body{padding:14px}
+  .back{display:none}
+
+  .ctrl{background:#fff;border:1px solid #dfe3ee;border-radius:11px;padding:9px 12px;margin-bottom:9px}
+  .ctrl .lb{display:block;font-size:11px;color:var(--ink-3);margin-bottom:4px}
+  .ctrl .val{font-size:13px;color:var(--ink)}
+  .ctrl .ph{font-size:13px;color:#aab2c2}
+  .ctrl select,.ctrl input{width:100%;border:0;background:transparent;font-size:13px;color:var(--ink);
+    font-family:inherit;appearance:none}
+  .row2{display:flex;gap:8px}
+  .row2>*{flex:1}
+  .dash{border:1.5px dashed #c3c8d8;border-radius:12px;padding:11px 12px;display:flex;gap:10px;
+    align-items:flex-start;background:#fcfcff;margin-bottom:9px}
+  .dash i{font-style:normal;font-size:15px;line-height:1.2;color:var(--brand)}
+  .dash b{display:block;font-size:12.5px}
+  .dash small{display:block;font-size:10.5px;color:var(--ink-3);margin-top:2px}
+  .dash em{display:block;font-style:normal;font-size:10.5px;color:var(--warn);margin-top:3px}
+  .result{background:var(--ok-soft);border:1px solid #c9ecdd;border-radius:10px;padding:8px 11px;
+    font-size:11.5px;color:var(--ok);margin-bottom:9px}
+  .result span{color:var(--warn)}
+  .result em{display:block;font-style:normal;color:var(--ink-3);margin-top:3px}
+  .itemcard{border:1px solid var(--line);border-radius:12px;padding:10px;background:#fff;margin-bottom:9px}
+  .itemcard .ih{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+  .itemcard .ih i{font-style:normal;width:17px;height:17px;border-radius:5px;background:#eceef6;
+    color:var(--ink-2);font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .itemcard .ih b{font-size:12.5px}
+  .sub{border-top:1px dashed #e3e6f0;margin-top:8px;padding-top:8px}
+  .sub .sh{font-size:11px;color:var(--ink-2);margin-bottom:6px}
+  .btn-add{width:100%;border:1px dashed #c3c8d8;background:#fcfcff;border-radius:11px;padding:9px;
+    font-size:12.5px;color:var(--ink-2);text-align:center}
+  .total{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink-2);
+    padding:8px 2px 2px}
+  .total b{color:var(--ink)}
+  .btn-main{width:100%;border:0;border-radius:12px;padding:12px;background:var(--brand);color:#fff;
+    font-size:14px;font-weight:600}
+  .btn-main.ghost{background:#eceef6;color:var(--ink-2)}
+  .quick{border:1px solid var(--line);border-radius:12px;padding:11px 12px;display:flex;gap:10px;
+    align-items:center;background:#fff;margin-bottom:9px}
+  .quick i{font-style:normal;width:30px;height:30px;border-radius:9px;background:var(--brand);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:16px}
+  .quick b{display:block;font-size:12.5px}
+  .quick small{display:block;font-size:10.5px;color:var(--ink-3)}
+  .quick em{margin-left:auto;font-style:normal;color:var(--ink-3)}
+  .stat-row{display:flex;gap:6px;margin-bottom:9px}
+  .stat{flex:1;background:#f4f5fa;border-radius:9px;padding:7px 4px;text-align:center}
+  .stat b{display:block;font-size:14px}
+  .stat span{font-size:9.5px;color:var(--ink-3)}
+  .alert{background:var(--hot-soft);border:1px solid #f6d3d4;border-radius:10px;padding:8px 10px;
+    font-size:11px;color:var(--hot);margin-bottom:9px}
+  .alert b{display:block}
+  .sect{font-size:11px;color:var(--ink-3);margin:2px 0 8px}
+
+  /* 箭头标注 */
+  .hot{position:relative;outline:2px solid var(--hot);outline-offset:2px;border-radius:12px;
+    animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(229,72,77,.18)}50%{box-shadow:0 0 0 6px rgba(229,72,77,.10)}}
+  .hot::before{content:attr(data-badge);position:absolute;left:-9px;top:-9px;width:19px;height:19px;
+    border-radius:50%;background:var(--hot);color:#fff;font-size:11px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;z-index:3;box-shadow:0 2px 6px rgba(229,72,77,.35)}
+  .hot2{outline:2px solid var(--hot);outline-offset:2px;border-radius:12px;position:relative}
+  .arrow{position:absolute;left:calc(100% + 3px);top:50%;transform:translateY(-50%);
+    width:30px;height:14px;z-index:2;pointer-events:none}
+  .tag{position:absolute;left:calc(100% + 34px);top:50%;transform:translateY(-50%);
+    background:#fff;border:1px solid #f3c9ca;color:var(--hot);border-radius:9px;padding:6px 11px;
+    font-size:12px;font-weight:600;line-height:1.4;width:172px;box-shadow:0 4px 12px rgba(229,72,77,.12);z-index:2}
+  .tag.left{left:auto;right:calc(100% + 34px);text-align:right}
+  .arrow.left{left:auto;right:calc(100% + 3px);transform:translateY(-50%) scaleX(-1)}
+  @media (max-width:960px){
+    .step{flex-direction:column;gap:16px}
+    .phone-wrap{flex:none;width:320px}
+    .tag,.arrow{position:static;transform:none;width:auto;display:block;margin:6px 0 0;
+      box-shadow:none;background:var(--hot-soft)}
+    .tag.left{text-align:left}
+  }
+
+  /* 案例截图 */
+  .case-imgs{display:flex;gap:16px;margin-bottom:16px}
+  .case-imgs figure{flex:1;margin:0;min-width:0}
+  .case-imgs img{width:100%;display:block;border-radius:14px;border:1px solid var(--line);
+    box-shadow:0 4px 14px rgba(30,36,48,.08)}
+  .case-imgs figcaption{font-size:12.5px;color:var(--ink-3);text-align:center;margin-top:7px}
+  @media (max-width:700px){.case-imgs{flex-direction:column}}
+
+  /* 表格 */
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);
+    border-radius:14px;overflow:hidden;font-size:13.5px}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line)}
+  th{background:#f7f8fc;font-size:12.5px;color:var(--ink-2)}
+  tr:last-child td{border-bottom:0}
+  td b{color:var(--ink)}
+  .must{color:var(--hot);font-weight:700}
+  .opt{color:var(--ink-3)}
+
+  /* 报错卡 */
+  .errs{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  .err{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--hot);
+    border-radius:12px;padding:14px 16px}
+  .err h4{margin:0 0 6px;font-size:14px}
+  .err p{margin:0;font-size:13px;color:var(--ink-2)}
+  .err code{background:#f2f3f8;border-radius:5px;padding:1px 5px;font-size:12px;color:#4a4ac0}
+
+  footer{margin-top:40px;text-align:center;color:var(--ink-3);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>上传采购订单 · 操作教程</h1>
+  <p>从登录到提交审核的完整路径，含智能识图填写、商品明细与逐件采购物流的填写规范。图中红色圆圈与箭头即为当步要操作的位置。</p>
+  <div class="hero-meta">
+    <span>适用：采购员上报 / 管理员代录</span>
+    <span>熟练后约 30 秒一单</span>
+    <span>手机端与电脑端界面一致</span>
+  </div>
+</header>
+
+<section>
+  <h2 class="sec">一、订单会经过哪些状态</h2>
+  <p class="sec-note">上传只是第一步，订单提交后由管理员推进后续环节。</p>
+  <div class="flow">
+    <span class="fnode me">① 采购员上传订单</span><span class="farrow">▸</span>
+    <span class="fnode">待审核</span><span class="farrow">▸</span>
+    <span class="fnode admin">管理员审核通过</span><span class="farrow">▸</span>
+    <span class="fnode">在途</span><span class="farrow">▸</span>
+    <span class="fnode admin">管理员拍照入库</span><span class="farrow">▸</span>
+    <span class="fnode">已入库</span><span class="farrow">▸</span>
+    <span class="fnode admin">按商品逐个发货</span><span class="farrow">▸</span>
+    <span class="fnode">已发货</span><span class="farrow">▸</span>
+    <span class="fnode admin">结款</span>
+  </div>
+  <div class="flow-legend">
+    <span><i style="background:#5b5bd6"></i>你的操作</span>
+    <span><i style="background:#eeeefc;border:1px solid #d7d7f5"></i>管理员操作</span>
+    <span>被驳回时：在首页点「修改后重新提交」，改完再次提交即回到待审核</span>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">二、实战案例：一笔真实的京东订单</h2>
+  <p class="sec-note">本教程全程以这笔订单为例（收件人与揽收信息已打码）。两张截图一起传给智能识图，正是「同一订单分段截图」的标准用法。</p>
+  <div class="case-imgs">
+    <figure>
+      <img src="images/case-order-detail.png" alt="京东订单详情截图（收件信息已打码）"/>
+      <figcaption>截图 ① 订单详情：渠道、单号、商品、金额</figcaption>
+    </figure>
+    <figure>
+      <img src="images/case-logistics-detail.png" alt="京东物流详情截图（地址与揽收信息已打码）"/>
+      <figcaption>截图 ② 物流详情：快递公司与运单号</figcaption>
+    </figure>
+  </div>
+  <table>
+    <thead><tr><th style="width:150px">表单字段</th><th style="width:230px">识图提取值</th><th>来源</th></tr></thead>
+    <tbody>
+      <tr><td><b>采购渠道 *</b></td><td>京东</td><td>截图 ① 店铺「361°运动鞋服旗舰店」所在平台</td></tr>
+      <tr><td><b>平台订单号</b></td><td>3626459002730963</td><td>截图 ① 订单编号</td></tr>
+      <tr><td><b>商品名称 *</b></td><td>361°男鞋运动鞋飞燃5</td><td>截图 ① 商品标题（被截断时按原文补全）</td></tr>
+      <tr><td><b>尺码 *</b></td><td>42【8.5】</td><td>截图 ① 规格「42【8.5】」，按原文填写</td></tr>
+      <tr><td><b>数量 *</b></td><td>2</td><td>截图 ①「数量 ×2」</td></tr>
+      <tr><td><b>实付金额 *</b></td><td>647.99</td><td>截图 ①「实付款 合计 ¥647.99」（两件合计）</td></tr>
+      <tr><td><b>采购快递公司 *</b></td><td>中通快递</td><td>截图 ②「中通快递」</td></tr>
+      <tr><td><b>采购快递单号 *</b></td><td>75627728167132</td><td>截图 ② 运单号</td></tr>
+      <tr><td><b>货号 *</b></td><td class="must">两张截图都没有</td><td class="must">识图会提示「未识别到：货号」，需到商品详情页查看后手动补填</td></tr>
+    </tbody>
+  </table>
+  <div class="tip info">这张运单还处于「已揽收 / 运输中」——上传后订单状态是<b>待审核</b>，管理员审核通过后才变「在途」；等包裹到仓，管理员拍照识运单即可匹配这笔订单入库。</div>
+</section>
+
+<section>
+  <h2 class="sec">三、分步操作（点箭头指向的位置）</h2>
+  <p class="sec-note">建议顺序：先识图 → 核对 → 补漏 → 提交。识图会自动填大部分字段，别急着手动敲。</p>
+
+  <!-- 步骤 1 -->
+  <div class="step">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-top"><small>BUYER HOME</small><strong>采购员首页</strong>
+          <p>订单及时上报，仓库收货更高效</p></div>
+        <div class="phone-body">
+          <div class="stat-row">
+            <div class="stat"><b>3</b><span>待审核</span></div>
+            <div class="stat"><b>5</b><span>在途</span></div>
+            <div class="stat"><b>12</b><span>已入库</span></div>
+          </div>
+          <div class="alert"><b>有订单被驳回</b>361°飞燃5 — 货号与商品详情页不符</div>
+          <div class="sect">快捷操作 · 10 秒完成上报</div>
+          <div class="quick hot" data-badge="1">
+            <i>＋</i><div><b>上传采购订单</b><small>填写渠道、商品与物流信息</small></div><em>›</em>
+            <svg class="arrow" viewBox="0 0 30 14"><path d="M1 7 H21" stroke="#e5484d" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M21 2 L28.5 7 L21 12 Z" fill="#e5484d"/></svg>
+            <span class="tag">点这里进入上报页</span>
+          </div>
+          <div class="quick"><i>▤</i><div><b>查看我的订单</b><small>跟踪审核、在途与入库状态</small></div><em>›</em></div>
+        </div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="step-head"><span class="num">1</span><h3>进入「上传采购订单」</h3></div>
+      <p>用微信号和密码登录后，在首页<b>快捷操作</b>区点「＋ 上传采购订单」。管理员则在首页或订单页点「＋ 新增采购订单」，代采购员录单。</p>
+      <ul>
+        <li>采购员账号需管理员审批通过后才能登录；游客可在登录页申请账号。</li>
+        <li>首页顶部若出现红色「有订单被驳回」，先点进去改单重提，再录新单。</li>
+      </ul>
+      <div class="tip warn">每次点「新增 / 上报」表单都是<b>全新空白</b>的，不会带出上一单内容。要改旧单请从订单列表点该单的编辑，不要重新录一遍。</div>
+    </div>
+  </div>
+
+  <!-- 步骤 2 -->
+  <div class="step">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-top"><small>NEW PURCHASE</small><strong>上报采购订单</strong>
+          <p>订单与附件将持久化保存到服务器</p></div>
+        <div class="phone-body">
+          <div class="dash hot" data-badge="2">
+            <i>✦</i><div><b>智能识图：上传订单截图自动填写</b>
+            <small>最多 3 张，支持京东 / 拼多多 / 淘宝 / 唯品会 / 抖音；同一订单可分段截图</small>
+            <em>此为辅助功能，识图后需核对！</em></div>
+            <svg class="arrow" viewBox="0 0 30 14"><path d="M1 7 H21" stroke="#e5484d" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M21 2 L28.5 7 L21 12 Z" fill="#e5484d"/></svg>
+            <span class="tag">第一件事：先点这里选截图</span>
+          </div>
+          <div class="row2">
+            <div class="ctrl"><span class="lb">采购渠道 *</span><span class="val">京东 ▾</span></div>
+            <div class="ctrl"><span class="lb">平台订单号（选填）</span><span class="ph">请输入订单号</span></div>
+          </div>
+          <div class="itemcard" style="opacity:.5">
+            <div class="ih"><i>1</i><b>商品 1</b></div>
+            <div class="ctrl"><span class="lb">商品名称 *</span><span class="ph">如 361°男鞋运动鞋飞燃5</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="step-head"><span class="num">2</span><h3>先让系统识图，自动填表</h3></div>
+      <p>进入表单后<b>第一步就点顶部的「✦ 智能识图」</b>，从相册选择平台订单详情截图（最多 3 张）。系统会调用视觉大模型抽取渠道、平台单号、快递信息和每个商品的名称 / 货号 / 尺码 / 数量 / 金额，直接填进表单。本案例就是把上一节的截图 ①、② 一起选中上传。</p>
+      <ul>
+        <li>一单拆多张截图也行：选 3 张一起识别，长订单分段截更准。</li>
+        <li>截图要拍<b>订单详情页</b>（含商品和金额），只拍物流页只能识别出快递信息。</li>
+        <li>识别时按钮显示「正在识别订单截图，请稍候」，别重复点。</li>
+      </ul>
+      <div class="tip info">若提示「尚未配置智能识图服务」，说明服务器没配视觉模型，跳过本步手动填写即可，其余功能不受影响。</div>
+    </div>
+  </div>
+
+  <!-- 步骤 3 -->
+  <div class="step">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-top"><small>NEW PURCHASE</small><strong>上报采购订单</strong></div>
+        <div class="phone-body">
+          <div class="dash"><i>✦</i><div><b>智能识图：上传订单截图自动填写</b><small>最多 3 张</small></div></div>
+          <div class="result hot" data-badge="3">
+            <b>已自动填写：采购渠道、平台订单号、快递公司、快递单号、1 个商品</b>
+            <span>未识别到：货号，请手动补充</span>
+            <em>2 张截图已加入订单附件</em>
+            <svg class="arrow" viewBox="0 0 30 14"><path d="M1 7 H21" stroke="#e5484d" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M21 2 L28.5 7 L21 12 Z" fill="#e5484d"/></svg>
+            <span class="tag">看这行：已填了什么、还差什么</span>
+          </div>
+          <div class="row2">
+            <div class="ctrl"><span class="lb">采购渠道 *</span><span class="val">京东 ▾</span></div>
+            <div class="ctrl"><span class="lb">平台订单号（选填）</span><span class="val">3626459002730963</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="step-head"><span class="num">3</span><h3>核对识别结果，只补缺的部分</h3></div>
+      <p>识图完成后会出现绿色结果条：<b>已自动填写</b>列出被填好的字段，<b>未识别到</b>列出需要你手动补的字段。截图会自动进入订单附件，不用再传一次。</p>
+      <ul>
+        <li>识别结果只是草稿，<b>提交前必须逐项核对</b>，尤其是货号、尺码和金额。</li>
+        <li>截图里只有物流信息、没有商品时，系统只填快递公司和单号，<b>不会凭空编造商品</b>，商品需你自己加。</li>
+        <li>已填过商品时再识图，新识别的商品会<b>追加</b>在后面，不会清掉你填的内容。</li>
+      </ul>
+      <div class="tip warn">金额识别错了很常见：以平台「实付」为准，不含优惠券抵扣前的原价。</div>
+    </div>
+  </div>
+
+  <!-- 步骤 4 -->
+  <div class="step">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-top"><small>NEW PURCHASE</small><strong>上报采购订单</strong></div>
+        <div class="phone-body">
+          <div class="row2 hot" data-badge="4">
+            <div class="ctrl hot2"><span class="lb">采购渠道 *</span><span class="val">京东 ▾</span></div>
+            <div class="ctrl"><span class="lb">平台订单号（选填）</span><span class="val">3626459002730963</span></div>
+            <svg class="arrow" viewBox="0 0 30 14"><path d="M1 7 H21" stroke="#e5484d" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M21 2 L28.5 7 L21 12 Z" fill="#e5484d"/></svg>
+            <span class="tag">左：选实际下单平台<br/>右：平台单号选填但不可重复</span>
+          </div>
+          <div class="sect">可选：京东 / 淘宝 / 抖音 / 唯品会 / 拼多多 / 其他</div>
+          <div class="itemcard">
+            <div class="ih"><i>1</i><b>361°男鞋运动鞋飞燃5</b></div>
+            <div class="row2">
+              <div class="ctrl"><span class="lb">货号 *</span><span class="ph">截图中没有，需手动补</span></div>
+              <div class="ctrl"><span class="lb">尺码 *</span><span class="val">42【8.5】</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="step-head"><span class="num">4</span><h3>确认订单头：渠道 + 平台订单号</h3></div>
+      <p>订单头是一整单共用的信息，只填两项：</p>
+      <ul>
+        <li><b>采购渠道 *</b>：必填，选实际下单平台；都不符选「其他」。</li>
+        <li><b>平台订单号</b>：选填，但填了就必须准确——同渠道 + 同单号在未被驳回的订单中<b>不允许重复</b>，重复会提交失败。</li>
+      </ul>
+      <div class="tip info">管理员编辑订单时，顶部还会多出「采购人」下拉，可把订单改挂到其他已启用的采购员名下。</div>
+    </div>
+  </div>
+
+  <!-- 步骤 5 -->
+  <div class="step">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-top"><small>NEW PURCHASE</small><strong>上报采购订单</strong></div>
+        <div class="phone-body">
+          <div class="itemcard">
+            <div class="ih"><i>1</i><b>361°男鞋运动鞋飞燃5</b></div>
+            <div class="ctrl hot" data-badge="5"><span class="lb">商品名称 *</span><span class="val">361°男鞋运动鞋飞燃5</span>
+              <svg class="arrow" viewBox="0 0 30 14"><path d="M1 7 H21" stroke="#e5484d" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M21 2 L28.5 7 L21 12 Z" fill="#e5484d"/></svg>
+              <span class="tag">截图标题被截断时补全全名</span>
+            </div>
+            <div class="row2">
+              <div class="ctrl"><span class="lb">货号 *</span><span class="ph">截图未含货号 → 手动补</span></div>
+              <div class="ctrl"><span class="lb">尺码 *</span><span class="val">42【8.5】</span></div>
+            </div>
+            <div class="row2">
+              <div class="ctrl"><span class="lb">数量 *</span><span class="val">2</span></div>
+              <div class="ctrl"><span class="lb">实付金额 *</span><span class="val">¥ 647.99</span></div>
+            </div>
+          </div>
+          <div class="btn-add hot" data-badge="5">＋ 添加商品
+            <svg class="arrow" viewBox="0 0 30 14"><path d="M1 7 H21" stroke="#e5484d" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M21 2 L28.5 7 L21 12 Z" fill="#e5484d"/></svg>
+            <span class="tag">一单多个商品点这里加行</span>
+          </div>
+          <div class="total"><span>合计 2 件</span><b>¥ 647.99</b></div>
+        </div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="step-head"><span class="num">5</span><h3>核对商品明细（每个商品都要填全）</h3></div>
+      <p>一笔订单可以包含多个商品行，每一行都要独立填完这 5 项：</p>
+      <ul>
+        <li><b>商品名称 *</b>、<b>货号 *</b>、<b>尺码 *</b>：按平台订单原文填，货号是后续入库和发货比对的关键。</li>
+        <li><b>数量 *</b>：整数且 ≥ 1。</li>
+        <li><b>实付金额 *</b>：填<b>元</b>，可带两位小数；系统按分保存，不会丢精度。</li>
+        <li>多商品点「＋ 添加商品」新增一行，底部会自动算合计件数与合计金额。</li>
+      </ul>
+      <div class="tip warn">只要有一个商品没填全，底部提交按钮就是灰的，点不动——这是最常见的「提交不了」原因。</div>
+    </div>
+  </div>
+
+  <!-- 步骤 6 -->
+  <div class="step">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-top"><small>NEW PURCHASE</small><strong>上报采购订单</strong></div>
+        <div class="phone-body">
+          <div class="itemcard">
+            <div class="ih"><i>1</i><b>361°男鞋运动鞋飞燃5</b></div>
+            <div class="sub">
+              <div class="sh">🚚 该商品采购物流 · 每件商品可分别填写</div>
+              <div class="row2 hot" data-badge="6">
+                <div class="ctrl hot2"><span class="lb">采购快递公司 *</span><span class="val">中通快递 ▾</span></div>
+                <div class="ctrl"><span class="lb">采购快递单号 *</span><span class="val">75627728167132</span></div>
+                <svg class="arrow" viewBox="0 0 30 14"><path d="M1 7 H21" stroke="#e5484d" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M21 2 L28.5 7 L21 12 Z" fill="#e5484d"/></svg>
+                <span class="tag">取自截图 ② 运单信息<br/>不在列表选「其他」手输</span>
+              </div>
+            </div>
+          </div>
+          <p style="font-size:11px;color:var(--ink-3);margin:2px 2px 0">本例两件鞋走同一个包裹、一个运单号；若拆成多个包裹发货，每个商品要各填各的单号。</p>
+        </div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="step-head"><span class="num">6</span><h3>逐件填写采购物流（最容易漏的一步）</h3></div>
+      <p>每个商品卡底部都有「🚚 该商品采购物流」区，<b>快递公司和快递单号要按商品分别填</b>——同一单的两个商品分两个包裹发货时，单号必须各填各的。</p>
+      <ul>
+        <li>快递公司选项：顺丰速运、京东物流、中通、圆通、申通、韵达、极兔、邮政EMS；不在列表选「其他」并手输名称。</li>
+        <li>订单头显示的快递信息，取的是<b>第一个商品</b>的快递公司与单号。</li>
+        <li>单号填错会导致仓库拍照收货时匹配不到订单，务必对照面单核对。</li>
+      </ul>
+      <div class="tip ok">整单一个包裹时，识图会把同一快递信息自动带到每个商品行，只需确认单号一致即可。</div>
+    </div>
+  </div>
+
+  <!-- 步骤 7 -->
+  <div class="step">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-top"><small>NEW PURCHASE</small><strong>上报采购订单</strong></div>
+        <div class="phone-body">
+          <div class="itemcard"><div class="ih"><i>1</i><b>361°男鞋运动鞋飞燃5</b></div></div>
+          <div class="dash hot" data-badge="7">
+            <i>＋</i><div><b>已选择 2 张截图</b><small>识图时上传的 2 张已自动计入，无需重复上传</small></div>
+            <svg class="arrow" viewBox="0 0 30 14"><path d="M1 7 H21" stroke="#e5484d" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M21 2 L28.5 7 L21 12 Z" fill="#e5484d"/></svg>
+            <span class="tag">附件最多 3 张（识图已占额度）</span>
+          </div>
+          <div class="btn-main hot" data-badge="7">提交订单
+            <svg class="arrow" viewBox="0 0 30 14"><path d="M1 7 H21" stroke="#e5484d" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M21 2 L28.5 7 L21 12 Z" fill="#e5484d"/></svg>
+            <span class="tag">核对无误后点提交</span>
+          </div>
+          <p style="font-size:10.5px;color:var(--ink-3);margin:8px 2px 0">平台订单号选填；每个商品需分别填写采购快递公司与快递单号</p>
+        </div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="step-head"><span class="num">7</span><h3>确认附件并提交</h3></div>
+      <p>「＋ 上传订单截图」用于补充凭证：<b>合计最多 3 张</b>，识图时选的截图已经算在里面，重复上传不会叠加。单张不超过 5MB。</p>
+      <ul>
+        <li>建议至少保留一张能看清<b>商品 + 实付金额</b>的截图，便于管理员审核。</li>
+        <li>点「提交订单」（管理员为「创建采购订单」），保存成功后订单状态为<b>待审核</b>，可在「查看我的订单」里跟踪。</li>
+      </ul>
+      <div class="tip info">提交后到入库前仍可编辑：在我的订单里点该单编辑即可；已入库的订单采购员不能再改。</div>
+    </div>
+  </div>
+
+  <!-- 步骤 8 -->
+  <div class="step">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-top"><small>BUYER ORDERS</small><strong>我的采购订单</strong></div>
+        <div class="phone-body">
+          <div class="ctrl" style="border-radius:999px"><span class="ph">🔍 搜索商品 / 订单号 / 快递单号</span></div>
+          <div class="stat-row" style="flex-wrap:wrap">
+            <div class="stat" style="flex:none;padding:5px 10px"><b style="font-size:12px">全部</b></div>
+            <div class="stat" style="flex:none;padding:5px 10px;background:var(--brand-soft);color:var(--brand)"><b style="font-size:12px;color:var(--brand)">待审核</b></div>
+            <div class="stat" style="flex:none;padding:5px 10px"><b style="font-size:12px">在途</b></div>
+            <div class="stat" style="flex:none;padding:5px 10px"><b style="font-size:12px">已入库</b></div>
+            <div class="stat" style="flex:none;padding:5px 10px"><b style="font-size:12px">已驳回</b></div>
+          </div>
+          <div class="itemcard hot" data-badge="8">
+            <div class="ih"><b>361°男鞋运动鞋飞燃5</b><span style="margin-left:auto;font-size:10.5px;color:var(--brand)">待审核</span></div>
+            <div style="font-size:11px;color:var(--ink-3)">京东 · 2 件 · ¥647.99 · 中通 75627728167132</div>
+            <svg class="arrow" viewBox="0 0 30 14"><path d="M1 7 H21" stroke="#e5484d" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M21 2 L28.5 7 L21 12 Z" fill="#e5484d"/></svg>
+            <span class="tag">提交后在这里看状态</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="step-head"><span class="num">8</span><h3>提交后：跟踪状态与被驳回怎么办</h3></div>
+      <ul>
+        <li><b>待审核</b>：等管理员审核。审核通过变「在途」，被驳回会写明原因。</li>
+        <li><b>在途</b>：货在路上；管理员收货后拍照识图或手输单号匹配订单并填库位入库。</li>
+        <li><b>已入库</b>：采购员看到的就是这个状态；管理员侧还会按发货进度显示「待发货 / 已发货」。</li>
+        <li><b>已驳回</b>：首页出现红色提醒卡，点「修改后重新提交」改完再交，状态回到待审核。</li>
+      </ul>
+      <div class="tip warn">入库后订单不能再被编辑；若确有错误，联系管理员在订单详情里「退回在途」撤销入库后重录（已发货的订单不能退回）。</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">四、填写速查表</h2>
+  <p class="sec-note">带 * 的是必填项，缺一项就无法提交。</p>
+  <table>
+    <thead><tr><th style="width:150px">字段</th><th style="width:90px">是否必填</th><th>填写要求</th></tr></thead>
+    <tbody>
+      <tr><td><b>采购渠道</b></td><td class="must">必填</td><td>京东 / 淘宝 / 抖音 / 唯品会 / 拼多多 / 其他</td></tr>
+      <tr><td><b>平台订单号</b></td><td class="opt">选填</td><td>填了就不能与同渠道未驳回订单重复</td></tr>
+      <tr><td><b>商品名称</b></td><td class="must">必填</td><td>按平台订单原文，如「361°男鞋运动鞋飞燃5」</td></tr>
+      <tr><td><b>货号</b></td><td class="must">必填</td><td>以商品详情页为准（截图常不含货号），入库与发货比对依据</td></tr>
+      <tr><td><b>尺码</b></td><td class="must">必填</td><td>如 42 / 41.5</td></tr>
+      <tr><td><b>数量</b></td><td class="must">必填</td><td>整数，最小 1</td></tr>
+      <tr><td><b>实付金额</b></td><td class="must">必填</td><td>单位元，按实付填写，系统按分保存</td></tr>
+      <tr><td><b>采购快递公司</b></td><td class="must">必填</td><td>每个商品单独填；列表外选「其他」手输</td></tr>
+      <tr><td><b>采购快递单号</b></td><td class="must">必填</td><td>每个商品单独填，对照面单核对</td></tr>
+      <tr><td><b>订单截图</b></td><td class="opt">选填</td><td>合计最多 3 张，单张 ≤ 5MB；识图截图占用同一额度</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2 class="sec">五、遇到问题先看这里</h2>
+  <div class="errs">
+    <div class="err">
+      <h4>提交按钮点不动（灰色）</h4>
+      <p>说明还有商品没填全。检查每个商品的名称、货号、尺码、数量、金额、采购快递公司、采购快递单号七项是否都有值。</p>
+    </div>
+    <div class="err">
+      <h4>提示「尚未配置智能识图服务」</h4>
+      <p>服务器未配置视觉模型（<code>VISION_*</code>）。跳过识图，手动填写即可，不影响其他功能。</p>
+    </div>
+    <div class="err">
+      <h4>识别失败 / 没识别到订单信息</h4>
+      <p>换更清晰的<b>订单详情页</b>截图（含商品与金额）；只含物流信息的截图识别不出商品；单张需在 8MB 以内。</p>
+    </div>
+    <div class="err">
+      <h4>平台订单号提交失败</h4>
+      <p>同一渠道下的订单号与已存在且未被驳回的订单重复了。核对单号，或留空不填。</p>
+    </div>
+    <div class="err">
+      <h4>识图后表单内容被覆盖？</h4>
+      <p>不会。已填过商品时，新识图结果是<b>追加</b>商品行；只有表单全空时才会整体替换。但识别出的渠道、单号会覆盖同名字段，提交前请核对。</p>
+    </div>
+    <div class="err">
+      <h4>想改已提交的订单</h4>
+      <p>入库前：在我的订单里点该单编辑保存。已入库：采购员不能改，需管理员「退回在途」；已发货的订单不允许退回。</p>
+    </div>
+  </div>
+</section>
+
+<footer>骏骏订单智能采购系统 · 上传采购订单操作教程 · 依据当前系统实现整理</footer>
+
+</div>
+</body>
+</html>
