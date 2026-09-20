@@ -53,6 +53,8 @@ const canRejectOrder = (order: PurchaseOrder) => !order.settled && ["待审核",
 const buyerCanEditOrder = (status: OrderStatus) => status === "待审核" || status === "在途" || status === "已驳回";
 const statusLabel = (status: OrderStatus) => readyToShip(status) ? "待发货" : status;
 const money = (value: number) => `¥${value.toLocaleString("zh-CN", {minimumFractionDigits: 2})}`;
+/** 商品行金额是整行实付合计；多件时按数量折算单价，保留两位小数。 */
+const unitPrice = (item: { amount: number; qty: number }) => item.qty > 0 ? Math.round(item.amount / item.qty * 100) / 100 : item.amount;
 /** 每个商品行代表一种款式，件数是所有款式数量之和。 */
 const orderQuantity = (order: PurchaseOrder) => order.items.reduce((sum, item) => sum + item.qty, 0);
 const orderTitleWithQuantity = (order: PurchaseOrder) => {
@@ -1961,7 +1963,8 @@ function OrderDetail({
                 <div className="item-row-lead">
                     <i className="item-index">{index + 1}</i>
                     <div className="item-row-main">
-                        <div className="item-row-top"><b>{item.title}</b><em>{money(item.amount)}</em></div>
+                        <div className="item-row-top"><b>{item.title}</b><span className="item-amount"><em>{money(item.amount)}</em>{item.qty > 1 &&
+                            <small className="item-unit-price">单价 {money(unitPrice(item))}</small>}</span></div>
                         <div className="item-sku-meta"><CopyNumber value={item.sku} label="商品货号"/><span>· {item.size}码 · ×{item.qty}</span>
                         </div>
                     </div>

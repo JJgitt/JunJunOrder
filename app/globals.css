@@ -4364,6 +4364,21 @@ button:active {
     color: var(--ink)
 }
 
+.item-amount {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px
+}
+
+.item-unit-price {
+    font-size: 11px;
+    line-height: 1.2;
+    color: #8b95a2;
+    white-space: nowrap
+}
+
 .item-row-main small {
     margin-top: 4px;
     font-size: 12px;

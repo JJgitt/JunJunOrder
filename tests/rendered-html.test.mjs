@@ -687,6 +687,18 @@ test("order details count units rather than style rows",async()=>{
   assertJsNotMatch(page,/<div className="items-card-head"><h3>商品清单<\/h3><span>\{order\.itemCount\} 件/);
 });
 
+test("multi-unit item rows show a smaller unit price under the line total",async()=>{
+  const [page,styles]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
+  ]);
+  assertJsMatch(page,/const unitPrice=\(item:\{amount:number;qty:number\}\)=>item\.qty>0\?Math\.round\(item\.amount\/item\.qty\*100\)\/100:item\.amount/);
+  assertJsMatch(page,/<div className="item-row-top"><b>\{item\.title\}<\/b><span className="item-amount"><em>\{money\(item\.amount\)\}<\/em>\{item\.qty>1&&<small className="item-unit-price">单价 \{money\(unitPrice\(item\)\)\}<\/small>\}<\/span><\/div>/);
+  assertCssMatch(styles,/\.item-row-top em\{[^}]*font-size:13px/);
+  assertCssMatch(styles,/\.item-unit-price\{[^}]*font-size:11px/);
+  assertCssMatch(styles,/\.item-amount\{[^}]*flex-direction:column;align-items:flex-end/);
+});
+
 test("admin batch selection summarizes selected orders and item quantity",async()=>{
   const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
   assertJsMatch(page,/selectedItemQuantity=selectedOrders\.reduce\(\(sum,order\)=>sum\+order\.items\.reduce\(\(qty,item\)=>qty\+item\.qty,0\),0\)/);
