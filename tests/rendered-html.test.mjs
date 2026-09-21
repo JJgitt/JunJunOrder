@@ -933,6 +933,23 @@ test("administrator dashboard notice checklist is persisted and completed items 
   assert.match(styles,/\.dashboard-notice-list \.completed \.dashboard-notice-text \{[^}]*text-decoration: line-through/);
 });
 
+test("completed dashboard notices remain visible for seven days only",async()=>{
+  const [schema,route,migration,page]=await Promise.all([
+    readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../drizzle/0014_dashboard_notice_completion_retention.sql",import.meta.url),"utf8"),
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+  ]);
+  assert.match(schema,/completedAt: timestamp\("completed_at", \{ withTimezone: true, mode: "string" \}\)/);
+  assert.match(migration,/ADD COLUMN "completed_at" timestamp with time zone/);
+  assert.match(migration,/SET "completed_at" = "updated_at"/);
+  assert.match(migration,/WHERE "completed" = true/);
+  assert.match(route,/7\*24\*60\*60\*1000/);
+  assert.match(route,/or\(eq\(dashboardNotices\.completed,false\),gte\(dashboardNotices\.completedAt,completedNoticeCutoff\)\)/);
+  assert.match(route,/completedAt:body\.completed\?changedAt:null/);
+  assert.match(page,/completedAt\?: string \| null/);
+});
+
 test("dashboard notice date and content can be edited with existing dates backfilled",async()=>{
   const [page,route,schema,migration,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),

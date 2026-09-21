@@ -1,12 +1,12 @@
 import { hash } from "bcryptjs";
 import { unlink } from "node:fs/promises";
-import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { auditLogs, dashboardNotices, inventory, inventoryLots, inventoryMovements, orderImages, orderItems, purchaseOrders, users } from "@/db/schema";
 import { assertSameOrigin, requireAdmin, requireAppUser, routeError } from "@/lib/auth";
 import { uploadPath } from "@/lib/file-storage";
 import { serverClock } from "@/lib/server-time";
-import { dateKey } from "@/lib/time";
+import { dateKey, timestamp } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,6 +33,7 @@ const buyerEditableStatuses=["待审核","在途","已驳回"] as const;
 async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
   const db=getDb();
   const isAdmin=user.role==="admin";
+  const clock=serverClock();
   const rows=isAdmin
     ?await db.select().from(purchaseOrders).orderBy(desc(purchaseOrders.createdAt)).limit(500)
     :await db.select().from(purchaseOrders).where(eq(purchaseOrders.purchaserId,user.id)).orderBy(desc(purchaseOrders.createdAt)).limit(300);
@@ -77,8 +78,9 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
     const [items,lots]=await Promise.all([db.select().from(inventory),db.select().from(inventoryLots).where(isNull(inventoryLots.shippedAt))]);
     stock=items.map(item=>({sku:item.sku,title:item.title,size:item.size,count:item.quantity,locations:Array.from(new Set(lots.filter(lot=>lot.sku===item.sku&&lot.size===item.size).map(lot=>lot.location)))}));
   }
-  const notices=isAdmin?await db.select().from(dashboardNotices).orderBy(desc(dashboardNotices.createdAt)):[];
-  return {clock:serverClock(),user,orders,stock,notices,users:people.map(person=>({id:person.id,wechatId:person.wechatId,phone:person.phone,name:person.name,role:person.role,active:person.active,approvalStatus:person.approvalStatus}))};
+  const completedNoticeCutoff=new Date(timestamp(clock.now)-7*24*60*60*1000).toISOString();
+  const notices=isAdmin?await db.select().from(dashboardNotices).where(or(eq(dashboardNotices.completed,false),gte(dashboardNotices.completedAt,completedNoticeCutoff))).orderBy(desc(dashboardNotices.createdAt)):[];
+  return {clock,user,orders,stock,notices,users:people.map(person=>({id:person.id,wechatId:person.wechatId,phone:person.phone,name:person.name,role:person.role,active:person.active,approvalStatus:person.approvalStatus}))};
 }
 
 export async function GET(request:Request){
@@ -117,7 +119,8 @@ export async function POST(request:Request){
       requireAdmin(user);
       const id=string(body.noticeId);
       if(!id||typeof body.completed!=="boolean")return Response.json({error:"注意事项参数错误"},{status:400});
-      const changed=await db.update(dashboardNotices).set({completed:body.completed,updatedAt:now()}).where(eq(dashboardNotices.id,id)).returning({id:dashboardNotices.id});
+      const changedAt=now();
+      const changed=await db.update(dashboardNotices).set({completed:body.completed,completedAt:body.completed?changedAt:null,updatedAt:changedAt}).where(eq(dashboardNotices.id,id)).returning({id:dashboardNotices.id});
       if(!changed.length)return Response.json({error:"注意事项不存在"},{status:404});
       return Response.json({data:await snapshot(user)});
     }

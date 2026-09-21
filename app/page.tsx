@@ -35,7 +35,7 @@ type PurchaseOrder = {
 
 type RecognizedOrder = { platform: string; platformNo: string; courierCompany: string; courierNo: string; items: Array<{ title: string; sku: string; size: string; qty: number; amount: number | null }>; notes: string[] };
 type StockItem = { sku: string; title: string; size: string; count: number; locations: string[]; lastSold?: string };
-type DashboardNotice = { id: string; content: string; noticeDate: string; completed: boolean; createdAt: string };
+type DashboardNotice = { id: string; content: string; noticeDate: string; completed: boolean; completedAt?: string | null; createdAt: string };
 type ApprovalStatus = "pending" | "approved" | "rejected";
 type AppUser = { id: string; wechatId: string; phone: string; name: string; role: Role; active: boolean; approvalStatus: ApprovalStatus };
 type Snapshot = { clock: ServerClock; user: AppUser; orders: PurchaseOrder[]; stock: StockItem[]; notices: DashboardNotice[]; users: AppUser[] };

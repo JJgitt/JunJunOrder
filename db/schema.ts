@@ -131,6 +131,7 @@ export const dashboardNotices = pgTable("dashboard_notices", {
   content: text("content").notNull(),
   noticeDate: date("notice_date", { mode: "string" }).notNull(),
   completed: boolean("completed").notNull().default(false),
+  completedAt: timestamp("completed_at", { withTimezone: true, mode: "string" }),
   createdBy: text("created_by").notNull().references(() => users.id),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
