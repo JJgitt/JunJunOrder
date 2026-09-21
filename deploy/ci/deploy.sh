@@ -4,16 +4,18 @@ umask 077
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 
 image=${1:-}
+# Exact repositories this server may deploy from: GHCR (build source), Huawei SWR (primary), Aliyun ACR (fallback).
 ghcr_image='^ghcr\.io/jjgitt/junjunorder@sha256:[a-f0-9]{64}$'
 swr_image='^swr\.cn-north-4\.myhuaweicloud\.com/junjunorder/junjunorder@sha256:[a-f0-9]{64}$'
-[[ $# == 1 && ( "$image" =~ $ghcr_image || "$image" =~ $swr_image ) ]] || {
+acr_image='^crpi-lz061y1f8ajv9wzf\.cn-guangzhou\.personal\.cr\.aliyuncs\.com/junjunorder/junjunorder@sha256:[a-f0-9]{64}$'
+[[ $# == 1 && ( "$image" =~ $ghcr_image || "$image" =~ $swr_image || "$image" =~ $acr_image ) ]] || {
   echo 'Only this project image with a sha256 digest may be deployed' >&2; exit 64;
 }
-if [[ "$image" == ghcr.io/* ]]; then
-  registry_host=ghcr.io
-else
-  registry_host=swr.cn-north-4.myhuaweicloud.com
-fi
+case "$image" in
+  ghcr.io/*) registry_host=ghcr.io ;;
+  swr.cn-north-4.myhuaweicloud.com/*) registry_host=swr.cn-north-4.myhuaweicloud.com ;;
+  *) registry_host=crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com ;;
+esac
 [[ $EUID == 0 ]] || { echo 'Must run through the restricted sudo entry' >&2; exit 1; }
 exec 9>/var/lock/hongyun-deploy.lock
 flock -w 900 9 || { echo 'Another deployment is running'; exit 1; }
@@ -35,7 +37,7 @@ keep_project_image_id() {
   keep_ids["$id"]=1
 }
 
-# Drop GHCR/SWR digest copies that are no longer the running app, latest, or a kept rollback.
+# Drop GHCR/SWR/ACR digest copies that are no longer the running app, latest, or a kept rollback.
 prune_unused_project_images() {
   local cid id tag current_ref
   local -a rollback_tags
@@ -48,7 +50,7 @@ prune_unused_project_images() {
   keep_project_image_id "$(docker image inspect --format '{{.Id}}' hongyun-order-app:latest 2>/dev/null || true)"
   if [[ -s /var/lib/hongyun-cicd/current-image ]]; then
     current_ref=$(tr -d '\n' </var/lib/hongyun-cicd/current-image)
-    if [[ "$current_ref" =~ ^(ghcr\.io/jjgitt/junjunorder|swr\.cn-north-4\.myhuaweicloud\.com/junjunorder/junjunorder)@sha256:[a-f0-9]{64}$ ]]; then
+    if [[ "$current_ref" =~ $ghcr_image || "$current_ref" =~ $swr_image || "$current_ref" =~ $acr_image ]]; then
       keep_project_image_id "$(docker image inspect --format '{{.Id}}' "$current_ref" 2>/dev/null || true)"
     fi
   fi
@@ -64,6 +66,7 @@ prune_unused_project_images() {
   done < <(docker image ls --no-trunc --format '{{.ID}} {{.Repository}}' | awk '
     $2 == "ghcr.io/jjgitt/junjunorder" ||
     $2 == "swr.cn-north-4.myhuaweicloud.com/junjunorder/junjunorder" ||
+    $2 == "crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com/junjunorder/junjunorder" ||
     $2 == "hongyun-order-app" { print $1 }
   ' | sort -u)
 }
@@ -121,7 +124,8 @@ trap cleanup EXIT
 export DOCKER_CONFIG="$auth_dir"
 IFS= read -r registry_user
 IFS= read -r registry_token
-[[ "$registry_user" =~ ^[A-Za-z0-9_.-]+(@[A-Za-z0-9_.-]+)?$ && ${#registry_user} -le 128 && -n "$registry_token" ]] || exit 64
+# GHCR uses the GitHub actor, SWR uses region@AK, Aliyun ACR uses the account login name (may look like an email).
+[[ "$registry_user" =~ ^[^[:space:][:cntrl:]]+$ && ${#registry_user} -le 128 && -n "$registry_token" ]] || exit 64
 printf '%s' "$registry_token" | docker login "$registry_host" -u "$registry_user" --password-stdin
 unset registry_token
 pulled=false
