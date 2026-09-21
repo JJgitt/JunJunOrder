@@ -19,11 +19,11 @@
 | 数据库字段/迁移 | [迭代手册](迭代手册.md) | `db/schema.ts`、`drizzle/`、[数据库设计](../数据库设计.md) |
 | 鉴权、上传、识图 | [架构与定位](架构与定位.md) | `lib/auth.ts`、`lib/file-storage.ts`、`lib/vision.ts` |
 | 测试、上线、故障 | [迭代手册](迭代手册.md) | `.github/workflows/ci-cd.yml`、[CI/CD 说明](../../deploy/ci/README.md) |
-| 录单操作教学 | [上传订单教程](../%E4%B8%8A%E4%BC%A0%E8%AE%A2%E5%8D%95%E6%95%99%E7%A8%8B.html) | `app/page.tsx` 的 `UploadPage`、`app/api/app/route.ts` 的 `create-order` |
+| 录单操作教学 | [上传订单教程](../../public/tutorial/upload-order.html) | `app/page.tsx` 的 `UploadPage`、`app/api/app/route.ts` 的 `create-order` |
 
 ## 现有深度资料
 
-- [上传订单教程](../%E4%B8%8A%E4%BC%A0%E8%AE%A2%E5%8D%95%E6%95%99%E7%A8%8B.html)：面向采购员与管理员的可视化录单教程（界面示意 + 箭头标注），含识图填写、必填项速查与常见报错；界面或校验变更后需同步更新。
+- [上传订单教程](../../public/tutorial/upload-order.html)：面向采购员与管理员的可视化录单教程（界面示意 + 箭头标注），含识图填写、必填项速查与常见报错；界面或校验变更后需同步更新。
 - [系统知识库](../系统知识库.md)：历史业务流程与设计解释；先核对其中日期和当前代码，尤其是后续增加的结款、看板事项与识图能力。
 - [数据库设计](../数据库设计.md)：表、列、索引与外键快照；以迁移为最终依据。
 - [README](../../README.md)：本地启动、环境变量、部署和基本使用。

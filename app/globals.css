@@ -1241,7 +1241,8 @@ button:active {
     gap: 9px
 }
 
-.buyer-quick button {
+.buyer-quick button,
+.buyer-quick a {
     min-height: 72px;
     border: 1px solid var(--line);
     border-radius: 17px;
@@ -1251,6 +1252,8 @@ button:active {
     align-items: center;
     gap: 11px;
     text-align: left;
+    color: inherit;
+    text-decoration: none;
     box-shadow: 0 5px 16px #0f172a07
 }
 

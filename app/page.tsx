@@ -1241,6 +1241,7 @@ function BuyerHome({
             <button className="upload-quick" onClick={onUpload}>
                 <i>＋</i><span><b>上传采购订单</b><small>填写渠道、商品与物流信息</small></span><em>›</em></button>
             <button onClick={onMine}><i>▤</i><span><b>查看我的订单</b><small>跟踪审核、在途与入库状态</small></span><em>›</em></button>
+            <a href="/tutorial/upload-order.html" target="_blank" rel="noreferrer"><i>?</i><span><b>上传订单教程</b><small>分步图解，含识图填写与常见报错</small></span><em>›</em></a>
         </div>
         <SectionHead title="最近订单" note="查看全部"/>
         <div className="order-list compact">{orders.slice(0, 2).map(order => <BuyerOrderCard key={order.id}
