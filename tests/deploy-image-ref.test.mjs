@@ -39,7 +39,10 @@ test("workflow keeps GHCR publish and optional SWR mirror", async () => {
   assert.match(workflow, /provenance: false/);
   assert.match(workflow, /sbom: false/);
   assert.match(workflow, /--prefer-index=false/);
-  assert.match(workflow, /IMAGE_REGISTRY == 'swr'/);
+  assert.match(workflow, /REQUESTED_REGISTRY.*IMAGE_REGISTRY/);
+  assert.match(workflow, /continue-on-error: true/);
+  assert.match(workflow, /Huawei SWR is unavailable; deploying the identical digest from GHCR/);
+  assert.match(workflow, /needs\.publish\.outputs\.registry == 'swr'/);
   assert.match(workflow, /swr\.cn-north-4\.myhuaweicloud\.com\/junjunorder\/junjunorder/);
   assert.match(workflow, /ghcr\.io\/jjgitt\/junjunorder/);
   assert.match(rollback, /"\$DEPLOY_USER@\$DEPLOY_HOST" "ghcr\.io\/jjgitt\/junjunorder@\$IMAGE_DIGEST"/);

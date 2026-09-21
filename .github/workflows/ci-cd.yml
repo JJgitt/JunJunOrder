@@ -61,6 +61,7 @@ jobs:
       packages: write
     outputs:
       digest: ${{ steps.build.outputs.digest }}
+      registry: ${{ steps.registry.outputs.name }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -72,8 +73,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Login to Huawei SWR
+        id: swr_login
         if: ${{ vars.SWR_REPOSITORY != '' }}
-        continue-on-error: ${{ vars.IMAGE_REGISTRY != 'swr' }}
+        continue-on-error: true
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
@@ -94,8 +96,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Mirror image to Huawei SWR
-        if: ${{ vars.SWR_REPOSITORY != '' }}
-        continue-on-error: ${{ vars.IMAGE_REGISTRY != 'swr' }}
+        id: swr_mirror
+        if: ${{ vars.SWR_REPOSITORY != '' && steps.swr_login.outcome == 'success' }}
+        continue-on-error: true
         env:
           SWR_HOST: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
           SWR_REPOSITORY: ${{ vars.SWR_REPOSITORY }}
@@ -109,6 +112,23 @@ jobs:
             --prefer-index=false \
             --tag "$SWR_HOST/$SWR_REPOSITORY:sha-${{ github.sha }}" \
             "ghcr.io/jjgitt/junjunorder@$IMAGE_DIGEST"
+      - name: Select deployment registry
+        id: registry
+        if: ${{ always() && steps.build.outcome == 'success' }}
+        env:
+          REQUESTED_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+          SWR_LOGIN_OUTCOME: ${{ steps.swr_login.outcome }}
+          SWR_MIRROR_OUTCOME: ${{ steps.swr_mirror.outcome }}
+        run: |
+          set -euo pipefail
+          if [[ "$REQUESTED_REGISTRY" == 'swr' && "$SWR_LOGIN_OUTCOME" == 'success' && "$SWR_MIRROR_OUTCOME" == 'success' ]]; then
+            echo 'name=swr' >> "$GITHUB_OUTPUT"
+          else
+            echo 'name=ghcr' >> "$GITHUB_OUTPUT"
+            if [[ "$REQUESTED_REGISTRY" == 'swr' ]]; then
+              echo '::warning::Huawei SWR is unavailable; deploying the identical digest from GHCR.'
+            fi
+          fi
 
   deploy:
     needs: publish
@@ -123,10 +143,10 @@ jobs:
       DEPLOY_USER: junjun
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-      REGISTRY_USER: ${{ vars.IMAGE_REGISTRY == 'swr' && secrets.SWR_USERNAME || github.actor }}
-      REGISTRY_TOKEN: ${{ vars.IMAGE_REGISTRY == 'swr' && secrets.SWR_PASSWORD || secrets.GITHUB_TOKEN }}
+      REGISTRY_USER: ${{ needs.publish.outputs.registry == 'swr' && secrets.SWR_USERNAME || github.actor }}
+      REGISTRY_TOKEN: ${{ needs.publish.outputs.registry == 'swr' && secrets.SWR_PASSWORD || secrets.GITHUB_TOKEN }}
       IMAGE_DIGEST: ${{ needs.publish.outputs.digest }}
-      IMAGE_REPOSITORY: ${{ vars.IMAGE_REGISTRY == 'swr' && 'swr.cn-north-4.myhuaweicloud.com/junjunorder/junjunorder' || 'ghcr.io/jjgitt/junjunorder' }}
+      IMAGE_REPOSITORY: ${{ needs.publish.outputs.registry == 'swr' && 'swr.cn-north-4.myhuaweicloud.com/junjunorder/junjunorder' || 'ghcr.io/jjgitt/junjunorder' }}
     steps:
       - name: Deploy immutable image through restricted SSH command
         shell: bash

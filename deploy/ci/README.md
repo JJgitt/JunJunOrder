@@ -1,13 +1,13 @@
 # 鸿运采购 CI/CD
 
-流程：推送 → 测试/数据库迁移验证 → main 构建镜像 → GHCR（必推）→ 可选镜像到华为云 SWR → SSH 按 `IMAGE_REGISTRY` 拉取摘要镜像 → 数据库备份 → 切换 → 健康检查。
+流程：推送 → 测试/数据库迁移验证 → main 构建镜像 → GHCR（必推）→ 可选镜像到华为云 SWR → SSH 拉取摘要镜像 → 数据库备份 → 切换 → 健康检查。
 
 当前生产发布走华为云 SWR，避免服务器跨境拉取 GHCR 时长时间阻塞。SWR 凭证只放在 GitHub Secrets，仓库里保留 2026-09-15 的 GHCR 快照：`deploy/ci/rollback/ghcr-20260915/`。
 
 - `.github/workflows/ci-cd.yml`：所有分支 push 和 main PR 执行测试；只有 main push / main 手动运行可以发布。
 - Actions 固定到上游提交 SHA；镜像按 Git commit 标记，生产部署按 digest 固定版本。
 - 构建在 GitHub 执行，服务器只拉取和启动。应用、PostgreSQL、上传卷仍在现有服务器。
-- GitHub 并发组 + 服务器 flock 双重串行保护。测试失败不会发布；每次镜像拉取最多等待 5 分钟、最多尝试 3 次，全部失败也不会切换线上应用。
+- GitHub 并发组 + 服务器 flock 双重串行保护。测试失败不会发布；选择 SWR 时如果登录或镜像同步失败，会自动改拉本次构建的同摘要 GHCR 镜像。每次镜像拉取最多等待 5 分钟、最多尝试 3 次，全部失败也不会切换线上应用。
 - 发布失败自动切换旧镜像，但**不自动恢复数据库**。数据库变更必须向后兼容，破坏性迁移需要人工维护窗口。
 - 每次发布会清理过期回滚标签和未再引用的本项目 digest；仍需定期看磁盘，并做异机备份。
 
@@ -30,7 +30,7 @@ Variables：
 | SWR_REPOSITORY | 例如 `junjunorder/junjunorder` |
 | IMAGE_REGISTRY | 空或 `ghcr`：服务器仍拉 GHCR；`swr`：服务器改拉 SWR（须先更新服务器脚本） |
 
-推送镜像用 GitHub 自动提供的 `GITHUB_TOKEN`（publish 作业 packages:write）；部署作业仅 packages:read。短期令牌通过 SSH 标准输入传入，在临时 Docker 配置目录中使用，结束后删除。无需长期 GHCR PAT。SWR 镜像是 GHCR 构建结果的副本，失败时默认不阻断 GHCR 发布。
+推送镜像用 GitHub 自动提供的 `GITHUB_TOKEN`（publish 作业 packages:write）；部署作业仅 packages:read。短期令牌通过 SSH 标准输入传入，在临时 Docker 配置目录中使用，结束后删除。无需长期 GHCR PAT。SWR 镜像是 GHCR 构建结果的副本；登录或同步失败时不阻断发布，流水线会使用 GHCR 完成本次部署并留下警告。
 
 ## 服务器
 
