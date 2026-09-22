@@ -1,8 +1,8 @@
 # 鸿运采购 CI/CD
 
-流程：推送 → 测试/数据库迁移验证 → main 构建镜像 → GHCR（必推）→ 同摘要镜像到华为云 SWR（失败不阻断）→ 有 SWR 后再从 SWR 拷到阿里云 ACR（失败不阻断）→ 选仓 → SSH 拉取摘要镜像 → 数据库备份 → 切换 → 健康检查。
+流程：推送 → 测试/数据库迁移验证 → main 在 runner 本地构建镜像 → 同一份本地镜像分别 `docker push` 到 GHCR（必推）、阿里云 ACR、华为云 SWR（后两者失败不阻断）→ 选仓 → SSH 拉取摘要镜像 → 数据库备份 → 切换 → 健康检查。
 
-选仓顺序：默认 ACR → SWR → GHCR。`IMAGE_REGISTRY=swr` 时优先 SWR。`IMAGE_REGISTRY=ghcr` 时只拉 GHCR。ACR 不从 GHCR 直拷，改为有 SWR 后再从 SWR 拷，避免美国 runner 把整包从 GitHub 再推广州时卡住。凭证只放在 GitHub Secrets，仓库里保留 2026-09-15 的 GHCR 快照：`deploy/ci/rollback/ghcr-20260915/`。
+选仓顺序：默认 ACR → SWR → GHCR。`IMAGE_REGISTRY=swr` 时优先 SWR。`IMAGE_REGISTRY=ghcr` 时只拉 GHCR。国内仓库从 runner 本地推，不用 `imagetools` 从 GHCR 再拷一遍。凭证只放在 GitHub Secrets，仓库里保留 2026-09-15 的 GHCR 快照：`deploy/ci/rollback/ghcr-20260915/`。
 
 - `.github/workflows/ci-cd.yml`：所有分支 push 和 main PR 执行测试；只有 main push / main 手动运行可以发布。
 - Actions 固定到上游提交 SHA；镜像按 Git commit 标记，生产部署按 digest 固定版本。
@@ -34,7 +34,7 @@ Variables：
 | ACR_REPOSITORY | 例如 `junjunorder/junjunorder`；为空则跳过 ACR |
 | IMAGE_REGISTRY | 空或 `acr`：ACR → SWR → GHCR；`swr`：SWR → ACR → GHCR；`ghcr`：只拉 GHCR |
 
-推送镜像用 GitHub 自动提供的 `GITHUB_TOKEN`（publish 作业 packages:write）；部署作业仅 packages:read。短期令牌通过 SSH 标准输入传入，在临时 Docker 配置目录中使用，结束后删除。无需长期 GHCR PAT。SWR 是 GHCR 的同摘要副本；ACR 只从已成功的 SWR 副本再拷一次，不从 GHCR 直推广州。任一侧登录或同步失败都不阻断发布。
+推送镜像用 GitHub 自动提供的 `GITHUB_TOKEN`（publish 作业 packages:write）；部署作业仅 packages:read。短期令牌通过 SSH 标准输入传入，在临时 Docker 配置目录中使用，结束后删除。无需长期 GHCR PAT。ACR / SWR 推的是 runner 上刚构建的同一份镜像，不是从 GHCR 再拉再拷。任一侧登录或推送失败都不阻断发布。
 
 ## 服务器
 
@@ -71,7 +71,7 @@ GHCR 包应保持私有，并关联本仓库及授予本仓库 Actions 访问权
 
 停用 ACR：删掉 `ACR_REPOSITORY`。停用 SWR：删掉 `SWR_REPOSITORY`。只拉 GHCR：把 `IMAGE_REGISTRY` 设为 `ghcr`。
 
-华为云 SWR 仍用于国内中转和第二优先部署。ACR 有 SWR 副本后才从 SWR 拷贝，避免 `copying sha256:… from ghcr.io` 卡在美国 runner。不要删除 `SWR_*` Secrets / Variables。
+华为云 SWR 仍是第二优先部署目标。ACR 和 SWR 都从本地构建结果直接推，避免 `copying sha256:… from ghcr.io`。不要删除 `SWR_*` Secrets / Variables。
 
 ## 参考
 

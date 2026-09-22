@@ -60,7 +60,7 @@ jobs:
       contents: read
       packages: write
     outputs:
-      digest: ${{ steps.build.outputs.digest }}
+      digest: ${{ steps.ghcr_push.outputs.digest }}
       registry: ${{ steps.registry.outputs.name }}
       repository: ${{ steps.registry.outputs.repository }}
     steps:
@@ -95,78 +95,83 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
-          push: true
+          load: true
           platforms: linux/amd64
           provenance: false
           sbom: false
-          tags: ghcr.io/jjgitt/junjunorder:sha-${{ github.sha }}
+          tags: hongyun:ci
           labels: |
             org.opencontainers.image.source=https://github.com/JJgitt/JunJunOrder
             org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Mirror image to Huawei SWR
-        id: swr_mirror
+      - name: Push image to GHCR
+        id: ghcr_push
+        env:
+          IMAGE_TAG: ghcr.io/jjgitt/junjunorder:sha-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker tag hongyun:ci "$IMAGE_TAG"
+          push_log=$(mktemp)
+          docker push "$IMAGE_TAG" | tee "$push_log"
+          digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE_TAG")
+          digest="${digest##*@}"
+          if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            digest=$(sed -n 's/.*digest: \(sha256:[a-f0-9]\{64\}\).*/\1/p' "$push_log" | tail -n 1)
+          fi
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Push image to Aliyun ACR
+        id: acr_push
+        if: ${{ vars.ACR_REPOSITORY != '' && steps.acr_login.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          ACR_HOST: ${{ vars.ACR_REGISTRY || 'crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com' }}
+          ACR_REPOSITORY: ${{ vars.ACR_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          [[ "$ACR_HOST" =~ ^[a-z0-9-]+\.cn-[a-z0-9-]+\.(personal\.)?cr\.aliyuncs\.com$ ]] || exit 1
+          [[ "$ACR_REPOSITORY" =~ ^[a-z0-9._-]+/[a-z0-9._-]+$ ]] || exit 1
+          # Push the local build. Do not imagetools-copy from GHCR; that hangs on
+          # "copying sha256:… from ghcr.io" on the US runner.
+          tag="$ACR_HOST/$ACR_REPOSITORY:sha-${{ github.sha }}"
+          docker tag hongyun:ci "$tag"
+          docker push "$tag"
+      - name: Push image to Huawei SWR
+        id: swr_push
         if: ${{ vars.SWR_REPOSITORY != '' && steps.swr_login.outcome == 'success' }}
         continue-on-error: true
         timeout-minutes: 10
         env:
           SWR_HOST: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
           SWR_REPOSITORY: ${{ vars.SWR_REPOSITORY }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
           [[ "$SWR_HOST" =~ ^swr\.[a-z0-9-]+\.myhuaweicloud\.com$ ]] || exit 1
           [[ "$SWR_REPOSITORY" =~ ^[a-z0-9._-]+/[a-z0-9._-]+$ ]] || exit 1
-          [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
-          docker buildx imagetools create \
-            --prefer-index=false \
-            --tag "$SWR_HOST/$SWR_REPOSITORY:sha-${{ github.sha }}" \
-            "ghcr.io/jjgitt/junjunorder@$IMAGE_DIGEST"
-      - name: Mirror image to Aliyun ACR
-        id: acr_mirror
-        if: ${{ vars.ACR_REPOSITORY != '' && steps.acr_login.outcome == 'success' && steps.swr_mirror.outcome == 'success' }}
-        continue-on-error: true
-        timeout-minutes: 8
-        env:
-          ACR_HOST: ${{ vars.ACR_REGISTRY || 'crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com' }}
-          ACR_REPOSITORY: ${{ vars.ACR_REPOSITORY }}
-          SWR_HOST: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
-          SWR_REPOSITORY: ${{ vars.SWR_REPOSITORY }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          set -euo pipefail
-          [[ "$ACR_HOST" =~ ^[a-z0-9-]+\.cn-[a-z0-9-]+\.(personal\.)?cr\.aliyuncs\.com$ ]] || exit 1
-          [[ "$ACR_REPOSITORY" =~ ^[a-z0-9._-]+/[a-z0-9._-]+$ ]] || exit 1
-          [[ "$SWR_HOST" =~ ^swr\.[a-z0-9-]+\.myhuaweicloud\.com$ ]] || exit 1
-          [[ "$SWR_REPOSITORY" =~ ^[a-z0-9._-]+/[a-z0-9._-]+$ ]] || exit 1
-          [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
-          # Copy from the China SWR digest, not GHCR. The US runner pulling GHCR then
-          # pushing Guangzhou is what hangs on "copying sha256:… from ghcr.io".
-          echo "Copying ACR from Huawei SWR $SWR_HOST/$SWR_REPOSITORY@$IMAGE_DIGEST"
-          docker buildx imagetools create \
-            --prefer-index=false \
-            --tag "$ACR_HOST/$ACR_REPOSITORY:sha-${{ github.sha }}" \
-            "$SWR_HOST/$SWR_REPOSITORY@$IMAGE_DIGEST"
+          tag="$SWR_HOST/$SWR_REPOSITORY:sha-${{ github.sha }}"
+          docker tag hongyun:ci "$tag"
+          docker push "$tag"
       - name: Select deployment registry
         id: registry
-        if: ${{ always() && steps.build.outcome == 'success' }}
+        if: ${{ always() && steps.ghcr_push.outcome == 'success' }}
         env:
           REQUESTED_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
           SWR_LOGIN_OUTCOME: ${{ steps.swr_login.outcome }}
-          SWR_MIRROR_OUTCOME: ${{ steps.swr_mirror.outcome }}
+          SWR_PUSH_OUTCOME: ${{ steps.swr_push.outcome }}
           SWR_HOST: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
           SWR_REPOSITORY: ${{ vars.SWR_REPOSITORY }}
           ACR_LOGIN_OUTCOME: ${{ steps.acr_login.outcome }}
-          ACR_MIRROR_OUTCOME: ${{ steps.acr_mirror.outcome }}
+          ACR_PUSH_OUTCOME: ${{ steps.acr_push.outcome }}
           ACR_HOST: ${{ vars.ACR_REGISTRY || 'crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com' }}
           ACR_REPOSITORY: ${{ vars.ACR_REPOSITORY }}
         run: |
           set -euo pipefail
-          # A registry only qualifies when both its login and the digest mirror succeeded in this run.
+          # A registry only qualifies when both its login and the local-image push succeeded in this run.
           swr_ready=false; acr_ready=false
-          [[ "$SWR_LOGIN_OUTCOME" == 'success' && "$SWR_MIRROR_OUTCOME" == 'success' ]] && swr_ready=true
-          [[ "$ACR_LOGIN_OUTCOME" == 'success' && "$ACR_MIRROR_OUTCOME" == 'success' ]] && acr_ready=true
+          [[ "$SWR_LOGIN_OUTCOME" == 'success' && "$SWR_PUSH_OUTCOME" == 'success' ]] && swr_ready=true
+          [[ "$ACR_LOGIN_OUTCOME" == 'success' && "$ACR_PUSH_OUTCOME" == 'success' ]] && acr_ready=true
           case "$REQUESTED_REGISTRY" in
             swr) order='swr acr' ;;
             ghcr) order='' ;;

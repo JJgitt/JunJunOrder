@@ -42,24 +42,23 @@ test("deploy script accepts the GHCR, Huawei SWR and Aliyun ACR digest refs only
   assert.match(deploy, /Image pull failed; running service unchanged/);
 });
 
-test("workflow copies ACR from SWR and deploys ACR then SWR then GHCR", async () => {
+test("workflow pushes the local build to ACR then SWR then falls back to GHCR", async () => {
   const workflow = await readFile(new URL("../.github/workflows/ci-cd.yml", import.meta.url), "utf8");
   const rollback = await readFile(new URL("../deploy/ci/rollback/ghcr-20260915/ci-cd.yml", import.meta.url), "utf8");
-  assert.match(workflow, /tags: ghcr\.io\/jjgitt\/junjunorder:sha-\$\{\{ github\.sha \}\}/);
+  assert.match(workflow, /tags: hongyun:ci/);
+  assert.match(workflow, /load: true/);
+  assert.match(workflow, /Push image to GHCR/);
   assert.match(workflow, /Login to Huawei SWR/);
-  assert.match(workflow, /Mirror image to Huawei SWR/);
+  assert.match(workflow, /Push image to Huawei SWR/);
   assert.match(workflow, /Login to Aliyun ACR/);
-  assert.match(workflow, /Mirror image to Aliyun ACR/);
+  assert.match(workflow, /Push image to Aliyun ACR/);
+  assert.match(workflow, /docker tag hongyun:ci/);
   assert.match(workflow, /if: \$\{\{ vars\.SWR_REPOSITORY != '' && steps\.swr_login\.outcome == 'success' \}\}/);
-  assert.match(
-    workflow,
-    /if: \$\{\{ vars\.ACR_REPOSITORY != '' && steps\.acr_login\.outcome == 'success' && steps\.swr_mirror\.outcome == 'success' \}\}/,
-  );
-  assert.match(workflow, /\$SWR_HOST\/\$SWR_REPOSITORY@\$IMAGE_DIGEST/);
-  assert.match(workflow, /Copying ACR from Huawei SWR/);
+  assert.match(workflow, /if: \$\{\{ vars\.ACR_REPOSITORY != '' && steps\.acr_login\.outcome == 'success' \}\}/);
+  assert.doesNotMatch(workflow, /imagetools create/);
+  assert.doesNotMatch(workflow, /ghcr\.io\/jjgitt\/junjunorder@\$IMAGE_DIGEST/);
   assert.match(workflow, /provenance: false/);
   assert.match(workflow, /sbom: false/);
-  assert.match(workflow, /--prefer-index=false/);
   assert.match(workflow, /REQUESTED_REGISTRY.*IMAGE_REGISTRY/);
   assert.match(workflow, /continue-on-error: true/);
   assert.match(workflow, /order='acr swr'/);
