@@ -4,7 +4,7 @@ umask 077
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 
 image=${1:-}
-# Exact repositories this server may deploy from: GHCR (build source), Huawei SWR (primary), Aliyun ACR (fallback).
+# Exact repositories this server may deploy from: GHCR (build source), Huawei SWR (China hop), Aliyun ACR (preferred).
 ghcr_image='^ghcr\.io/jjgitt/junjunorder@sha256:[a-f0-9]{64}$'
 swr_image='^swr\.cn-north-4\.myhuaweicloud\.com/junjunorder/junjunorder@sha256:[a-f0-9]{64}$'
 acr_image='^crpi-lz061y1f8ajv9wzf\.cn-guangzhou\.personal\.cr\.aliyuncs\.com/junjunorder/junjunorder@sha256:[a-f0-9]{64}$'
@@ -122,29 +122,72 @@ cleanup() {
 }
 trap cleanup EXIT
 export DOCKER_CONFIG="$auth_dir"
-IFS= read -r registry_user
-IFS= read -r registry_token
-# GHCR uses the GitHub actor, SWR uses region@AK, Aliyun ACR uses the account login name (may look like an email).
-[[ "$registry_user" =~ ^[^[:space:][:cntrl:]]+$ && ${#registry_user} -le 128 && -n "$registry_token" ]] || exit 64
-printf '%s' "$registry_token" | docker login "$registry_host" -u "$registry_user" --password-stdin
-unset registry_token
-pulled=false
-for ((attempt=1; attempt<=pull_attempts; attempt++)); do
-  echo "Pulling image (attempt $attempt/$pull_attempts, timeout ${pull_timeout_seconds}s)"
-  if timeout --signal=TERM --kill-after="${pull_kill_after_seconds}s" "${pull_timeout_seconds}s" docker pull "$image"; then
-    pulled=true
-    break
-  else
+
+login_registry() {
+  local host=$1 user=$2 token=$3
+  [[ "$user" =~ ^[^[:space:][:cntrl:]]+$ && ${#user} -le 128 && -n "$token" ]] || exit 64
+  printf '%s' "$token" | docker login "$host" -u "$user" --password-stdin
+}
+
+pull_digest() {
+  local ref=$1 attempt pull_status
+  for ((attempt=1; attempt<=pull_attempts; attempt++)); do
+    echo "Pulling image (attempt $attempt/$pull_attempts, timeout ${pull_timeout_seconds}s): $ref"
+    if timeout --signal=TERM --kill-after="${pull_kill_after_seconds}s" "${pull_timeout_seconds}s" docker pull "$ref"; then
+      return 0
+    fi
     pull_status=$?
     if (( pull_status == 124 || pull_status == 137 )); then
       echo "Image pull attempt $attempt timed out after ${pull_timeout_seconds}s" >&2
     else
       echo "Image pull attempt $attempt failed with status $pull_status" >&2
     fi
+    if (( attempt < pull_attempts )); then sleep 5; fi
+  done
+  return 1
+}
+
+IFS= read -r registry_user
+IFS= read -r registry_token
+# GHCR uses the GitHub actor, SWR uses region@AK, Aliyun ACR uses the account login name (may look like an email).
+[[ "$registry_user" =~ ^[^[:space:][:cntrl:]]+$ && ${#registry_user} -le 128 && -n "$registry_token" ]] || exit 64
+
+# Aliyun personal ACR cannot be filled from a US GitHub runner (cross-border push stalls).
+# When the target is ACR, stdin also carries a China-reachable seed: SWR first, else GHCR.
+if [[ "$image" =~ $acr_image ]]; then
+  IFS= read -r seed_user
+  IFS= read -r seed_token
+  IFS= read -r seed_repository
+  digest=${image##*@}
+  [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 64
+  [[ "$seed_repository" =~ ^(ghcr\.io/jjgitt/junjunorder|swr\.cn-north-4\.myhuaweicloud\.com/junjunorder/junjunorder)$ ]] || exit 64
+  case "$seed_repository" in
+    ghcr.io/*) seed_host=ghcr.io ;;
+    *) seed_host=swr.cn-north-4.myhuaweicloud.com ;;
+  esac
+  login_registry "$registry_host" "$registry_user" "$registry_token"
+  if ! pull_digest "$image"; then
+    echo "ACR is missing $digest; pulling $seed_repository and pushing ACR from this China server"
+    login_registry "$seed_host" "$seed_user" "$seed_token"
+    pull_digest "$seed_repository@$digest" || { echo 'Image pull failed; running service unchanged'; exit 1; }
+    login_registry "$registry_host" "$registry_user" "$registry_token"
+    seed_id=$(docker image inspect --format '{{.Id}}' "$seed_repository@$digest")
+    docker tag "$seed_id" "crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com/junjunorder/junjunorder:from-seed"
+    if timeout --signal=TERM --kill-after="${pull_kill_after_seconds}s" 600s \
+      docker push "crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com/junjunorder/junjunorder:from-seed" \
+      && pull_digest "$image"; then
+      echo 'ACR now has the digest; deploying from Aliyun ACR'
+    else
+      echo 'Warning: China-side ACR push failed; deploying the identical seed digest' >&2
+      image="$seed_repository@$digest"
+    fi
   fi
-  if (( attempt < pull_attempts )); then sleep 5; fi
-done
-[[ "$pulled" == true ]] || { echo 'Image pull failed; running service unchanged'; exit 1; }
+  unset registry_token seed_token
+else
+  login_registry "$registry_host" "$registry_user" "$registry_token"
+  unset registry_token
+  pull_digest "$image" || { echo 'Image pull failed; running service unchanged'; exit 1; }
+fi
 old_id=$("${compose[@]}" ps -q app)
 [[ -n "$old_id" ]] || { echo 'Expected existing production application'; exit 1; }
 old_image=$(docker inspect --format '{{.Image}}' "$old_id")

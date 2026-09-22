@@ -71,7 +71,7 @@ docker compose up -d --build
 
 ## 生产发布
 
-线上地址：`http://113.46.133.47`。推送到 `main` 后由 GitHub Actions 跑测试、在 runner 本地构建镜像，再把同一份镜像分别推到 GHCR、阿里云 ACR 和华为云 SWR，不再从 GHCR 拷到国内仓库。生产服务器按 digest 优先拉 ACR，不行再 SWR，最后落回 GHCR。凭证只放在 GitHub Secrets。单次镜像拉取设置 5 分钟超时并最多重试 3 次，全部失败时保持线上应用不变。细节、启用顺序和回滚见 [deploy/ci/README.md](deploy/ci/README.md)。
+线上地址：`http://113.46.133.47`。推送到 `main` 后由 GitHub Actions 跑测试、在 runner 本地构建镜像并推到 GHCR，同时尽量推到华为云 SWR。阿里云个人版 ACR 不能从美国 runner 直推广州（官方说明海外回推内地会卡住），改由国内服务器从 SWR/GHCR 收下后再推 ACR，生产按 digest 优先跑 ACR。凭证只放在 GitHub Secrets。单次镜像拉取设置 5 分钟超时并最多重试 3 次，全部失败时保持线上应用不变。细节、启用顺序和回滚见 [deploy/ci/README.md](deploy/ci/README.md)。
 
 ## 备份与恢复
 

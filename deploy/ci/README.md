@@ -1,8 +1,10 @@
 # 鸿运采购 CI/CD
 
-流程：推送 → 测试/数据库迁移验证 → main 在 runner 本地构建镜像 → 同一份本地镜像分别 `docker push` 到 GHCR（必推）、阿里云 ACR、华为云 SWR（后两者失败不阻断）→ 选仓 → SSH 拉取摘要镜像 → 数据库备份 → 切换 → 健康检查。
+流程：推送 → 测试/数据库迁移验证 → main 在 runner 本地构建镜像 → 推 GHCR（必推）和华为云 SWR（失败不阻断）→ 选仓 → 国内服务器若目标是 ACR，则从 SWR/GHCR 收下同一 digest 再推到广州 ACR → 拉 ACR 部署 → 数据库备份 → 切换 → 健康检查。
 
-选仓顺序：默认 ACR → SWR → GHCR。`IMAGE_REGISTRY=swr` 时优先 SWR。`IMAGE_REGISTRY=ghcr` 时只拉 GHCR。国内仓库从 runner 本地推，不用 `imagetools` 从 GHCR 再拷一遍。凭证只放在 GitHub Secrets，仓库里保留 2026-09-15 的 GHCR 快照：`deploy/ci/rollback/ghcr-20260915/`。
+选仓顺序：默认部署目标 ACR。`IMAGE_REGISTRY=swr` 时直接拉 SWR。`IMAGE_REGISTRY=ghcr` 时只拉 GHCR。美国 GitHub runner **不推 ACR**：阿里云个人版从海外回推内地会卡住（官方 FAQ）。凭证只放在 GitHub Secrets，仓库里保留 2026-09-15 的 GHCR 快照：`deploy/ci/rollback/ghcr-20260915/`。
+
+更新 `deploy/ci/deploy.sh` 后必须在服务器重新执行 `deploy/ci/install-server-deploy.sh`，否则 ACR 五段 stdin 对不上旧脚本。
 
 - `.github/workflows/ci-cd.yml`：所有分支 push 和 main PR 执行测试；只有 main push / main 手动运行可以发布。
 - Actions 固定到上游提交 SHA；镜像按 Git commit 标记，生产部署按 digest 固定版本。
@@ -34,7 +36,7 @@ Variables：
 | ACR_REPOSITORY | 例如 `junjunorder/junjunorder`；为空则跳过 ACR |
 | IMAGE_REGISTRY | 空或 `acr`：ACR → SWR → GHCR；`swr`：SWR → ACR → GHCR；`ghcr`：只拉 GHCR |
 
-推送镜像用 GitHub 自动提供的 `GITHUB_TOKEN`（publish 作业 packages:write）；部署作业仅 packages:read。短期令牌通过 SSH 标准输入传入，在临时 Docker 配置目录中使用，结束后删除。无需长期 GHCR PAT。ACR / SWR 推的是 runner 上刚构建的同一份镜像，不是从 GHCR 再拉再拷。任一侧登录或推送失败都不阻断发布。
+推送镜像用 GitHub 自动提供的 `GITHUB_TOKEN`（publish 作业 packages:write）；部署作业仅 packages:read。短期令牌通过 SSH 标准输入传入，在临时 Docker 配置目录中使用，结束后删除。无需长期 GHCR PAT。ACR 由国内服务器从 SWR（或 GHCR）灌入，不从美国 runner 直推广州。
 
 ## 服务器
 
@@ -65,15 +67,20 @@ GHCR 包应保持私有，并关联本仓库及授予本仓库 Actions 访问权
 
 启用顺序：
 
-1. 服务器 `/usr/local/sbin/hongyun-deploy` 须已包含 ACR 白名单。
+1. 服务器 `/usr/local/sbin/hongyun-deploy` 须已包含「国内灌 ACR」逻辑（五段 stdin）。
 2. 在 GitHub 配置 Variables `ACR_REGISTRY`、`ACR_REPOSITORY=junjunorder/junjunorder`，Secrets `ACR_USERNAME`、`ACR_PASSWORD`（阿里云控制台 → 容器镜像服务 → 访问凭证 → 固定密码）。
-3. `IMAGE_REGISTRY` 设为 `acr` 或不设：优先 ACR，失败再 SWR，最后 GHCR。
+3. `IMAGE_REGISTRY` 设为 `acr` 或不设：部署目标 ACR，由国内服务器从 SWR/GHCR 灌入。
 
 停用 ACR：删掉 `ACR_REPOSITORY`。停用 SWR：删掉 `SWR_REPOSITORY`。只拉 GHCR：把 `IMAGE_REGISTRY` 设为 `ghcr`。
 
-华为云 SWR 仍是第二优先部署目标。ACR 和 SWR 都从本地构建结果直接推，避免 `copying sha256:… from ghcr.io`。不要删除 `SWR_*` Secrets / Variables。
+华为云 SWR 是给国内服务器灌 ACR 的中转。美国 runner 不推 ACR。不要删除 `SWR_*` Secrets / Variables。
+
+## 阿里云 ACR 为什么不能在 GitHub 上推
+
+GitHub-hosted runner 在美国，个人版仓库在广州。阿里云文档写明：个人版从海外构建成功后再推回中国内地会慢，而且容易因跨域网络失败。这就是 `Push image to Aliyun ACR` 卡满 10 分钟被取消的原因，不是账号没登上。企业版的海外加速不在个人版上。处理办法是国内机器（本仓库的生产服务器）拉 SWR/GHCR，再推广州 ACR。
 
 ## 参考
 
 - https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images
 - https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry
+- https://help.aliyun.com/zh/acr/support/faq-about-the-basic-operations-of-container-registry

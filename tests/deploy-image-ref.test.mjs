@@ -37,12 +37,15 @@ test("deploy script accepts the GHCR, Huawei SWR and Aliyun ACR digest refs only
   assert.match(deploy, /pull_attempts=3/);
   assert.match(
     deploy,
-    /timeout --signal=TERM --kill-after="\$\{pull_kill_after_seconds\}s" "\$\{pull_timeout_seconds\}s" docker pull "\$image"/,
+    /timeout --signal=TERM --kill-after="\$\{pull_kill_after_seconds\}s" "\$\{pull_timeout_seconds\}s" docker pull "\$ref"/,
   );
   assert.match(deploy, /Image pull failed; running service unchanged/);
+  assert.match(deploy, /ACR is missing \$digest; pulling \$seed_repository and pushing ACR from this China server/);
+  assert.match(deploy, /docker push "crpi-lz061y1f8ajv9wzf\.cn-guangzhou\.personal\.cr\.aliyuncs\.com\/junjunorder\/junjunorder:from-seed"/);
+  assert.match(deploy, /timeout --signal=TERM --kill-after="\$\{pull_kill_after_seconds\}s" 600s/);
 });
 
-test("workflow pushes the local build to ACR then SWR then falls back to GHCR", async () => {
+test("workflow does not push ACR from the US runner; the China server seeds ACR", async () => {
   const workflow = await readFile(new URL("../.github/workflows/ci-cd.yml", import.meta.url), "utf8");
   const rollback = await readFile(new URL("../deploy/ci/rollback/ghcr-20260915/ci-cd.yml", import.meta.url), "utf8");
   assert.match(workflow, /tags: hongyun:ci/);
@@ -50,26 +53,26 @@ test("workflow pushes the local build to ACR then SWR then falls back to GHCR", 
   assert.match(workflow, /Push image to GHCR/);
   assert.match(workflow, /Login to Huawei SWR/);
   assert.match(workflow, /Push image to Huawei SWR/);
-  assert.match(workflow, /Login to Aliyun ACR/);
-  assert.match(workflow, /Push image to Aliyun ACR/);
+  assert.doesNotMatch(workflow, /Push image to Aliyun ACR/);
+  assert.doesNotMatch(workflow, /Login to Aliyun ACR/);
   assert.match(workflow, /docker tag hongyun:ci/);
+  assert.match(workflow, /timeout --signal=TERM --kill-after=30s 10m docker push/);
+  assert.doesNotMatch(workflow, /timeout-minutes: 10/);
   assert.match(workflow, /if: \$\{\{ vars\.SWR_REPOSITORY != '' && steps\.swr_login\.outcome == 'success' \}\}/);
-  assert.match(workflow, /if: \$\{\{ vars\.ACR_REPOSITORY != '' && steps\.acr_login\.outcome == 'success' \}\}/);
   assert.doesNotMatch(workflow, /imagetools create/);
-  assert.doesNotMatch(workflow, /ghcr\.io\/jjgitt\/junjunorder@\$IMAGE_DIGEST/);
   assert.match(workflow, /provenance: false/);
   assert.match(workflow, /sbom: false/);
   assert.match(workflow, /REQUESTED_REGISTRY.*IMAGE_REGISTRY/);
   assert.match(workflow, /continue-on-error: true/);
-  assert.match(workflow, /order='acr swr'/);
-  assert.match(workflow, /Aliyun ACR is unavailable; deploying the identical digest from Huawei SWR/);
-  assert.match(workflow, /Aliyun ACR and Huawei SWR are unavailable; deploying the identical digest from GHCR/);
+  assert.match(workflow, /selected=acr/);
+  assert.match(workflow, /the China server will seed it from/);
+  assert.match(workflow, /echo "seed=\$seed" >> "\$GITHUB_OUTPUT"/);
   assert.match(workflow, /echo "repository=\$repository" >> "\$GITHUB_OUTPUT"/);
   assert.match(workflow, /IMAGE_REPOSITORY: \$\{\{ needs\.publish\.outputs\.repository \|\| 'ghcr\.io\/jjgitt\/junjunorder' \}\}/);
   assert.match(workflow, /needs\.publish\.outputs\.registry == 'swr' && secrets\.SWR_USERNAME/);
   assert.match(workflow, /needs\.publish\.outputs\.registry == 'acr' && secrets\.ACR_USERNAME/);
-  assert.match(workflow, /needs\.publish\.outputs\.registry == 'swr' && secrets\.SWR_PASSWORD/);
-  assert.match(workflow, /needs\.publish\.outputs\.registry == 'acr' && secrets\.ACR_PASSWORD/);
+  assert.match(workflow, /TARGET_REGISTRY:-\}" == acr/);
+  assert.match(workflow, /SEED_REPOSITORY/);
   assert.match(workflow, /swr\\\.cn-north-4\\\.myhuaweicloud\\\.com\/junjunorder\/junjunorder/, "deploy job whitelists the SWR repository");
   assert.match(workflow, /crpi-lz061y1f8ajv9wzf\\\.cn-guangzhou\\\.personal\\\.cr\\\.aliyuncs\\\.com\/junjunorder\/junjunorder/, "deploy job whitelists the ACR repository");
   assert.match(workflow, /ghcr\.io\/jjgitt\/junjunorder/);

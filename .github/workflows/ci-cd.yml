@@ -63,6 +63,8 @@ jobs:
       digest: ${{ steps.ghcr_push.outputs.digest }}
       registry: ${{ steps.registry.outputs.name }}
       repository: ${{ steps.registry.outputs.repository }}
+      seed: ${{ steps.registry.outputs.seed }}
+      seed_repository: ${{ steps.registry.outputs.seed_repository }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -82,15 +84,6 @@ jobs:
           registry: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
           username: ${{ secrets.SWR_USERNAME }}
           password: ${{ secrets.SWR_PASSWORD }}
-      - name: Login to Aliyun ACR
-        id: acr_login
-        if: ${{ vars.ACR_REPOSITORY != '' }}
-        continue-on-error: true
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ${{ vars.ACR_REGISTRY || 'crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com' }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
       - id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
@@ -121,28 +114,10 @@ jobs:
           fi
           [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-      - name: Push image to Aliyun ACR
-        id: acr_push
-        if: ${{ vars.ACR_REPOSITORY != '' && steps.acr_login.outcome == 'success' }}
-        continue-on-error: true
-        timeout-minutes: 10
-        env:
-          ACR_HOST: ${{ vars.ACR_REGISTRY || 'crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com' }}
-          ACR_REPOSITORY: ${{ vars.ACR_REPOSITORY }}
-        run: |
-          set -euo pipefail
-          [[ "$ACR_HOST" =~ ^[a-z0-9-]+\.cn-[a-z0-9-]+\.(personal\.)?cr\.aliyuncs\.com$ ]] || exit 1
-          [[ "$ACR_REPOSITORY" =~ ^[a-z0-9._-]+/[a-z0-9._-]+$ ]] || exit 1
-          # Push the local build. Do not imagetools-copy from GHCR; that hangs on
-          # "copying sha256:… from ghcr.io" on the US runner.
-          tag="$ACR_HOST/$ACR_REPOSITORY:sha-${{ github.sha }}"
-          docker tag hongyun:ci "$tag"
-          docker push "$tag"
       - name: Push image to Huawei SWR
         id: swr_push
         if: ${{ vars.SWR_REPOSITORY != '' && steps.swr_login.outcome == 'success' }}
         continue-on-error: true
-        timeout-minutes: 10
         env:
           SWR_HOST: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
           SWR_REPOSITORY: ${{ vars.SWR_REPOSITORY }}
@@ -150,9 +125,11 @@ jobs:
           set -euo pipefail
           [[ "$SWR_HOST" =~ ^swr\.[a-z0-9-]+\.myhuaweicloud\.com$ ]] || exit 1
           [[ "$SWR_REPOSITORY" =~ ^[a-z0-9._-]+/[a-z0-9._-]+$ ]] || exit 1
+          # SWR is the China hop. Do not push ACR from this US runner: Aliyun personal
+          # ACR stalls on overseas-to-mainland uploads (official FAQ).
           tag="$SWR_HOST/$SWR_REPOSITORY:sha-${{ github.sha }}"
           docker tag hongyun:ci "$tag"
-          docker push "$tag"
+          timeout --signal=TERM --kill-after=30s 10m docker push "$tag"
       - name: Select deployment registry
         id: registry
         if: ${{ always() && steps.ghcr_push.outcome == 'success' }}
@@ -162,37 +139,54 @@ jobs:
           SWR_PUSH_OUTCOME: ${{ steps.swr_push.outcome }}
           SWR_HOST: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
           SWR_REPOSITORY: ${{ vars.SWR_REPOSITORY }}
-          ACR_LOGIN_OUTCOME: ${{ steps.acr_login.outcome }}
-          ACR_PUSH_OUTCOME: ${{ steps.acr_push.outcome }}
           ACR_HOST: ${{ vars.ACR_REGISTRY || 'crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com' }}
           ACR_REPOSITORY: ${{ vars.ACR_REPOSITORY }}
         run: |
           set -euo pipefail
-          # A registry only qualifies when both its login and the local-image push succeeded in this run.
-          swr_ready=false; acr_ready=false
+          swr_ready=false
           [[ "$SWR_LOGIN_OUTCOME" == 'success' && "$SWR_PUSH_OUTCOME" == 'success' ]] && swr_ready=true
-          [[ "$ACR_LOGIN_OUTCOME" == 'success' && "$ACR_PUSH_OUTCOME" == 'success' ]] && acr_ready=true
+          seed=ghcr
+          seed_repository='ghcr.io/jjgitt/junjunorder'
+          if [[ "$swr_ready" == true ]]; then
+            seed=swr
+            seed_repository="$SWR_HOST/$SWR_REPOSITORY"
+          fi
           case "$REQUESTED_REGISTRY" in
-            swr) order='swr acr' ;;
-            ghcr) order='' ;;
-            *) order='acr swr' ;;
-          esac
-          selected=ghcr
-          for candidate in $order; do
-            if [[ "$candidate" == acr && "$acr_ready" == true ]]; then selected=acr; break; fi
-            if [[ "$candidate" == swr && "$swr_ready" == true ]]; then selected=swr; break; fi
-          done
-          case "$selected" in
-            swr) repository="$SWR_HOST/$SWR_REPOSITORY" ;;
-            acr) repository="$ACR_HOST/$ACR_REPOSITORY" ;;
-            *) repository='ghcr.io/jjgitt/junjunorder' ;;
+            ghcr)
+              selected=ghcr
+              repository='ghcr.io/jjgitt/junjunorder'
+              seed=ghcr
+              seed_repository='ghcr.io/jjgitt/junjunorder'
+              ;;
+            swr)
+              if [[ "$swr_ready" == true ]]; then
+                selected=swr
+                repository="$SWR_HOST/$SWR_REPOSITORY"
+              else
+                selected=ghcr
+                repository='ghcr.io/jjgitt/junjunorder'
+                echo '::warning::Huawei SWR is unavailable; deploying the identical digest from GHCR.'
+              fi
+              ;;
+            *)
+              if [[ -n "$ACR_REPOSITORY" ]]; then
+                selected=acr
+                repository="$ACR_HOST/$ACR_REPOSITORY"
+              elif [[ "$swr_ready" == true ]]; then
+                selected=swr
+                repository="$SWR_HOST/$SWR_REPOSITORY"
+              else
+                selected=ghcr
+                repository='ghcr.io/jjgitt/junjunorder'
+              fi
+              ;;
           esac
           echo "name=$selected" >> "$GITHUB_OUTPUT"
           echo "repository=$repository" >> "$GITHUB_OUTPUT"
-          if [[ "$selected" == swr ]]; then
-            echo '::warning::Aliyun ACR is unavailable; deploying the identical digest from Huawei SWR.'
-          elif [[ -n "$order" && "$selected" == ghcr ]]; then
-            echo '::warning::Aliyun ACR and Huawei SWR are unavailable; deploying the identical digest from GHCR.'
+          echo "seed=$seed" >> "$GITHUB_OUTPUT"
+          echo "seed_repository=$seed_repository" >> "$GITHUB_OUTPUT"
+          if [[ "$selected" == acr ]]; then
+            echo "Deploy target is ACR; the China server will seed it from $seed_repository"
           fi
 
   deploy:
@@ -210,8 +204,12 @@ jobs:
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
       REGISTRY_USER: ${{ needs.publish.outputs.registry == 'swr' && secrets.SWR_USERNAME || needs.publish.outputs.registry == 'acr' && secrets.ACR_USERNAME || github.actor }}
       REGISTRY_TOKEN: ${{ needs.publish.outputs.registry == 'swr' && secrets.SWR_PASSWORD || needs.publish.outputs.registry == 'acr' && secrets.ACR_PASSWORD || secrets.GITHUB_TOKEN }}
+      SEED_USER: ${{ needs.publish.outputs.seed == 'swr' && secrets.SWR_USERNAME || github.actor }}
+      SEED_TOKEN: ${{ needs.publish.outputs.seed == 'swr' && secrets.SWR_PASSWORD || secrets.GITHUB_TOKEN }}
+      SEED_REPOSITORY: ${{ needs.publish.outputs.seed_repository || 'ghcr.io/jjgitt/junjunorder' }}
       IMAGE_DIGEST: ${{ needs.publish.outputs.digest }}
       IMAGE_REPOSITORY: ${{ needs.publish.outputs.repository || 'ghcr.io/jjgitt/junjunorder' }}
+      TARGET_REGISTRY: ${{ needs.publish.outputs.registry }}
     steps:
       - name: Deploy immutable image through restricted SSH command
         shell: bash
@@ -221,14 +219,20 @@ jobs:
           test -n "$DEPLOY_KNOWN_HOSTS" || { echo 'Missing DEPLOY_KNOWN_HOSTS repository secret'; exit 1; }
           [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
           [[ "$IMAGE_REPOSITORY" =~ ^(ghcr\.io/jjgitt/junjunorder|swr\.cn-north-4\.myhuaweicloud\.com/junjunorder/junjunorder|crpi-lz061y1f8ajv9wzf\.cn-guangzhou\.personal\.cr\.aliyuncs\.com/junjunorder/junjunorder)$ ]] || exit 1
+          [[ "$SEED_REPOSITORY" =~ ^(ghcr\.io/jjgitt/junjunorder|swr\.cn-north-4\.myhuaweicloud\.com/junjunorder/junjunorder)$ ]] || exit 1
           ssh_dir=$(mktemp -d)
           trap 'rm -f "$ssh_dir/key" "$ssh_dir/known_hosts"; rmdir "$ssh_dir"' EXIT
           chmod 700 "$ssh_dir"
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$ssh_dir/key"
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
           chmod 600 "$ssh_dir/key" "$ssh_dir/known_hosts"
-          # Two-line ephemeral registry credentials travel only through encrypted stdin.
-          printf '%s\n%s\n' "$REGISTRY_USER" "$REGISTRY_TOKEN" | ssh \
+          # Ephemeral registry credentials travel only through encrypted stdin.
+          # ACR deploys send seed credentials so the China server can fill ACR locally.
+          if [[ "${TARGET_REGISTRY:-}" == acr ]]; then
+            printf '%s\n%s\n%s\n%s\n%s\n' "$REGISTRY_USER" "$REGISTRY_TOKEN" "$SEED_USER" "$SEED_TOKEN" "$SEED_REPOSITORY"
+          else
+            printf '%s\n%s\n' "$REGISTRY_USER" "$REGISTRY_TOKEN"
+          fi | ssh \
             -i "$ssh_dir/key" -o IdentitiesOnly=yes -o BatchMode=yes \
             -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$ssh_dir/known_hosts" \
             -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
