@@ -55,7 +55,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: test
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     permissions:
       contents: read
       packages: write
@@ -73,15 +73,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Login to Huawei SWR
-        id: swr_login
-        if: ${{ vars.SWR_REPOSITORY != '' }}
-        continue-on-error: true
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
-          username: ${{ secrets.SWR_USERNAME }}
-          password: ${{ secrets.SWR_PASSWORD }}
       - name: Login to Aliyun ACR
         id: acr_login
         if: ${{ vars.ACR_REPOSITORY != '' }}
@@ -105,27 +96,11 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Mirror image to Huawei SWR
-        id: swr_mirror
-        if: ${{ vars.SWR_REPOSITORY != '' && steps.swr_login.outcome == 'success' }}
-        continue-on-error: true
-        env:
-          SWR_HOST: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
-          SWR_REPOSITORY: ${{ vars.SWR_REPOSITORY }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          set -euo pipefail
-          [[ "$SWR_HOST" =~ ^swr\.[a-z0-9-]+\.myhuaweicloud\.com$ ]] || exit 1
-          [[ "$SWR_REPOSITORY" =~ ^[a-z0-9._-]+/[a-z0-9._-]+$ ]] || exit 1
-          [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
-          docker buildx imagetools create \
-            --prefer-index=false \
-            --tag "$SWR_HOST/$SWR_REPOSITORY:sha-${{ github.sha }}" \
-            "ghcr.io/jjgitt/junjunorder@$IMAGE_DIGEST"
       - name: Mirror image to Aliyun ACR
         id: acr_mirror
         if: ${{ vars.ACR_REPOSITORY != '' && steps.acr_login.outcome == 'success' }}
         continue-on-error: true
+        timeout-minutes: 22
         env:
           ACR_HOST: ${{ vars.ACR_REGISTRY || 'crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com' }}
           ACR_REPOSITORY: ${{ vars.ACR_REPOSITORY }}
@@ -144,42 +119,27 @@ jobs:
         if: ${{ always() && steps.build.outcome == 'success' }}
         env:
           REQUESTED_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
-          SWR_LOGIN_OUTCOME: ${{ steps.swr_login.outcome }}
-          SWR_MIRROR_OUTCOME: ${{ steps.swr_mirror.outcome }}
-          SWR_HOST: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
-          SWR_REPOSITORY: ${{ vars.SWR_REPOSITORY }}
           ACR_LOGIN_OUTCOME: ${{ steps.acr_login.outcome }}
           ACR_MIRROR_OUTCOME: ${{ steps.acr_mirror.outcome }}
           ACR_HOST: ${{ vars.ACR_REGISTRY || 'crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com' }}
           ACR_REPOSITORY: ${{ vars.ACR_REPOSITORY }}
         run: |
           set -euo pipefail
-          # Preference: the requested China registry first, the other China registry second, GHCR last.
-          # A registry only qualifies when both its login and the digest mirror succeeded in this run.
-          swr_ready=false; acr_ready=false
-          [[ "$SWR_LOGIN_OUTCOME" == 'success' && "$SWR_MIRROR_OUTCOME" == 'success' ]] && swr_ready=true
+          # Preference: Aliyun ACR when login and the digest mirror both succeeded; GHCR last.
+          acr_ready=false
           [[ "$ACR_LOGIN_OUTCOME" == 'success' && "$ACR_MIRROR_OUTCOME" == 'success' ]] && acr_ready=true
-          case "$REQUESTED_REGISTRY" in
-            swr) order='swr acr' ;;
-            acr) order='acr swr' ;;
-            *) order='' ;;
-          esac
           selected=ghcr
-          for candidate in $order; do
-            if [[ "$candidate" == swr && "$swr_ready" == true ]]; then selected=swr; break; fi
-            if [[ "$candidate" == acr && "$acr_ready" == true ]]; then selected=acr; break; fi
-          done
+          if [[ "$REQUESTED_REGISTRY" != 'ghcr' && "$acr_ready" == true ]]; then
+            selected=acr
+          fi
           case "$selected" in
-            swr) repository="$SWR_HOST/$SWR_REPOSITORY" ;;
             acr) repository="$ACR_HOST/$ACR_REPOSITORY" ;;
             *) repository='ghcr.io/jjgitt/junjunorder' ;;
           esac
           echo "name=$selected" >> "$GITHUB_OUTPUT"
           echo "repository=$repository" >> "$GITHUB_OUTPUT"
-          if [[ "$REQUESTED_REGISTRY" == 'swr' && "$selected" == acr ]]; then
-            echo '::warning::Huawei SWR is unavailable; deploying the identical digest from Aliyun ACR.'
-          elif [[ -n "$order" && "$selected" == ghcr ]]; then
-            echo '::warning::Huawei SWR and Aliyun ACR are unavailable; deploying the identical digest from GHCR.'
+          if [[ "$REQUESTED_REGISTRY" != 'ghcr' && "$selected" == ghcr ]]; then
+            echo '::warning::Aliyun ACR is unavailable; deploying the identical digest from GHCR.'
           fi
 
   deploy:
@@ -195,8 +155,8 @@ jobs:
       DEPLOY_USER: junjun
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-      REGISTRY_USER: ${{ needs.publish.outputs.registry == 'swr' && secrets.SWR_USERNAME || needs.publish.outputs.registry == 'acr' && secrets.ACR_USERNAME || github.actor }}
-      REGISTRY_TOKEN: ${{ needs.publish.outputs.registry == 'swr' && secrets.SWR_PASSWORD || needs.publish.outputs.registry == 'acr' && secrets.ACR_PASSWORD || secrets.GITHUB_TOKEN }}
+      REGISTRY_USER: ${{ needs.publish.outputs.registry == 'acr' && secrets.ACR_USERNAME || github.actor }}
+      REGISTRY_TOKEN: ${{ needs.publish.outputs.registry == 'acr' && secrets.ACR_PASSWORD || secrets.GITHUB_TOKEN }}
       IMAGE_DIGEST: ${{ needs.publish.outputs.digest }}
       IMAGE_REPOSITORY: ${{ needs.publish.outputs.repository || 'ghcr.io/jjgitt/junjunorder' }}
     steps:
@@ -207,7 +167,7 @@ jobs:
           test -n "$DEPLOY_SSH_KEY" || { echo 'Missing DEPLOY_SSH_KEY repository secret'; exit 1; }
           test -n "$DEPLOY_KNOWN_HOSTS" || { echo 'Missing DEPLOY_KNOWN_HOSTS repository secret'; exit 1; }
           [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
-          [[ "$IMAGE_REPOSITORY" =~ ^(ghcr\.io/jjgitt/junjunorder|swr\.cn-north-4\.myhuaweicloud\.com/junjunorder/junjunorder|crpi-lz061y1f8ajv9wzf\.cn-guangzhou\.personal\.cr\.aliyuncs\.com/junjunorder/junjunorder)$ ]] || exit 1
+          [[ "$IMAGE_REPOSITORY" =~ ^(ghcr\.io/jjgitt/junjunorder|crpi-lz061y1f8ajv9wzf\.cn-guangzhou\.personal\.cr\.aliyuncs\.com/junjunorder/junjunorder)$ ]] || exit 1
           ssh_dir=$(mktemp -d)
           trap 'rm -f "$ssh_dir/key" "$ssh_dir/known_hosts"; rmdir "$ssh_dir"' EXIT
           chmod 700 "$ssh_dir"

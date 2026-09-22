@@ -71,7 +71,7 @@ docker compose up -d --build
 
 ## 生产发布
 
-线上地址：`http://113.46.133.47`。推送到 `main` 后由 GitHub Actions 跑测试、构建镜像并发布。镜像始终发布到 GitHub Container Registry（GHCR），再以同一 digest 同步到华为云 SWR（`swr.cn-north-4.myhuaweicloud.com/junjunorder/junjunorder`）和阿里云 ACR（`crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com/junjunorder/junjunorder`）；生产服务器按 SWR → ACR → GHCR 的顺序从第一个可用仓库按 digest 拉取，凭证只放在 GitHub Secrets。部署脚本只接受这三个仓库的白名单地址，对单次镜像拉取设置 5 分钟超时并最多重试 3 次，全部失败时保持线上应用不变。细节、启用顺序和回滚见 [deploy/ci/README.md](deploy/ci/README.md)。
+线上地址：`http://113.46.133.47`。推送到 `main` 后由 GitHub Actions 跑测试、构建镜像并发布。镜像始终发布到 GitHub Container Registry（GHCR），再以同一 digest 同步到阿里云 ACR（`crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com/junjunorder/junjunorder`）；生产服务器优先从 ACR 按 digest 拉取，ACR 不可用时落回 GHCR。凭证只放在 GitHub Secrets。部署脚本仍接受旧的华为云 SWR 地址以便清理历史镜像，新发布不再使用 SWR。单次镜像拉取设置 5 分钟超时并最多重试 3 次，全部失败时保持线上应用不变。细节、启用顺序和回滚见 [deploy/ci/README.md](deploy/ci/README.md)。
 
 ## 备份与恢复
 
@@ -125,7 +125,7 @@ npm run dev
 
 ## 安全提示
 
-- 不要提交 `.env`，也不要把华为云 SWR 或 GitHub 的登录密码写进仓库。
+- 不要提交 `.env`，也不要把镜像仓库或 GitHub 的登录密码写进仓库。
 - PostgreSQL 不对公网暴露端口，默认只在 Compose 内部网络访问。
 - 图片接口经过登录和订单归属校验，不直接暴露上传目录。
 - 得物和 OCR 凭证只保存在服务器环境变量中。
