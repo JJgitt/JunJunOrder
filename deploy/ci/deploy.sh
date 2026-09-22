@@ -130,19 +130,19 @@ login_registry() {
 }
 
 pull_digest() {
-  local ref=$1 attempt pull_status
-  for ((attempt=1; attempt<=pull_attempts; attempt++)); do
-    echo "Pulling image (attempt $attempt/$pull_attempts, timeout ${pull_timeout_seconds}s): $ref"
-    if timeout --signal=TERM --kill-after="${pull_kill_after_seconds}s" "${pull_timeout_seconds}s" docker pull "$ref"; then
+  local ref=$1 timeout_seconds=${2:-$pull_timeout_seconds} attempts=${3:-$pull_attempts} attempt pull_status
+  for ((attempt=1; attempt<=attempts; attempt++)); do
+    echo "Pulling image (attempt $attempt/$attempts, timeout ${timeout_seconds}s): $ref"
+    if timeout --signal=TERM --kill-after="${pull_kill_after_seconds}s" "${timeout_seconds}s" docker pull "$ref"; then
       return 0
     fi
     pull_status=$?
     if (( pull_status == 124 || pull_status == 137 )); then
-      echo "Image pull attempt $attempt timed out after ${pull_timeout_seconds}s" >&2
+      echo "Image pull attempt $attempt timed out after ${timeout_seconds}s" >&2
     else
       echo "Image pull attempt $attempt failed with status $pull_status" >&2
     fi
-    if (( attempt < pull_attempts )); then sleep 5; fi
+    if (( attempt < attempts )); then sleep 5; fi
   done
   return 1
 }
@@ -152,8 +152,8 @@ IFS= read -r registry_token
 # GHCR uses the GitHub actor, SWR uses region@AK, Aliyun ACR uses the account login name (may look like an email).
 [[ "$registry_user" =~ ^[^[:space:][:cntrl:]]+$ && ${#registry_user} -le 128 && -n "$registry_token" ]] || exit 64
 
-# Aliyun personal ACR cannot be filled from a US GitHub runner (cross-border push stalls).
-# When the target is ACR, stdin also carries a China-reachable seed: SWR first, else GHCR.
+# US GitHub runners stall when pushing either China registry (ACR Guangzhou or SWR Beijing).
+# The seed is GHCR. This server pulls it and pushes ACR on the domestic link.
 if [[ "$image" =~ $acr_image ]]; then
   IFS= read -r seed_user
   IFS= read -r seed_token
@@ -169,7 +169,7 @@ if [[ "$image" =~ $acr_image ]]; then
   if ! pull_digest "$image"; then
     echo "ACR is missing $digest; pulling $seed_repository and pushing ACR from this China server"
     login_registry "$seed_host" "$seed_user" "$seed_token"
-    pull_digest "$seed_repository@$digest" || { echo 'Image pull failed; running service unchanged'; exit 1; }
+    pull_digest "$seed_repository@$digest" 1200 2 || { echo 'Image pull failed; running service unchanged'; exit 1; }
     login_registry "$registry_host" "$registry_user" "$registry_token"
     seed_id=$(docker image inspect --format '{{.Id}}' "$seed_repository@$digest")
     docker tag "$seed_id" "crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com/junjunorder/junjunorder:from-seed"

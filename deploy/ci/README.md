@@ -1,8 +1,8 @@
 # 鸿运采购 CI/CD
 
-流程：推送 → 测试/数据库迁移验证 → main 在 runner 本地构建镜像 → 推 GHCR（必推）和华为云 SWR（失败不阻断）→ 选仓 → 国内服务器若目标是 ACR，则从 SWR/GHCR 收下同一 digest 再推到广州 ACR → 拉 ACR 部署 → 数据库备份 → 切换 → 健康检查。
+流程：推送 → 测试/数据库迁移验证 → main 在 runner 本地构建镜像 → 只推 GHCR → 国内服务器拉 GHCR，再推到广州 ACR → 用 ACR 部署 → 数据库备份 → 切换 → 健康检查。
 
-选仓顺序：默认部署目标 ACR。`IMAGE_REGISTRY=swr` 时直接拉 SWR。`IMAGE_REGISTRY=ghcr` 时只拉 GHCR。美国 GitHub runner **不推 ACR**：阿里云个人版从海外回推内地会卡住（官方 FAQ）。凭证只放在 GitHub Secrets，仓库里保留 2026-09-15 的 GHCR 快照：`deploy/ci/rollback/ghcr-20260915/`。
+选仓顺序：默认部署目标 ACR，种子固定为 GHCR。`IMAGE_REGISTRY=ghcr` 或 `swr` 时只拉 GHCR。美国 GitHub runner **不推 ACR，也不推 SWR**：两个国内仓库从海外上传都会卡住。凭证只放在 GitHub Secrets，仓库里保留 2026-09-15 的 GHCR 快照：`deploy/ci/rollback/ghcr-20260915/`。
 
 更新 `deploy/ci/deploy.sh` 后必须在服务器重新执行 `deploy/ci/install-server-deploy.sh`，否则 ACR 五段 stdin 对不上旧脚本。
 
@@ -73,11 +73,11 @@ GHCR 包应保持私有，并关联本仓库及授予本仓库 Actions 访问权
 
 停用 ACR：删掉 `ACR_REPOSITORY`。停用 SWR：删掉 `SWR_REPOSITORY`。只拉 GHCR：把 `IMAGE_REGISTRY` 设为 `ghcr`。
 
-华为云 SWR 是给国内服务器灌 ACR 的中转。美国 runner 不推 ACR。不要删除 `SWR_*` Secrets / Variables。
+美国 runner 不推 ACR，也不推华为云 SWR。`Push image to Huawei SWR` 卡住的原因和 ACR 一样：runner 在美国，SWR 在华北，跨境上传停住。国内服务器从 GHCR 拉镜像（下载方向），再在国内推广州 ACR。
 
-## 阿里云 ACR 为什么不能在 GitHub 上推
+## 为什么 GitHub 上推国内仓库会卡住
 
-GitHub-hosted runner 在美国，个人版仓库在广州。阿里云文档写明：个人版从海外构建成功后再推回中国内地会慢，而且容易因跨域网络失败。这就是 `Push image to Aliyun ACR` 卡满 10 分钟被取消的原因，不是账号没登上。企业版的海外加速不在个人版上。处理办法是国内机器（本仓库的生产服务器）拉 SWR/GHCR，再推广州 ACR。
+GitHub-hosted runner 在美国。阿里云个人版在广州，华为云 SWR 在华北。阿里云文档写明：个人版从海外再推回中国内地会慢，而且容易因跨域网络失败。SWR 没有单独的海外加速，从美国 `docker push` 同样会停在上传。账号是登上的。处理办法是 runner 只推 GHCR，国内机器再拉 GHCR、推广州 ACR。
 
 ## 参考
 

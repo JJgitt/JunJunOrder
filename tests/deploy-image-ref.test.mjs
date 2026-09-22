@@ -37,8 +37,9 @@ test("deploy script accepts the GHCR, Huawei SWR and Aliyun ACR digest refs only
   assert.match(deploy, /pull_attempts=3/);
   assert.match(
     deploy,
-    /timeout --signal=TERM --kill-after="\$\{pull_kill_after_seconds\}s" "\$\{pull_timeout_seconds\}s" docker pull "\$ref"/,
+    /timeout --signal=TERM --kill-after="\$\{pull_kill_after_seconds\}s" "\$\{timeout_seconds\}s" docker pull "\$ref"/,
   );
+  assert.match(deploy, /pull_digest "\$seed_repository@\$digest" 1200 2/);
   assert.match(deploy, /Image pull failed; running service unchanged/);
   assert.match(deploy, /ACR is missing \$digest; pulling \$seed_repository and pushing ACR from this China server/);
   assert.match(deploy, /docker push "crpi-lz061y1f8ajv9wzf\.cn-guangzhou\.personal\.cr\.aliyuncs\.com\/junjunorder\/junjunorder:from-seed"/);
@@ -51,19 +52,17 @@ test("workflow does not push ACR from the US runner; the China server seeds ACR"
   assert.match(workflow, /tags: hongyun:ci/);
   assert.match(workflow, /load: true/);
   assert.match(workflow, /Push image to GHCR/);
-  assert.match(workflow, /Login to Huawei SWR/);
-  assert.match(workflow, /Push image to Huawei SWR/);
+  assert.doesNotMatch(workflow, /Login to Huawei SWR/);
+  assert.doesNotMatch(workflow, /Push image to Huawei SWR/);
   assert.doesNotMatch(workflow, /Push image to Aliyun ACR/);
   assert.doesNotMatch(workflow, /Login to Aliyun ACR/);
   assert.match(workflow, /docker tag hongyun:ci/);
-  assert.match(workflow, /timeout --signal=TERM --kill-after=30s 10m docker push/);
-  assert.doesNotMatch(workflow, /timeout-minutes: 10/);
-  assert.match(workflow, /if: \$\{\{ vars\.SWR_REPOSITORY != '' && steps\.swr_login\.outcome == 'success' \}\}/);
+  assert.doesNotMatch(workflow, /docker push "\$tag"/);
+  assert.match(workflow, /seed_repository='ghcr\.io\/jjgitt\/junjunorder'/);
   assert.doesNotMatch(workflow, /imagetools create/);
   assert.match(workflow, /provenance: false/);
   assert.match(workflow, /sbom: false/);
   assert.match(workflow, /REQUESTED_REGISTRY.*IMAGE_REGISTRY/);
-  assert.match(workflow, /continue-on-error: true/);
   assert.match(workflow, /selected=acr/);
   assert.match(workflow, /the China server will seed it from/);
   assert.match(workflow, /echo "seed=\$seed" >> "\$GITHUB_OUTPUT"/);

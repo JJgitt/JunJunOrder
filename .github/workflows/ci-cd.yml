@@ -75,15 +75,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Login to Huawei SWR
-        id: swr_login
-        if: ${{ vars.SWR_REPOSITORY != '' }}
-        continue-on-error: true
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
-          username: ${{ secrets.SWR_USERNAME }}
-          password: ${{ secrets.SWR_PASSWORD }}
       - id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
@@ -114,67 +105,31 @@ jobs:
           fi
           [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-      - name: Push image to Huawei SWR
-        id: swr_push
-        if: ${{ vars.SWR_REPOSITORY != '' && steps.swr_login.outcome == 'success' }}
-        continue-on-error: true
-        env:
-          SWR_HOST: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
-          SWR_REPOSITORY: ${{ vars.SWR_REPOSITORY }}
-        run: |
-          set -euo pipefail
-          [[ "$SWR_HOST" =~ ^swr\.[a-z0-9-]+\.myhuaweicloud\.com$ ]] || exit 1
-          [[ "$SWR_REPOSITORY" =~ ^[a-z0-9._-]+/[a-z0-9._-]+$ ]] || exit 1
-          # SWR is the China hop. Do not push ACR from this US runner: Aliyun personal
-          # ACR stalls on overseas-to-mainland uploads (official FAQ).
-          tag="$SWR_HOST/$SWR_REPOSITORY:sha-${{ github.sha }}"
-          docker tag hongyun:ci "$tag"
-          timeout --signal=TERM --kill-after=30s 10m docker push "$tag"
       - name: Select deployment registry
         id: registry
         if: ${{ always() && steps.ghcr_push.outcome == 'success' }}
         env:
           REQUESTED_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
-          SWR_LOGIN_OUTCOME: ${{ steps.swr_login.outcome }}
-          SWR_PUSH_OUTCOME: ${{ steps.swr_push.outcome }}
-          SWR_HOST: ${{ vars.SWR_REGISTRY || 'swr.cn-north-4.myhuaweicloud.com' }}
-          SWR_REPOSITORY: ${{ vars.SWR_REPOSITORY }}
           ACR_HOST: ${{ vars.ACR_REGISTRY || 'crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com' }}
           ACR_REPOSITORY: ${{ vars.ACR_REPOSITORY }}
         run: |
           set -euo pipefail
-          swr_ready=false
-          [[ "$SWR_LOGIN_OUTCOME" == 'success' && "$SWR_PUSH_OUTCOME" == 'success' ]] && swr_ready=true
+          # Do not push SWR or ACR from this US runner. Both China registries stall on
+          # the overseas upload. The China server pulls GHCR and pushes ACR itself.
           seed=ghcr
           seed_repository='ghcr.io/jjgitt/junjunorder'
-          if [[ "$swr_ready" == true ]]; then
-            seed=swr
-            seed_repository="$SWR_HOST/$SWR_REPOSITORY"
-          fi
           case "$REQUESTED_REGISTRY" in
-            ghcr)
+            ghcr|swr)
               selected=ghcr
               repository='ghcr.io/jjgitt/junjunorder'
-              seed=ghcr
-              seed_repository='ghcr.io/jjgitt/junjunorder'
-              ;;
-            swr)
-              if [[ "$swr_ready" == true ]]; then
-                selected=swr
-                repository="$SWR_HOST/$SWR_REPOSITORY"
-              else
-                selected=ghcr
-                repository='ghcr.io/jjgitt/junjunorder'
-                echo '::warning::Huawei SWR is unavailable; deploying the identical digest from GHCR.'
+              if [[ "$REQUESTED_REGISTRY" == swr ]]; then
+                echo '::warning::Huawei SWR is not pushed from GitHub; deploying the identical digest from GHCR.'
               fi
               ;;
             *)
               if [[ -n "$ACR_REPOSITORY" ]]; then
                 selected=acr
                 repository="$ACR_HOST/$ACR_REPOSITORY"
-              elif [[ "$swr_ready" == true ]]; then
-                selected=swr
-                repository="$SWR_HOST/$SWR_REPOSITORY"
               else
                 selected=ghcr
                 repository='ghcr.io/jjgitt/junjunorder'
@@ -193,7 +148,7 @@ jobs:
     needs: publish
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: read
@@ -235,7 +190,7 @@ jobs:
           fi | ssh \
             -i "$ssh_dir/key" -o IdentitiesOnly=yes -o BatchMode=yes \
             -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$ssh_dir/known_hosts" \
-            -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
+            -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=40 \
             "$DEPLOY_USER@$DEPLOY_HOST" "$IMAGE_REPOSITORY@$IMAGE_DIGEST"
       - name: Check public health endpoint
         run: curl --fail --retry 5 --retry-delay 3 --max-time 15 http://113.46.133.47/api/health
