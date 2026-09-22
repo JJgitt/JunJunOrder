@@ -1210,6 +1210,12 @@ function BuyerOrderCard({order, onOpen, onEdit}: { order: PurchaseOrder; onOpen:
                                   onClick={onEdit}>{order.status === "已驳回" ? "修改后重新提交" : "编辑采购单"}</button> : undefined}/>;
 }
 
+function UploadTutorialLink() {
+    return <a className="tutorial-banner" href="/tutorial/upload-order.html" target="_blank" rel="noreferrer">
+        <i>教程</i><span><b>上传订单教程</b><small>分步图解，含识图填写与常见报错</small></span><em>打开</em>
+    </a>;
+}
+
 function BuyerHome({
                        buyerName,
                        orders,
@@ -1224,6 +1230,7 @@ function BuyerHome({
     const count = (status: OrderStatus) => orders.filter(o => o.status === status).length;
     return <section className="enter buyer-home">
         <div className="buyer-welcome"><span>采购员 · {buyerName}</span><h2>今天也要买到好价 👋</h2><p>订单及时上报，仓库收货更高效</p></div>
+        <UploadTutorialLink/>
         <div className="buyer-stats">
             <button onClick={onMine}><b>{count("待审核")}</b><span>待审核</span></button>
             <button onClick={onMine}><b>{count("在途")}</b><span>在途</span></button>
@@ -1241,7 +1248,6 @@ function BuyerHome({
             <button className="upload-quick" onClick={onUpload}>
                 <i>＋</i><span><b>上传采购订单</b><small>填写渠道、商品与物流信息</small></span><em>›</em></button>
             <button onClick={onMine}><i>▤</i><span><b>查看我的订单</b><small>跟踪审核、在途与入库状态</small></span><em>›</em></button>
-            <a href="/tutorial/upload-order.html" target="_blank" rel="noreferrer"><i>?</i><span><b>上传订单教程</b><small>分步图解，含识图填写与常见报错</small></span><em>›</em></a>
         </div>
         <SectionHead title="最近订单" note="查看全部"/>
         <div className="order-list compact">{orders.slice(0, 2).map(order => <BuyerOrderCard key={order.id}
@@ -1397,6 +1403,7 @@ function UploadPage({
                 <p>{mode === "admin" ? "以管理员身份录入，订单与附件将持久化保存到服务器。" : editing && editing.status !== "已驳回" ? `订单当前为“${editing.status}”，入库前均可修改并保存。` : "订单与附件将持久化保存到服务器，提交后可跨设备查看。"}</p>
             </div>
             {onCancel && <button className="form-back-button" type="button" onClick={onCancel}>返回订单</button>}</div>
+        <UploadTutorialLink/>
         {editing?.rejectReason && <div className="inline-warning"><b>驳回原因</b><span>{editing.rejectReason}</span></div>}
         <form className="purchase-form" autoComplete="off" onSubmit={submit}>
             {mode === "admin" && editing && <label><span>采购人 *</span>
