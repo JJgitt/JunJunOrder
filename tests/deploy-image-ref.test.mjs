@@ -39,42 +39,32 @@ test("deploy script accepts the GHCR, Huawei SWR and Aliyun ACR digest refs only
     deploy,
     /timeout --signal=TERM --kill-after="\$\{pull_kill_after_seconds\}s" "\$\{timeout_seconds\}s" docker pull "\$ref"/,
   );
-  assert.match(deploy, /pull_digest "\$seed_repository@\$digest" 1200 2/);
   assert.match(deploy, /Image pull failed; running service unchanged/);
-  assert.match(deploy, /ACR is missing \$digest; pulling \$seed_repository and pushing ACR from this China server/);
-  assert.match(deploy, /docker push "crpi-lz061y1f8ajv9wzf\.cn-guangzhou\.personal\.cr\.aliyuncs\.com\/junjunorder\/junjunorder:from-seed"/);
-  assert.match(deploy, /timeout --signal=TERM --kill-after="\$\{pull_kill_after_seconds\}s" 600s/);
+  assert.match(deploy, /junjunorder:main#\[0-9a-f\]\{40\}/);
+  assert.match(deploy, /Waiting for ACR build of \$sha on \$tag/);
+  assert.match(deploy, /\/app\/source-revision/);
+  assert.doesNotMatch(deploy, /from-seed/);
+  assert.doesNotMatch(deploy, /seed_repository/);
 });
 
-test("workflow does not push ACR from the US runner; the China server seeds ACR", async () => {
+test("workflow deploys the Aliyun China build and does not push from GitHub", async () => {
   const workflow = await readFile(new URL("../.github/workflows/ci-cd.yml", import.meta.url), "utf8");
+  const dockerfile = await readFile(new URL("../Dockerfile", import.meta.url), "utf8");
   const rollback = await readFile(new URL("../deploy/ci/rollback/ghcr-20260915/ci-cd.yml", import.meta.url), "utf8");
-  assert.match(workflow, /tags: hongyun:ci/);
-  assert.match(workflow, /load: true/);
-  assert.match(workflow, /Push image to GHCR/);
+  assert.match(dockerfile, /git rev-parse HEAD > \/source-revision/);
+  assert.match(dockerfile, /COPY --from=revision --chown=nextjs:nodejs \/source-revision \.\/source-revision/);
+  assert.doesNotMatch(workflow, /Push image to GHCR/);
+  assert.doesNotMatch(workflow, /docker\/build-push-action/);
   assert.doesNotMatch(workflow, /Login to Huawei SWR/);
-  assert.doesNotMatch(workflow, /Push image to Huawei SWR/);
   assert.doesNotMatch(workflow, /Push image to Aliyun ACR/);
-  assert.doesNotMatch(workflow, /Login to Aliyun ACR/);
-  assert.match(workflow, /docker tag hongyun:ci/);
-  assert.doesNotMatch(workflow, /docker push "\$tag"/);
-  assert.match(workflow, /seed_repository='ghcr\.io\/jjgitt\/junjunorder'/);
   assert.doesNotMatch(workflow, /imagetools create/);
-  assert.match(workflow, /provenance: false/);
-  assert.match(workflow, /sbom: false/);
-  assert.match(workflow, /REQUESTED_REGISTRY.*IMAGE_REGISTRY/);
-  assert.match(workflow, /selected=acr/);
-  assert.match(workflow, /the China server will seed it from/);
-  assert.match(workflow, /echo "seed=\$seed" >> "\$GITHUB_OUTPUT"/);
-  assert.match(workflow, /echo "repository=\$repository" >> "\$GITHUB_OUTPUT"/);
-  assert.match(workflow, /IMAGE_REPOSITORY: \$\{\{ needs\.publish\.outputs\.repository \|\| 'ghcr\.io\/jjgitt\/junjunorder' \}\}/);
-  assert.match(workflow, /needs\.publish\.outputs\.registry == 'swr' && secrets\.SWR_USERNAME/);
-  assert.match(workflow, /needs\.publish\.outputs\.registry == 'acr' && secrets\.ACR_USERNAME/);
-  assert.match(workflow, /TARGET_REGISTRY:-\}" == acr/);
-  assert.match(workflow, /SEED_REPOSITORY/);
-  assert.match(workflow, /swr\\\.cn-north-4\\\.myhuaweicloud\\\.com\/junjunorder\/junjunorder/, "deploy job whitelists the SWR repository");
-  assert.match(workflow, /crpi-lz061y1f8ajv9wzf\\\.cn-guangzhou\\\.personal\\\.cr\\\.aliyuncs\\\.com\/junjunorder\/junjunorder/, "deploy job whitelists the ACR repository");
-  assert.match(workflow, /ghcr\.io\/jjgitt\/junjunorder/);
+  assert.match(workflow, /needs: test/);
+  assert.match(workflow, /junjunorder:main#\$\{\{ github\.sha \}\}/);
+  assert.match(workflow, /secrets\.ACR_USERNAME/);
+  assert.match(workflow, /secrets\.ACR_PASSWORD/);
+  assert.match(workflow, /\/app\/source-revision matches this commit/);
+  assert.doesNotMatch(workflow, /SEED_REPOSITORY/);
+  assert.doesNotMatch(workflow, /secrets\.SWR_USERNAME|secrets\.SWR_PASSWORD/);
   assert.match(rollback, /"\$DEPLOY_USER@\$DEPLOY_HOST" "ghcr\.io\/jjgitt\/junjunorder@\$IMAGE_DIGEST"/);
   assert.doesNotMatch(workflow, /SWR_PASSWORD:\s*['"]?[A-Za-z0-9+/=]{20,}/);
   assert.doesNotMatch(workflow, /ACR_PASSWORD:\s*['"]?[A-Za-z0-9+/=]{20,}/);

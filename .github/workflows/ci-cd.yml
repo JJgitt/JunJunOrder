@@ -51,146 +51,43 @@ jobs:
       - run: node tests/order-uniqueness.integration.mjs
       - run: bash -n deploy/ci/deploy.sh deploy/ci/ssh-entry.sh deploy/ci/install-server-deploy.sh
 
-  publish:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: test
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      digest: ${{ steps.ghcr_push.outputs.digest }}
-      registry: ${{ steps.registry.outputs.name }}
-      repository: ${{ steps.registry.outputs.repository }}
-      seed: ${{ steps.registry.outputs.seed }}
-      seed_repository: ${{ steps.registry.outputs.seed_repository }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - id: build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          load: true
-          platforms: linux/amd64
-          provenance: false
-          sbom: false
-          tags: hongyun:ci
-          labels: |
-            org.opencontainers.image.source=https://github.com/JJgitt/JunJunOrder
-            org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Push image to GHCR
-        id: ghcr_push
-        env:
-          IMAGE_TAG: ghcr.io/jjgitt/junjunorder:sha-${{ github.sha }}
-        run: |
-          set -euo pipefail
-          docker tag hongyun:ci "$IMAGE_TAG"
-          push_log=$(mktemp)
-          docker push "$IMAGE_TAG" | tee "$push_log"
-          digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE_TAG")
-          digest="${digest##*@}"
-          if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
-            digest=$(sed -n 's/.*digest: \(sha256:[a-f0-9]\{64\}\).*/\1/p' "$push_log" | tail -n 1)
-          fi
-          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
-      - name: Select deployment registry
-        id: registry
-        if: ${{ always() && steps.ghcr_push.outcome == 'success' }}
-        env:
-          REQUESTED_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
-          ACR_HOST: ${{ vars.ACR_REGISTRY || 'crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com' }}
-          ACR_REPOSITORY: ${{ vars.ACR_REPOSITORY }}
-        run: |
-          set -euo pipefail
-          # Do not push SWR or ACR from this US runner. Both China registries stall on
-          # the overseas upload. The China server pulls GHCR and pushes ACR itself.
-          seed=ghcr
-          seed_repository='ghcr.io/jjgitt/junjunorder'
-          case "$REQUESTED_REGISTRY" in
-            ghcr|swr)
-              selected=ghcr
-              repository='ghcr.io/jjgitt/junjunorder'
-              if [[ "$REQUESTED_REGISTRY" == swr ]]; then
-                echo '::warning::Huawei SWR is not pushed from GitHub; deploying the identical digest from GHCR.'
-              fi
-              ;;
-            *)
-              if [[ -n "$ACR_REPOSITORY" ]]; then
-                selected=acr
-                repository="$ACR_HOST/$ACR_REPOSITORY"
-              else
-                selected=ghcr
-                repository='ghcr.io/jjgitt/junjunorder'
-              fi
-              ;;
-          esac
-          echo "name=$selected" >> "$GITHUB_OUTPUT"
-          echo "repository=$repository" >> "$GITHUB_OUTPUT"
-          echo "seed=$seed" >> "$GITHUB_OUTPUT"
-          echo "seed_repository=$seed_repository" >> "$GITHUB_OUTPUT"
-          if [[ "$selected" == acr ]]; then
-            echo "Deploy target is ACR; the China server will seed it from $seed_repository"
-          fi
-
   deploy:
-    needs: publish
+    needs: test
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
     permissions:
       contents: read
-      packages: read
     env:
       DEPLOY_HOST: '113.46.133.47'
       DEPLOY_USER: junjun
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-      REGISTRY_USER: ${{ needs.publish.outputs.registry == 'swr' && secrets.SWR_USERNAME || needs.publish.outputs.registry == 'acr' && secrets.ACR_USERNAME || github.actor }}
-      REGISTRY_TOKEN: ${{ needs.publish.outputs.registry == 'swr' && secrets.SWR_PASSWORD || needs.publish.outputs.registry == 'acr' && secrets.ACR_PASSWORD || secrets.GITHUB_TOKEN }}
-      SEED_USER: ${{ needs.publish.outputs.seed == 'swr' && secrets.SWR_USERNAME || github.actor }}
-      SEED_TOKEN: ${{ needs.publish.outputs.seed == 'swr' && secrets.SWR_PASSWORD || secrets.GITHUB_TOKEN }}
-      SEED_REPOSITORY: ${{ needs.publish.outputs.seed_repository || 'ghcr.io/jjgitt/junjunorder' }}
-      IMAGE_DIGEST: ${{ needs.publish.outputs.digest }}
-      IMAGE_REPOSITORY: ${{ needs.publish.outputs.repository || 'ghcr.io/jjgitt/junjunorder' }}
-      TARGET_REGISTRY: ${{ needs.publish.outputs.registry }}
+      REGISTRY_USER: ${{ secrets.ACR_USERNAME }}
+      REGISTRY_TOKEN: ${{ secrets.ACR_PASSWORD }}
+      IMAGE_REF: crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com/junjunorder/junjunorder:main#${{ github.sha }}
     steps:
-      - name: Deploy immutable image through restricted SSH command
+      - name: Wait for the China ACR build and deploy its digest
         shell: bash
         run: |
           set -euo pipefail
           test -n "$DEPLOY_SSH_KEY" || { echo 'Missing DEPLOY_SSH_KEY repository secret'; exit 1; }
           test -n "$DEPLOY_KNOWN_HOSTS" || { echo 'Missing DEPLOY_KNOWN_HOSTS repository secret'; exit 1; }
-          [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
-          [[ "$IMAGE_REPOSITORY" =~ ^(ghcr\.io/jjgitt/junjunorder|swr\.cn-north-4\.myhuaweicloud\.com/junjunorder/junjunorder|crpi-lz061y1f8ajv9wzf\.cn-guangzhou\.personal\.cr\.aliyuncs\.com/junjunorder/junjunorder)$ ]] || exit 1
-          [[ "$SEED_REPOSITORY" =~ ^(ghcr\.io/jjgitt/junjunorder|swr\.cn-north-4\.myhuaweicloud\.com/junjunorder/junjunorder)$ ]] || exit 1
+          test -n "$REGISTRY_USER" || { echo 'Missing ACR_USERNAME repository secret'; exit 1; }
+          test -n "$REGISTRY_TOKEN" || { echo 'Missing ACR_PASSWORD repository secret'; exit 1; }
+          [[ "$IMAGE_REF" =~ ^crpi-lz061y1f8ajv9wzf\.cn-guangzhou\.personal\.cr\.aliyuncs\.com/junjunorder/junjunorder:main#[0-9a-f]{40}$ ]] || exit 1
           ssh_dir=$(mktemp -d)
           trap 'rm -f "$ssh_dir/key" "$ssh_dir/known_hosts"; rmdir "$ssh_dir"' EXIT
           chmod 700 "$ssh_dir"
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$ssh_dir/key"
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
           chmod 600 "$ssh_dir/key" "$ssh_dir/known_hosts"
-          # Ephemeral registry credentials travel only through encrypted stdin.
-          # ACR deploys send seed credentials so the China server can fill ACR locally.
-          if [[ "${TARGET_REGISTRY:-}" == acr ]]; then
-            printf '%s\n%s\n%s\n%s\n%s\n' "$REGISTRY_USER" "$REGISTRY_TOKEN" "$SEED_USER" "$SEED_TOKEN" "$SEED_REPOSITORY"
-          else
-            printf '%s\n%s\n' "$REGISTRY_USER" "$REGISTRY_TOKEN"
-          fi | ssh \
+          # ACR login travels only through encrypted stdin. The server polls tag main
+          # until /app/source-revision matches this commit, then deploys that digest.
+          printf '%s\n%s\n' "$REGISTRY_USER" "$REGISTRY_TOKEN" | ssh \
             -i "$ssh_dir/key" -o IdentitiesOnly=yes -o BatchMode=yes \
             -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$ssh_dir/known_hosts" \
-            -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=40 \
-            "$DEPLOY_USER@$DEPLOY_HOST" "$IMAGE_REPOSITORY@$IMAGE_DIGEST"
+            -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=70 \
+            "$DEPLOY_USER@$DEPLOY_HOST" "$IMAGE_REF"
       - name: Check public health endpoint
         run: curl --fail --retry 5 --retry-delay 3 --max-time 15 http://113.46.133.47/api/health

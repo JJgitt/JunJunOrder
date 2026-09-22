@@ -4,11 +4,17 @@ umask 077
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 
 image=${1:-}
-# Exact repositories this server may deploy from: GHCR (build source), Huawei SWR (China hop), Aliyun ACR (preferred).
+# Digest refs remain for rollback. A main#<commit> ref waits for Aliyun's China build of that commit.
 ghcr_image='^ghcr\.io/jjgitt/junjunorder@sha256:[a-f0-9]{64}$'
 swr_image='^swr\.cn-north-4\.myhuaweicloud\.com/junjunorder/junjunorder@sha256:[a-f0-9]{64}$'
 acr_image='^crpi-lz061y1f8ajv9wzf\.cn-guangzhou\.personal\.cr\.aliyuncs\.com/junjunorder/junjunorder@sha256:[a-f0-9]{64}$'
-[[ $# == 1 && ( "$image" =~ $ghcr_image || "$image" =~ $swr_image || "$image" =~ $acr_image ) ]] || {
+acr_wait='^crpi-lz061y1f8ajv9wzf\.cn-guangzhou\.personal\.cr\.aliyuncs\.com/junjunorder/junjunorder:main#[0-9a-f]{40}$'
+expected_sha=
+if [[ $# == 1 && "$image" =~ $acr_wait ]]; then
+  expected_sha=${image##*#}
+  image=${image%%#*}
+fi
+[[ $# == 1 && ( "$image" =~ $ghcr_image || "$image" =~ $swr_image || "$image" =~ $acr_image || -n "$expected_sha" ) ]] || {
   echo 'Only this project image with a sha256 digest may be deployed' >&2; exit 64;
 }
 case "$image" in
@@ -21,8 +27,6 @@ exec 9>/var/lock/hongyun-deploy.lock
 flock -w 900 9 || { echo 'Another deployment is running'; exit 1; }
 cd /home/junjun/hongyun-order
 compose=(docker compose --project-name hongyun-order --env-file .env -f compose.yaml -f deploy/compose.server.yaml -f /etc/hongyun-cicd/compose.image.yaml)
-export DEPLOY_IMAGE="$image"
-
 retain_rollbacks=3
 retain_backups=10
 minimum_free_kb=$((5 * 1024 * 1024))
@@ -152,42 +156,39 @@ IFS= read -r registry_token
 # GHCR uses the GitHub actor, SWR uses region@AK, Aliyun ACR uses the account login name (may look like an email).
 [[ "$registry_user" =~ ^[^[:space:][:cntrl:]]+$ && ${#registry_user} -le 128 && -n "$registry_token" ]] || exit 64
 
-# US GitHub runners stall when pushing either China registry (ACR Guangzhou or SWR Beijing).
-# The seed is GHCR. This server pulls it and pushes ACR on the domestic link.
-if [[ "$image" =~ $acr_image ]]; then
-  IFS= read -r seed_user
-  IFS= read -r seed_token
-  IFS= read -r seed_repository
-  digest=${image##*@}
-  [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 64
-  [[ "$seed_repository" =~ ^(ghcr\.io/jjgitt/junjunorder|swr\.cn-north-4\.myhuaweicloud\.com/junjunorder/junjunorder)$ ]] || exit 64
-  case "$seed_repository" in
-    ghcr.io/*) seed_host=ghcr.io ;;
-    *) seed_host=swr.cn-north-4.myhuaweicloud.com ;;
-  esac
-  login_registry "$registry_host" "$registry_user" "$registry_token"
-  if ! pull_digest "$image"; then
-    echo "ACR is missing $digest; pulling $seed_repository and pushing ACR from this China server"
-    login_registry "$seed_host" "$seed_user" "$seed_token"
-    pull_digest "$seed_repository@$digest" 1200 2 || { echo 'Image pull failed; running service unchanged'; exit 1; }
-    login_registry "$registry_host" "$registry_user" "$registry_token"
-    seed_id=$(docker image inspect --format '{{.Id}}' "$seed_repository@$digest")
-    docker tag "$seed_id" "crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com/junjunorder/junjunorder:from-seed"
-    if timeout --signal=TERM --kill-after="${pull_kill_after_seconds}s" 600s \
-      docker push "crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com/junjunorder/junjunorder:from-seed" \
-      && pull_digest "$image"; then
-      echo 'ACR now has the digest; deploying from Aliyun ACR'
+login_registry "$registry_host" "$registry_user" "$registry_token"
+unset registry_token
+
+wait_for_acr_commit() {
+  local tag=$1 sha=$2 revision repo_digest deadline=$((SECONDS + 1500))
+  while (( SECONDS < deadline )); do
+    echo "Waiting for ACR build of $sha on $tag"
+    if timeout --signal=TERM --kill-after="${pull_kill_after_seconds}s" 180s docker pull "$tag"; then
+      revision=$(docker run --rm --network none --entrypoint cat "$tag" /app/source-revision 2>/dev/null | tr -d '[:space:]' || true)
+      echo "Pulled ACR tag revision=${revision:-missing}"
+      if [[ "$revision" == "$sha" ]]; then
+        repo_digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$tag")
+        repo_digest=${repo_digest##*@}
+        [[ "$repo_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || return 1
+        image="crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com/junjunorder/junjunorder@$repo_digest"
+        echo "Deploying ACR digest $image"
+        return 0
+      fi
     else
-      echo 'Warning: China-side ACR push failed; deploying the identical seed digest' >&2
-      image="$seed_repository@$digest"
+      echo "ACR tag is not ready yet" >&2
     fi
-  fi
-  unset registry_token seed_token
+    sleep 20
+  done
+  echo 'Timed out waiting for the Aliyun ACR build of this commit; running service unchanged' >&2
+  return 1
+}
+
+if [[ -n "$expected_sha" ]]; then
+  wait_for_acr_commit "$image" "$expected_sha" || { echo 'Image pull failed; running service unchanged'; exit 1; }
 else
-  login_registry "$registry_host" "$registry_user" "$registry_token"
-  unset registry_token
   pull_digest "$image" || { echo 'Image pull failed; running service unchanged'; exit 1; }
 fi
+export DEPLOY_IMAGE="$image"
 old_id=$("${compose[@]}" ps -q app)
 [[ -n "$old_id" ]] || { echo 'Expected existing production application'; exit 1; }
 old_image=$(docker inspect --format '{{.Image}}' "$old_id")
