@@ -1,13 +1,13 @@
 # 鸿运采购 CI/CD
 
-流程：推送 → 测试/数据库迁移验证 → main 构建镜像 → GHCR（必推）→ 同摘要镜像到阿里云 ACR（失败不阻断）→ 选仓 → SSH 拉取摘要镜像 → 数据库备份 → 切换 → 健康检查。
+流程：推送 → 测试/数据库迁移验证 → main 构建镜像 → GHCR（必推）→ 同摘要镜像到华为云 SWR（失败不阻断）→ 有 SWR 后再从 SWR 拷到阿里云 ACR（失败不阻断）→ 选仓 → SSH 拉取摘要镜像 → 数据库备份 → 切换 → 健康检查。
 
-选仓顺序：默认 ACR → GHCR。`IMAGE_REGISTRY=ghcr` 时只拉 GHCR。华为云 SWR 已停用，不再登录或同步。凭证只放在 GitHub Secrets，仓库里保留 2026-09-15 的 GHCR 快照：`deploy/ci/rollback/ghcr-20260915/`。
+选仓顺序：默认 ACR → SWR → GHCR。`IMAGE_REGISTRY=swr` 时优先 SWR。`IMAGE_REGISTRY=ghcr` 时只拉 GHCR。ACR 不从 GHCR 直拷，改为有 SWR 后再从 SWR 拷，避免美国 runner 把整包从 GitHub 再推广州时卡住。凭证只放在 GitHub Secrets，仓库里保留 2026-09-15 的 GHCR 快照：`deploy/ci/rollback/ghcr-20260915/`。
 
 - `.github/workflows/ci-cd.yml`：所有分支 push 和 main PR 执行测试；只有 main push / main 手动运行可以发布。
 - Actions 固定到上游提交 SHA；镜像按 Git commit 标记，生产部署按 digest 固定版本。
 - 构建在 GitHub 执行，服务器只拉取和启动。应用、PostgreSQL、上传卷仍在现有服务器。
-- GitHub 并发组 + 服务器 flock 双重串行保护。测试失败不会发布；ACR 登录或镜像同步失败时，自动改拉本次构建的同摘要 GHCR 镜像。每次镜像拉取最多等待 5 分钟、最多尝试 3 次，全部失败也不会切换线上应用。
+- GitHub 并发组 + 服务器 flock 双重串行保护。测试失败不会发布；SWR / ACR 登录或镜像同步失败时，按选仓顺序改拉本次构建的同摘要镜像。每次镜像拉取最多等待 5 分钟、最多尝试 3 次，全部失败也不会切换线上应用。
 - 发布失败自动切换旧镜像，但**不自动恢复数据库**。数据库变更必须向后兼容，破坏性迁移需要人工维护窗口。
 - 每次发布会清理过期回滚标签和未再引用的本项目 digest；仍需定期看磁盘，并做异机备份。
 
@@ -19,6 +19,8 @@
 | --- | --- |
 | DEPLOY_SSH_KEY | 专用 Ed25519 私钥，不要输出或提交 |
 | DEPLOY_KNOWN_HOSTS | 已核验的服务器 SSH 主机公钥，不在运行时盲目信任 ssh-keyscan |
+| SWR_USERNAME | 华为云 SWR 登录用户名（区域@AK） |
+| SWR_PASSWORD | 华为云 SWR 登录密码（SK），不要写入仓库 |
 | ACR_USERNAME | 阿里云 ACR 个人版登录用户名（控制台「访问凭证」显示的账号全名） |
 | ACR_PASSWORD | 阿里云 ACR 个人版 Registry 固定密码，不要写入仓库 |
 
@@ -26,11 +28,13 @@ Variables：
 
 | 名称 | 内容 |
 | --- | --- |
+| SWR_REGISTRY | 默认 `swr.cn-north-4.myhuaweicloud.com` |
+| SWR_REPOSITORY | 例如 `junjunorder/junjunorder`；为空则跳过 SWR |
 | ACR_REGISTRY | 默认 `crpi-lz061y1f8ajv9wzf.cn-guangzhou.personal.cr.aliyuncs.com` |
-| ACR_REPOSITORY | 例如 `junjunorder/junjunorder`；为空则跳过 ACR、只拉 GHCR |
-| IMAGE_REGISTRY | 空或 `acr`：ACR → GHCR；`ghcr`：只拉 GHCR |
+| ACR_REPOSITORY | 例如 `junjunorder/junjunorder`；为空则跳过 ACR |
+| IMAGE_REGISTRY | 空或 `acr`：ACR → SWR → GHCR；`swr`：SWR → ACR → GHCR；`ghcr`：只拉 GHCR |
 
-推送镜像用 GitHub 自动提供的 `GITHUB_TOKEN`（publish 作业 packages:write）；部署作业仅 packages:read。短期令牌通过 SSH 标准输入传入，在临时 Docker 配置目录中使用，结束后删除。无需长期 GHCR PAT。ACR 镜像是 GHCR 构建结果的同摘要副本；登录或同步失败时不阻断发布，流水线改拉 GHCR 并留下警告。
+推送镜像用 GitHub 自动提供的 `GITHUB_TOKEN`（publish 作业 packages:write）；部署作业仅 packages:read。短期令牌通过 SSH 标准输入传入，在临时 Docker 配置目录中使用，结束后删除。无需长期 GHCR PAT。SWR 是 GHCR 的同摘要副本；ACR 只从已成功的 SWR 副本再拷一次，不从 GHCR 直推广州。任一侧登录或同步失败都不阻断发布。
 
 ## 服务器
 
@@ -63,11 +67,11 @@ GHCR 包应保持私有，并关联本仓库及授予本仓库 Actions 访问权
 
 1. 服务器 `/usr/local/sbin/hongyun-deploy` 须已包含 ACR 白名单。
 2. 在 GitHub 配置 Variables `ACR_REGISTRY`、`ACR_REPOSITORY=junjunorder/junjunorder`，Secrets `ACR_USERNAME`、`ACR_PASSWORD`（阿里云控制台 → 容器镜像服务 → 访问凭证 → 固定密码）。
-3. `IMAGE_REGISTRY` 设为 `acr` 或不设。
+3. `IMAGE_REGISTRY` 设为 `acr` 或不设：优先 ACR，失败再 SWR，最后 GHCR。
 
-停用 ACR：删掉 `ACR_REPOSITORY` 或把 `IMAGE_REGISTRY` 设为 `ghcr`，流水线只拉 GHCR。
+停用 ACR：删掉 `ACR_REPOSITORY`。停用 SWR：删掉 `SWR_REPOSITORY`。只拉 GHCR：把 `IMAGE_REGISTRY` 设为 `ghcr`。
 
-华为云 SWR 已停用：流水线不再登录或同步 SWR。服务器脚本仍接受旧的 SWR digest，只为清理历史镜像；GitHub 里残留的 `SWR_*` Secrets / Variables 可以删掉。
+华为云 SWR 仍用于国内中转和第二优先部署。ACR 有 SWR 副本后才从 SWR 拷贝，避免 `copying sha256:… from ghcr.io` 卡在美国 runner。不要删除 `SWR_*` Secrets / Variables。
 
 ## 参考
 

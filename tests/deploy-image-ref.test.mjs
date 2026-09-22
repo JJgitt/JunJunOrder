@@ -42,26 +42,36 @@ test("deploy script accepts the GHCR, Huawei SWR and Aliyun ACR digest refs only
   assert.match(deploy, /Image pull failed; running service unchanged/);
 });
 
-test("workflow keeps GHCR publish with an ACR mirror and picks ACR then GHCR", async () => {
+test("workflow copies ACR from SWR and deploys ACR then SWR then GHCR", async () => {
   const workflow = await readFile(new URL("../.github/workflows/ci-cd.yml", import.meta.url), "utf8");
   const rollback = await readFile(new URL("../deploy/ci/rollback/ghcr-20260915/ci-cd.yml", import.meta.url), "utf8");
   assert.match(workflow, /tags: ghcr\.io\/jjgitt\/junjunorder:sha-\$\{\{ github\.sha \}\}/);
-  assert.doesNotMatch(workflow, /Login to Huawei SWR/);
-  assert.doesNotMatch(workflow, /Mirror image to Huawei SWR/);
+  assert.match(workflow, /Login to Huawei SWR/);
+  assert.match(workflow, /Mirror image to Huawei SWR/);
   assert.match(workflow, /Login to Aliyun ACR/);
   assert.match(workflow, /Mirror image to Aliyun ACR/);
-  assert.match(workflow, /if: \$\{\{ vars\.ACR_REPOSITORY != '' && steps\.acr_login\.outcome == 'success' \}\}/);
+  assert.match(workflow, /if: \$\{\{ vars\.SWR_REPOSITORY != '' && steps\.swr_login\.outcome == 'success' \}\}/);
+  assert.match(
+    workflow,
+    /if: \$\{\{ vars\.ACR_REPOSITORY != '' && steps\.acr_login\.outcome == 'success' && steps\.swr_mirror\.outcome == 'success' \}\}/,
+  );
+  assert.match(workflow, /\$SWR_HOST\/\$SWR_REPOSITORY@\$IMAGE_DIGEST/);
+  assert.match(workflow, /Copying ACR from Huawei SWR/);
   assert.match(workflow, /provenance: false/);
   assert.match(workflow, /sbom: false/);
   assert.match(workflow, /--prefer-index=false/);
   assert.match(workflow, /REQUESTED_REGISTRY.*IMAGE_REGISTRY/);
   assert.match(workflow, /continue-on-error: true/);
-  assert.match(workflow, /Aliyun ACR is unavailable; deploying the identical digest from GHCR/);
+  assert.match(workflow, /order='acr swr'/);
+  assert.match(workflow, /Aliyun ACR is unavailable; deploying the identical digest from Huawei SWR/);
+  assert.match(workflow, /Aliyun ACR and Huawei SWR are unavailable; deploying the identical digest from GHCR/);
   assert.match(workflow, /echo "repository=\$repository" >> "\$GITHUB_OUTPUT"/);
   assert.match(workflow, /IMAGE_REPOSITORY: \$\{\{ needs\.publish\.outputs\.repository \|\| 'ghcr\.io\/jjgitt\/junjunorder' \}\}/);
-  assert.match(workflow, /needs\.publish\.outputs\.registry == 'acr' && secrets\.ACR_USERNAME \|\| github\.actor/);
-  assert.match(workflow, /needs\.publish\.outputs\.registry == 'acr' && secrets\.ACR_PASSWORD \|\| secrets\.GITHUB_TOKEN/);
-  assert.doesNotMatch(workflow, /secrets\.SWR_USERNAME|secrets\.SWR_PASSWORD|vars\.SWR_REPOSITORY/);
+  assert.match(workflow, /needs\.publish\.outputs\.registry == 'swr' && secrets\.SWR_USERNAME/);
+  assert.match(workflow, /needs\.publish\.outputs\.registry == 'acr' && secrets\.ACR_USERNAME/);
+  assert.match(workflow, /needs\.publish\.outputs\.registry == 'swr' && secrets\.SWR_PASSWORD/);
+  assert.match(workflow, /needs\.publish\.outputs\.registry == 'acr' && secrets\.ACR_PASSWORD/);
+  assert.match(workflow, /swr\\\.cn-north-4\\\.myhuaweicloud\\\.com\/junjunorder\/junjunorder/, "deploy job whitelists the SWR repository");
   assert.match(workflow, /crpi-lz061y1f8ajv9wzf\\\.cn-guangzhou\\\.personal\\\.cr\\\.aliyuncs\\\.com\/junjunorder\/junjunorder/, "deploy job whitelists the ACR repository");
   assert.match(workflow, /ghcr\.io\/jjgitt\/junjunorder/);
   assert.match(rollback, /"\$DEPLOY_USER@\$DEPLOY_HOST" "ghcr\.io\/jjgitt\/junjunorder@\$IMAGE_DIGEST"/);
