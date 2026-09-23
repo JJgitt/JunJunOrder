@@ -318,11 +318,12 @@ export default function Home() {
         }
     }
 
-    async function updateSettlementProof(id: string, proof: File) {
+    async function updateSettlementProof(id: string, proof: File, amount?: number | null) {
         try {
             const form = new FormData();
             form.set("orderId", id);
             form.append("proof", proof, proof.name);
+            if (amount !== undefined) form.set("amount", amount === null ? "" : String(amount));
             const response = await fetch("/api/settlements/proof", {method: "POST", body: form});
             if (response.status === 401) {
                 router.replace("/login");
@@ -332,7 +333,7 @@ export default function Home() {
             if (!response.ok) throw new Error(json.error || "结款截图上传失败");
             await load();
             setOverlay(null);
-            notify(json.replaced ? "结款截图已更换" : "结款截图已补充");
+            notify(`${json.replaced ? "结款截图已更换" : "结款截图已补充"}${amount !== undefined ? "，金额已更新" : ""}`);
             return true;
         } catch (error) {
             notify(error instanceof Error ? error.message : "结款截图上传失败");
@@ -2132,14 +2133,49 @@ function SettlementProofSheet({
                                   order,
                                   onClose,
                                   onSubmit
-                              }: { order: PurchaseOrder; onClose: () => void; onSubmit: (id: string, proof: File) => Promise<boolean> }) {
+                              }: { order: PurchaseOrder; onClose: () => void; onSubmit: (id: string, proof: File, amount?: number | null) => Promise<boolean> }) {
     const [proof, setProof] = useState<File | null>(null), [busy, setBusy] = useState(false);
+    const [amount, setAmount] = useState(order.settledAmount?.toFixed(2) ?? "");
+    const [recognizing, setRecognizing] = useState(false), [recognitionMessage, setRecognitionMessage] = useState("");
+    const recognitionRequest = useRef(0);
+    const parsedAmount = amount.trim() ? Number(amount) : null;
+    const amountInvalid = parsedAmount != null && (!Number.isFinite(parsedAmount) || Math.round(parsedAmount * 100) <= 0 || Math.round(parsedAmount * 100) > 2_147_483_647);
+
+    useEffect(() => () => { recognitionRequest.current += 1; }, []);
+
+    async function chooseProof(file: File | null) {
+        const requestId = ++recognitionRequest.current;
+        setRecognitionMessage("");
+        setRecognizing(false);
+        if (!file) { setProof(null); return; }
+        if (!file.type.startsWith("image/") || file.size === 0 || file.size > 5 * 1024 * 1024) {
+            setProof(null);
+            setRecognitionMessage("请选择 5MB 以内的结款截图");
+            return;
+        }
+        setProof(file);
+        setRecognizing(true);
+        try {
+            const form = new FormData();
+            form.set("image", file);
+            const response = await fetch("/api/settlements/recognize", {method: "POST", body: form});
+            const json = await response.json() as { data?: { amount: number }; error?: string };
+            if (!response.ok || !json.data || !Number.isFinite(json.data.amount) || json.data.amount <= 0) throw new Error(json.error || "未识别出金额，请手动输入");
+            if (recognitionRequest.current !== requestId) return;
+            setAmount(json.data.amount.toFixed(2));
+            setRecognitionMessage(`已识别 ${money(json.data.amount)}，请核对后保存`);
+        } catch (error) {
+            if (recognitionRequest.current === requestId) setRecognitionMessage(`${error instanceof Error ? error.message : "识别失败"}；已保留当前金额，可手动修改`);
+        } finally {
+            if (recognitionRequest.current === requestId) setRecognizing(false);
+        }
+    }
 
     async function confirm() {
-        if (!proof || busy) return;
+        if (!proof || busy || recognizing || amountInvalid) return;
         setBusy(true);
         try {
-            await onSubmit(order.id, proof);
+            await onSubmit(order.id, proof, parsedAmount === (order.settledAmount ?? null) ? undefined : parsedAmount);
         } finally {
             setBusy(false);
         }
@@ -2147,19 +2183,25 @@ function SettlementProofSheet({
 
     return <Modal title={order.settlementProofs.length ? "更换结款截图" : "补传结款截图"} subtitle={order.id}
                   subtitleCopyValue={order.id} onClose={onClose}>
-        <div className="settlement-proof-repair-note"><i>▧</i><div><b>结款状态与金额不会改变</b>
-            <p>这里只补充或更换结款凭证，不会重复结款，也不会影响订单的发货状态。</p></div></div>
+        <div className="settlement-proof-repair-note"><i>▧</i><div><b>上传截图后自动识别结款金额</b>
+            <p>请核对金额后保存。原结款时间和发货状态保持不变。</p></div></div>
         {order.settlementProofs.length > 0 && <OrderImages images={order.settlementProofs} title="当前结款截图" variant="settlement"/>}
-        <label className={`receipt-upload settlement-proof-upload ${proof ? "selected" : ""}`}>
-            <input type="file" accept="image/*" disabled={busy}
-                   onChange={event => setProof(event.target.files?.[0] ?? null)}/>
-            <i>{proof ? "✓" : "＋"}</i><span><b>{proof ? proof.name : order.settlementProofs.length ? "选择新的结款截图" : "选择要补传的结款截图"}</b>
-            <small>最多 1 张、图片不超过 5MB</small></span>
+        <label className="settlement-amount-field"><span>实际结款金额 <em>选填</em></span>
+            <div><i>¥</i><input value={amount} inputMode="decimal" disabled={busy || recognizing} placeholder="留空则显示金额未记录"
+                               onChange={event => {setAmount(event.target.value.replace(/[^\d.]/g, "")); setRecognitionMessage("");}}/></div>
+            <small>{amountInvalid ? "请输入有效的正数金额，或留空清除" : "自动识别后可手动修改；留空保存将清除已有金额"}</small>
         </label>
+        <label className={`receipt-upload settlement-proof-upload ${proof ? "selected" : ""}`}>
+            <input type="file" accept="image/*" disabled={busy || recognizing}
+                   onChange={event => {void chooseProof(event.target.files?.[0] ?? null); event.target.value = "";}}/>
+            <i>{proof ? "✓" : "＋"}</i><span><b>{proof ? proof.name : order.settlementProofs.length ? "选择新的结款截图" : "选择要补传的结款截图"}</b>
+            <small>{recognizing ? "正在识别结款金额…" : "最多 1 张、图片不超过 5MB"}</small></span>
+        </label>
+        {recognitionMessage && <p role="status" className={`settlement-recognition ${recognitionMessage.startsWith("已识别") ? "success" : "failed"}`}>{recognitionMessage}</p>}
         <div className="dual-actions settlement-confirm-actions">
             <button className="secondary-button" disabled={busy} onClick={onClose}>取消</button>
-            <button className="primary-button settlement-confirm-button" disabled={busy || !proof}
-                    onClick={() => void confirm()}>{busy ? "正在保存…" : order.settlementProofs.length ? "确认更换截图" : "确认补传截图"}</button>
+            <button className="primary-button settlement-confirm-button" disabled={busy || !proof || recognizing || amountInvalid}
+                    onClick={() => void confirm()}>{busy ? "正在保存…" : recognizing ? "正在识别金额…" : "确认保存截图和金额"}</button>
         </div>
     </Modal>;
 }

@@ -25,6 +25,16 @@ export async function POST(request: Request) {
     const orderId = String(form.get("orderId") ?? "").trim();
     const proof = form.get("proof");
     if (!orderId) return Response.json({ error: "缺少订单 ID" }, { status: 400 });
+    // Omitted amount preserves the existing value for older clients; blank explicitly clears it.
+    const updateAmount = form.has("amount");
+    const amountValue = form.get("amount");
+    if (updateAmount && typeof amountValue !== "string") return Response.json({ error: "请输入有效的实际结款金额" }, { status: 400 });
+    const amountText = String(amountValue ?? "").replace(/[¥￥,，\s]/g, "");
+    const amount = amountText ? Number(amountText) : null;
+    const amountCents = amount == null ? null : Math.round(amount * 100);
+    if (amount != null && (!Number.isFinite(amount) || amountCents == null || amountCents <= 0 || amountCents > 2_147_483_647)) {
+      return Response.json({ error: "请输入有效的实际结款金额，或留空清除" }, { status: 400 });
+    }
     if (!(proof instanceof File) || proof.size <= 0) return Response.json({ error: "请选择结款截图" }, { status: 400 });
     const extension = imageExtension(proof.type);
     if (!extension || proof.size > 5 * 1024 * 1024) {
@@ -47,13 +57,17 @@ export async function POST(request: Request) {
         .where(and(eq(orderImages.orderId, orderId), eq(orderImages.kind, "settlement"))).for("update");
       if (oldImages.length) await tx.delete(orderImages).where(inArray(orderImages.id, oldImages.map(image => image.id)));
       await tx.insert(orderImages).values({ id, orderId, kind: "settlement", objectKey, fileName: proof.name || `结款截图${extension}`, contentType: proof.type, sizeBytes: proof.size, uploadedBy: user.id, createdAt: timestamp });
+      if (updateAmount) {
+        await tx.update(purchaseOrders).set({ settledAmountCents: amountCents, updatedAt: timestamp }).where(eq(purchaseOrders.id, orderId));
+      }
       await tx.insert(auditLogs).values({
         id: `audit_${crypto.randomUUID()}`,
         actorId: user.id,
         action: oldImages.length ? "replace_settlement_proof" : "add_settlement_proof",
         entityType: "purchase_order",
         entityId: orderId,
-        detailJson: JSON.stringify({ proofImageId: id, replacedImageIds: oldImages.map(image => image.id) }),
+        detailJson: JSON.stringify({ proofImageId: id, replacedImageIds: oldImages.map(image => image.id),
+          ...(updateAmount ? { before: { settledAmountCents: order.settledAmountCents }, after: { settledAmountCents: amountCents } } : {}) }),
         createdAt: timestamp,
       });
       return oldImages.map(image => image.objectKey);

@@ -31,7 +31,7 @@
 
 ## 新 Agent 的第一轮检查
 
-1. `git status --short --branch`：识别用户已有改动，禁止顺手覆盖或带入提交。
+1. 每次迭代修改代码、配置或文档前，先执行 `git status --short --branch`，再执行 `git pull --ff-only` 同步当前分支上游，并确认成功。保留已有改动，禁止擅自 stash、reset、checkout 或覆盖；拉取失败、分支分叉或缺少上游时停止修改并说明阻塞。纯查看分析无需拉取，细则见 [迭代手册](迭代手册.md)。
 2. 查任务对应源码和测试；不要仅凭 Wiki 推断实现。
 3. 若写 Next.js 代码，先读 `node_modules/next/dist/docs/` 下对应版本指南（仓库 `AGENTS.md` 要求）。
 4. 明确角色权限、订单原始状态/派生状态、事务边界、库存三层同步、审计和兼容迁移。

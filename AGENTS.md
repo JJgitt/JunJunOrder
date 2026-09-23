@@ -16,6 +16,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Delivery workflow
 
+- At the start of every iteration that will change code, configuration, or documentation, run `git status --short --branch`, then `git pull --ff-only` for the current branch's upstream before editing. Verify the pull succeeds; do not rely on cached `origin/*` refs or CI checkout as a substitute.
+- Preserve all existing work. Never automatically stash, reset, checkout, or overwrite changes to make the pull succeed. If the pull fails, branches diverge, or no upstream exists, stop editing and report the blocker. Read-only investigations do not require a pull.
 - After completing a code change and its relevant local checks pass, commit the scoped changes, push them to `main`, and monitor the existing CI/CD workflow until the production deployment succeeds.
 - Do not include unrelated or pre-existing working-tree changes in the commit.
 - If the user explicitly asks for a local-only change, a review, or says not to deploy yet, do not commit or push.
