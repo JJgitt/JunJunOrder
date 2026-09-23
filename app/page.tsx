@@ -1214,7 +1214,12 @@ function BuyerOrderCard({order, onOpen, onEdit}: { order: PurchaseOrder; onOpen:
                                   onClick={onEdit}>{order.status === "已驳回" ? "修改后重新提交" : "编辑采购单"}</button> : undefined}/>;
 }
 
-function UploadTutorialLink() {
+function UploadTutorialLink({compact = false}: {compact?: boolean}) {
+    if (compact) return <div className="tutorial-compact-row">
+        <a className="tutorial-compact-link" href="/tutorial/upload-order.html" target="_blank" rel="noopener noreferrer">
+            上传订单教程 <span aria-hidden="true">↗</span>
+        </a>
+    </div>;
     return <a className="tutorial-banner" href="/tutorial/upload-order.html" target="_blank" rel="noreferrer">
         <i>教程</i><span><b>上传订单教程</b><small>分步图解，含识图填写与常见报错</small></span><em>打开</em>
     </a>;
@@ -1414,7 +1419,7 @@ function UploadPage({
                 <p>{mode === "admin" ? "以管理员身份录入，订单与附件将持久化保存到服务器。" : editing && editing.status !== "已驳回" ? `订单当前为“${editing.status}”，入库前均可修改并保存。` : "订单与附件将持久化保存到服务器，提交后可跨设备查看。"}</p>
             </div>
             {onCancel && <button className="form-back-button" type="button" onClick={onCancel}>返回订单</button>}</div>
-        <UploadTutorialLink/>
+        <UploadTutorialLink compact/>
         {editing?.rejectReason && <div className="inline-warning"><b>驳回原因</b><span>{editing.rejectReason}</span></div>}
         <form className="purchase-form" autoComplete="off" onSubmit={submit}>
             {mode === "admin" && editing && <label><span>采购人 *</span>

@@ -1285,6 +1285,32 @@ button:active {
     font-weight: 700
 }
 
+.tutorial-compact-row {
+    display: flex;
+    justify-content: flex-end;
+    margin: 3px 0 12px
+}
+
+.tutorial-compact-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    width: max-content;
+    max-width: 100%;
+    padding: 4px 2px;
+    color: var(--primary-dark);
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 3px
+}
+
+.tutorial-compact-link:focus-visible {
+    border-radius: 4px;
+    outline: 2px solid var(--primary);
+    outline-offset: 2px
+}
+
 .buyer-quick {
     display: flex;
     flex-direction: column;

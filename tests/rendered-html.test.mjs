@@ -58,6 +58,19 @@ test("form grids shrink and touch buyer filters match native select text", async
   assert.doesNotMatch(css, /html\.ios-device/);
 });
 
+test("upload form tutorial is a compact text link while buyer home keeps its banner", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const buyerHome = page.slice(page.indexOf("function BuyerHome("), page.indexOf("function UploadPage("));
+  const uploadPage = page.slice(page.indexOf("function UploadPage("));
+  assertJsMatch(page, /function UploadTutorialLink\(\{compact=false\}:\{compact\?:boolean\}\)/);
+  assertJsMatch(page, /className="tutorial-compact-link" href="\/tutorial\/upload-order\.html"/);
+  assertJsMatch(buyerHome, /<UploadTutorialLink\/>/);
+  assertJsMatch(uploadPage, /<UploadTutorialLink compact\/>/);
+  assert.match(css, /\.tutorial-compact-row\s*\{[^}]*display: flex;[^}]*justify-content: flex-end/);
+  assert.match(css, /\.tutorial-compact-link\s*\{[^}]*display: inline-flex;[^}]*width: max-content/);
+});
+
 test("modal content scrolls independently while its close header stays outside", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
