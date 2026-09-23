@@ -1,6 +1,47 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeRecognition, normalizeSettlementAmount } from "../lib/vision.ts";
+import { isVisionTimeout, normalizeRecognition, normalizeSettlementAmount, recognizeOrderImage } from "../lib/vision.ts";
+
+test("vision timeouts are classified without treating unrelated errors as timeouts", () => {
+  assert.equal(isVisionTimeout(Object.assign(new Error("request expired"), { name: "TimeoutError" })), true);
+  assert.equal(isVisionTimeout(Object.assign(new Error("request aborted"), { name: "AbortError" })), true);
+  assert.equal(isVisionTimeout(Object.assign(new Error("fetch failed"), {
+    cause: Object.assign(new Error("socket timed out"), { code: "UND_ERR_CONNECT_TIMEOUT" }),
+  })), true);
+  assert.equal(isVisionTimeout(new Error("invalid model JSON")), false);
+});
+
+test("order recognition treats upstream HTTP and response-body timeouts alike", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousConfig = {
+    base: process.env.VISION_API_BASE,
+    key: process.env.VISION_API_KEY,
+    model: process.env.VISION_MODEL,
+  };
+  process.env.VISION_API_BASE = "https://example.invalid/v1";
+  process.env.VISION_API_KEY = "test-only";
+  process.env.VISION_MODEL = "test-model";
+  const image = new File([Uint8Array.of(1)], "order.jpg", { type: "image/jpeg" });
+  try {
+    for (const status of [408, 504]) {
+      globalThis.fetch = async () => new Response(null, { status });
+      await assert.rejects(recognizeOrderImage(image), error => isVisionTimeout(error));
+    }
+    const bodyTimeout = Object.assign(new Error("body timed out"), { name: "TimeoutError" });
+    globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => { throw bodyTimeout; } });
+    await assert.rejects(recognizeOrderImage(image), error => error === bodyTimeout);
+  } finally {
+    globalThis.fetch = previousFetch;
+    for (const [name, value] of [
+      ["VISION_API_BASE", previousConfig.base],
+      ["VISION_API_KEY", previousConfig.key],
+      ["VISION_MODEL", previousConfig.model],
+    ]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
 
 test("missing, null, empty and whitespace SKUs fall back to trimmed product names", () => {
   for (const sku of [undefined, null, "", "   "]) {

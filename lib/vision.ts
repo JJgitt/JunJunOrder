@@ -198,6 +198,25 @@ export function visionConfigured() {
   return Boolean(process.env.VISION_API_BASE && process.env.VISION_API_KEY && process.env.VISION_MODEL);
 }
 
+/** fetch and its underlying network stack use different names/codes for upstream timeouts. */
+export function isVisionTimeout(error: unknown): boolean {
+  let current = error;
+  for (let depth = 0; depth < 3 && current && typeof current === "object"; depth++) {
+    const detail = current as { name?: unknown; code?: unknown; cause?: unknown };
+    if (detail.name === "TimeoutError" || detail.name === "AbortError"
+      || ["ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT"].includes(String(detail.code))) return true;
+    current = detail.cause;
+  }
+  return false;
+}
+
+class VisionTimeoutError extends Error {
+  constructor() {
+    super("识图服务响应超时");
+    this.name = "TimeoutError";
+  }
+}
+
 /** 调用视觉模型识别一张或多张订单截图；抛出的 Error.message 可直接展示给用户。 */
 export async function recognizeOrderImages(images: File[]): Promise<RecognizedOrder> {
   const files = images.slice(0, 3);
@@ -226,7 +245,14 @@ export async function recognizeOrderImages(images: File[]): Promise<RecognizedOr
     }),
     signal: AbortSignal.timeout(timeout),
   });
-  const body = await response.json().catch(() => ({})) as { choices?: Array<{ message?: { content?: unknown } }>; error?: { message?: string } };
+  if (response.status === 408 || response.status === 504) throw new VisionTimeoutError();
+  let body: { choices?: Array<{ message?: { content?: unknown } }>; error?: { message?: string } };
+  try {
+    body = await response.json();
+  } catch (error) {
+    if (isVisionTimeout(error)) throw error;
+    body = {};
+  }
   if (!response.ok) {
     console.error("[vision] upstream error", response.status, body);
     throw new Error(`识图服务调用失败（${response.status}）${body.error?.message ? `：${body.error.message}` : ""}`);

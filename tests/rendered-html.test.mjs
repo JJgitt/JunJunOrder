@@ -71,6 +71,15 @@ test("upload form tutorial is a compact text link while buyer home keeps its ban
   assert.match(css, /\.tutorial-compact-link\s*\{[^}]*display: inline-flex;[^}]*width: max-content/);
 });
 
+test("order recognition reports upstream timeouts and keeps OCR data if catalog matching fails", async () => {
+  const route = await readFile(new URL("../app/api/orders/recognize/route.ts", import.meta.url), "utf8");
+  assert.match(route, /if \(isVisionTimeout\(error\)\) \{[\s\S]*?status: 504/);
+  assert.match(route, /set local statement_timeout = '5000ms'/);
+  assert.match(route, /product knowledge unavailable after/);
+  assert.match(route, /notes = \[\.\.\.notes, "商品资料匹配暂不可用/);
+  assert.match(route, /return Response\.json\(\{ data: \{ \.\.\.data, notes, knowledgeMatches \} \}/);
+});
+
 test("modal content scrolls independently while its close header stays outside", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
