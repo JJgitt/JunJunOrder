@@ -7,6 +7,9 @@ import Image from "next/image";
 import {courierTrackingUrl, findOrdersByCourierNo, findTransitCandidatesByCourierTail, normalizeCourierNo} from "@/lib/courier";
 import {buildOrderCopyText} from "@/lib/order-copy";
 import {dateKey, dayRange, timestamp, waitingLabel, type ServerClock} from "@/lib/time";
+import type {KnowledgeMatch} from "@/lib/product-knowledge-match";
+import {fillProductIdentity} from "@/lib/product-knowledge-fill";
+import ProductKnowledgePanel from "./product-knowledge-panel";
 import {ServerClockProvider, useServerClock} from "./server-clock";
 
 type Role = "admin" | "buyer";
@@ -23,7 +26,7 @@ type OrderItem = {
     purchaseCourierCompany: string; purchaseCourierNo: string;
     shipped?: boolean; shippedAt?: string; resalePlatform?: string; resaleNo?: string; salePrice?: number; outboundCompany?: string; outboundCourier?: string;
 };
-type OrderItemDraft = { id: string; title: string; sku: string; size: string; qty: number | ""; amount: string; purchaseCourierCompany: string; customPurchaseCourierCompany: string; purchaseCourierNo: string };
+type OrderItemDraft = { id: string; title: string; sku: string; size: string; qty: number | ""; amount: string; purchaseCourierCompany: string; customPurchaseCourierCompany: string; purchaseCourierNo: string; knowledgeHint?: KnowledgeMatch };
 
 type PurchaseOrder = {
     id: string; platform: string; platformNo: string; courierCompany: string; courierNo: string; status: OrderStatus;
@@ -33,7 +36,7 @@ type PurchaseOrder = {
     images: OrderImage[]; settlementProofs: OrderImage[];
 };
 
-type RecognizedOrder = { platform: string; platformNo: string; courierCompany: string; courierNo: string; items: Array<{ title: string; sku: string; size: string; qty: number; amount: number | null }>; notes: string[] };
+type RecognizedOrder = { platform: string; platformNo: string; courierCompany: string; courierNo: string; items: Array<{ title: string; sku: string; skuSource?: "explicit" | "specification" | "title"; size: string; qty: number; amount: number | null }>; knowledgeMatches?: KnowledgeMatch[]; notes: string[] };
 type StockItem = { sku: string; title: string; size: string; count: number; locations: string[]; lastSold?: string };
 type DashboardNotice = { id: string; content: string; noticeDate: string; completed: boolean; completedAt?: string | null; createdAt: string };
 type ApprovalStatus = "pending" | "approved" | "rejected";
@@ -1308,17 +1311,22 @@ function UploadPage({
             if (data.courierCompany) filled.push("快递公司"); else missing.push("快递公司");
             if (data.courierNo) filled.push("快递单号"); else missing.push("快递单号");
             if (data.items.length) {
-                const drafts = data.items.map(item => applyRecognizedCourier({
+                const drafts = data.items.map((item, index) => {
+                    const match = data.knowledgeMatches?.[index];
+                    const filledItem = fillProductIdentity(item, match);
+                    return applyRecognizedCourier({
                     id: "",
-                    title: item.title,
-                    sku: item.sku,
+                    title: filledItem.title,
+                    sku: filledItem.sku,
                     size: item.size,
                     qty: item.qty,
                     amount: item.amount != null && item.amount > 0 ? String(item.amount) : "",
                     purchaseCourierCompany: "顺丰速运",
                     customPurchaseCourierCompany: "",
-                    purchaseCourierNo: ""
-                }, data.courierCompany, data.courierNo));
+                    purchaseCourierNo: "",
+                    knowledgeHint: match?.kind !== "none" ? match : undefined
+                }, data.courierCompany, data.courierNo);
+                });
                 setItems(current => {
                     const blank = current.every(item => !item.title.trim() && !item.sku.trim() && !item.size.trim() && !item.amount.trim());
                     if (!blank) return [...current, ...drafts];
@@ -1328,6 +1336,8 @@ function UploadPage({
                     });
                 });
                 filled.push(`${data.items.length} 个商品`);
+                const autoCount=data.knowledgeMatches?.filter(match=>match.kind==="auto").length ?? 0;
+                if(autoCount)filled.push(`知识库补全 ${autoCount} 款`);
             } else {
                 if (data.courierCompany || data.courierNo) setItems(current => current.map(item => applyRecognizedCourier(item, data.courierCompany, data.courierNo)));
                 missing.push("商品信息");
@@ -1439,11 +1449,22 @@ function UploadPage({
                         <button className="item-remove" type="button" aria-label={`删除商品 ${index + 1}`}
                                 onClick={() => setItems(current => current.filter((_, i) => i !== index))}>删除</button>}
                     </div>
+                    {item.knowledgeHint?.kind === "auto" && <div className="knowledge-hint auto" role="status">
+                        <b>已按商品知识库补全</b><span>请核对商品名称与货号；金额、尺码和数量仍以本次截图为准。</span>
+                    </div>}
+                    {item.knowledgeHint?.kind === "suggestion" && <div className="knowledge-hint suggestion">
+                        <b>找到相似商品，请核对后选择</b>
+                        <div>{item.knowledgeHint.candidates.map(candidate => <button key={candidate.id} type="button"
+                            onClick={() => updateItem(index, {title:candidate.title,sku:candidate.sku,knowledgeHint:undefined})}>
+                            {candidate.title} · {candidate.sku} <strong>采用</strong>
+                        </button>)}</div>
+                        <small>不选择则保留识图结果；货号仍按规格描述或商品名称兜底。</small>
+                    </div>}
                     <label><span>商品名称 *</span><input value={item.title}
-                                                     onChange={e => updateItem(index, {title: e.target.value})}
+                                                     onChange={e => updateItem(index, {title: e.target.value,knowledgeHint:undefined})}
                                                      placeholder="如 乔丹 DUNK LOW 熊猫"/></label>
                     <div className="field-grid"><label><span>货号 *</span><input value={item.sku}
-                                                                               onChange={e => updateItem(index, {sku: e.target.value})}
+                                                                               onChange={e => updateItem(index, {sku: e.target.value,knowledgeHint:undefined})}
                                                                                placeholder="DD1391-100"/></label><label><span>尺码 *</span><input
                         value={item.size} onChange={e => updateItem(index, {size: e.target.value})}
                         placeholder="42 / 41.5"/></label></div>
@@ -1606,6 +1627,7 @@ function AdminProfile({
                                               onClick={() => onActive(person.id, !person.active)}>{person.active ? "停用" : "启用"}</button>}{person.role === "buyer" && person.id !== user.id &&
             <button className="member-delete-button" aria-label={`删除采购员 ${person.name}`}
                     onClick={() => setDeleteTarget(person)}>删除</button>}</div>)}</div>
+        <ProductKnowledgePanel/>
         {resetTarget &&
             <ResetPasswordSheet member={resetTarget} onClose={() => setResetTarget(null)} onSubmit={onResetPassword}/>}
         {deleteTarget &&

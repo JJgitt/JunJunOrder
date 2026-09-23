@@ -2,7 +2,7 @@ import { hash } from "bcryptjs";
 import { unlink } from "node:fs/promises";
 import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { auditLogs, dashboardNotices, inventory, inventoryLots, inventoryMovements, orderImages, orderItems, purchaseOrders, users } from "@/db/schema";
+import { auditLogs, dashboardNotices, inventory, inventoryLots, inventoryMovements, orderImages, orderItems, productKnowledge, purchaseOrders, users } from "@/db/schema";
 import { assertSameOrigin, requireAdmin, requireAppUser, routeError } from "@/lib/auth";
 import { uploadPath } from "@/lib/file-storage";
 import { serverClock } from "@/lib/server-time";
@@ -281,6 +281,18 @@ export async function POST(request:Request){
           await tx.delete(inventoryLots).where(eq(inventoryLots.orderId,id));
         }
         await tx.update(purchaseOrders).set({status:action==="approve"?"在途":"已驳回",rejectReason:action==="reject"?reason:null,auditorId:user.id,...(action==="reject"?{receivedAt:null,location:null}:{}),updatedAt:timestamp}).where(eq(purchaseOrders.id,id));
+        if(action==="approve"){
+          const approvedItems=await tx.select({title:orderItems.title,sku:orderItems.sku}).from(orderItems).where(eq(orderItems.orderId,id));
+          for(const item of approvedItems){
+            const title=item.title.trim(),sku=item.sku.trim();
+            if(title.length<4||sku.length<2||sku.toLowerCase()===title.toLowerCase())continue;
+            // Descriptive specification fallbacks must remain suggestions until an admin confirms them.
+            const confirmedCode=/^(?=.*\d)[A-Za-z0-9._-]{4,}$/.test(sku);
+            const source=confirmedCode?"approved":"historical";
+            await tx.insert(productKnowledge).values({id:uid("pk"),title,sku,source,sourceOrderId:id,createdAt:timestamp,updatedAt:timestamp})
+              .onConflictDoUpdate({target:[productKnowledge.title,productKnowledge.sku],set:{source:sql`case when ${productKnowledge.source} = 'manual' then 'manual' when ${productKnowledge.source} = 'approved' or ${source} = 'approved' then 'approved' else 'historical' end`,updatedAt:timestamp}});
+          }
+        }
         await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action,entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({reason,previousStatus:order.status,previousLocation:order.location}),createdAt:timestamp});
       });
       return Response.json({data:await snapshot(user)});

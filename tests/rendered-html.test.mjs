@@ -267,7 +267,7 @@ test("one purchase order supports separate purchase logistics for multiple items
     readFile(new URL("../app/api/export/route.ts",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assertJsMatch(page,/type OrderItemDraft = \{[^}]+purchaseCourierCompany:string[^}]+purchaseCourierNo:string\}/);
+  assertJsMatch(page,/type OrderItemDraft = \{[^}]+purchaseCourierCompany:string[^}]+purchaseCourierNo:string[^}]*\}/);
   assertJsMatch(page,/className="item-purchase-logistics"/);
   assertJsMatch(page,/每个商品可设置不同的采购快递公司与单号/);
   assertJsMatch(page,/items\.some\(item=>item\.purchaseCourierNo\.includes\(value\)\)/);

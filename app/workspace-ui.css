@@ -360,3 +360,11 @@ button:disabled { cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+.knowledge-hint { display: grid; gap: 7px; margin: 0 0 12px; padding: 10px 12px; border: 1px solid #d9e5f7; border-radius: 11px; background: #f4f8ff; color: #254575; line-height: 1.5; }
+.knowledge-hint b { font-size: 12px; }
+.knowledge-hint span, .knowledge-hint small { font-size: 11px; }
+.knowledge-hint.auto { border-color: #b7e5c5; background: #f1fbf4; color: #23663a; }
+.knowledge-hint.suggestion > div { display: grid; gap: 6px; }
+.knowledge-hint.suggestion button { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 42px; padding: 7px 10px; border: 1px solid #d3dff2; border-radius: 8px; background: #fff; color: #254575; text-align: left; font-size: 12px; overflow-wrap: anywhere; }
+.knowledge-hint.suggestion button strong { flex: none; color: #245dc4; font-size: 11px; }

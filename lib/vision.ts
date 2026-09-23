@@ -13,7 +13,7 @@
 export const recognizablePlatforms = ["京东", "拼多多", "淘宝", "唯品会", "抖音", "其他"] as const;
 export const recognizableCouriers = ["顺丰速运", "京东物流", "中通快递", "圆通速递", "申通快递", "韵达快递", "极兔速递", "邮政EMS"] as const;
 
-export type RecognizedItem = { title: string; sku: string; size: string; qty: number; amount: number | null };
+export type RecognizedItem = { title: string; sku: string; skuSource: "explicit" | "specification" | "title"; size: string; qty: number; amount: number | null };
 export type RecognizedOrder = {
   platform: string;
   platformNo: string;
@@ -35,6 +35,7 @@ export const visionPrompt = `你是采购订单录入助手。用户会上传一
     {
       "title": "商品名称，去掉店铺名、活动词、【】里的促销语，保留品牌与款名",
       "sku": "优先填写图片中明确标注的货号/款号/型号，例如 DD1391-100、M9060BE1、273303；如果没有明确货号，但商品规格同时包含尺码和颜色/款式等其他描述，则把去掉尺码后的规格描述填入货号，例如规格‘夜影黑 / 42’应填‘夜影黑’；仍无法确认时填空字符串",
+      "skuSource": "sku 的来源：截图明确标注货号/款号/型号填 explicit；仅来自颜色/款式规格填 specification；都没有填 title",
       "size": "只填写规格中的尺码部分，如 42、41.5、XS、M、L、XL、均码；不要混入颜色或款式描述；没有填空字符串",
       "qty": 购买数量（整数，默认 1）,
       "amount": 该商品实付金额（数字，单位元）；优先取"实付/到手/合计"金额，找不到填 null
@@ -164,9 +165,17 @@ export function normalizeRecognition(payload: unknown): RecognizedOrder {
     .map(item => {
       const title = str(item.title);
       const specification = splitRecognizedSpecification(item.size);
+      const rawSku = str(item.sku);
+      const skuSource: RecognizedItem["skuSource"] = !rawSku
+        ? specification.skuCandidate ? "specification" : "title"
+        : item.skuSource === "specification" || (specification.skuCandidate && rawSku.toLowerCase() === specification.skuCandidate.toLowerCase())
+          ? "specification"
+          : item.skuSource === "explicit" || /^(?=.*\d)[A-Za-z0-9-]{4,}$/.test(rawSku)
+            ? "explicit" : "specification";
       return {
         title,
-        sku: str(item.sku) || specification.skuCandidate || title,
+        sku: rawSku || specification.skuCandidate || title,
+        skuSource,
         size: specification.size,
         qty: positiveInt(item.qty),
         amount: amountOrNull(item.amount),

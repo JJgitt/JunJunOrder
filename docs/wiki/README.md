@@ -14,10 +14,10 @@
 
 | 任务 | 先读 | 再定位 |
 | --- | --- | --- |
-| 订单、库存、结款业务 | [业务与不变量](业务与不变量.md) | `app/api/app/route.ts`、`db/schema.ts` |
+| 订单、库存、结款、商品知识库业务 | [业务与不变量](业务与不变量.md) | `app/api/app/route.ts`、`db/schema.ts` |
 | 页面或 API 改动 | [架构与定位](架构与定位.md) | `app/page.tsx`、对应 `app/api/**/route.ts` |
 | 数据库字段/迁移 | [迭代手册](迭代手册.md) | `db/schema.ts`、`drizzle/`、[数据库设计](../数据库设计.md) |
-| 鉴权、上传、识图 | [架构与定位](架构与定位.md) | `lib/auth.ts`、`lib/file-storage.ts`、`lib/vision.ts` |
+| 鉴权、上传、识图和商品资料匹配 | [架构与定位](架构与定位.md) | `lib/auth.ts`、`lib/file-storage.ts`、`lib/vision.ts`、`app/api/orders/recognize/route.ts` |
 | 测试、上线、故障 | [迭代手册](迭代手册.md) | `.github/workflows/ci-cd.yml`、[CI/CD 说明](../../deploy/ci/README.md) |
 | 录单操作教学 | [上传订单教程](../../public/tutorial/upload-order.html) | `app/page.tsx` 的 `UploadPage`、`app/api/app/route.ts` 的 `create-order` |
 

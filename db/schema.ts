@@ -73,6 +73,20 @@ export const orderItems = pgTable("order_items", {
   index("idx_order_items_purchase_courier_no").on(table.purchaseCourierNo),
 ]);
 
+export const productKnowledge = pgTable("product_knowledge", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  sku: text("sku").notNull(),
+  aliases: text("aliases").notNull().default("[]"),
+  source: text("source", { enum: ["historical", "approved", "manual"] }).notNull().default("manual"),
+  sourceOrderId: text("source_order_id"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  uniqueIndex("idx_product_knowledge_title_sku").on(table.title, table.sku),
+  index("idx_product_knowledge_sku").on(table.sku),
+]);
+
 export const inventory = pgTable("inventory", {
   sku: text("sku").notNull(),
   size: text("size").notNull(),
