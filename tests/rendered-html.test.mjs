@@ -1067,8 +1067,11 @@ test("completed dashboard notices show their completion time in the server time 
 test("administrator order overview adds server-month purchase, sales and estimated profit alongside all-time totals",async()=>{
   const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
   const dashboard=page.slice(page.indexOf("function AdminDashboard("),page.indexOf("function SectionHead("));
-  assertJsMatch(page,/import \{monthlyFinance\} from "@\/lib\/dashboard-finance"/);
-  assertJsMatch(dashboard,/monthlyFinance\(orders,now,timeZone,\{timestamp,dateKey\}\)/);
+  assertJsMatch(page,/import \{financeMonthOptions,monthlyFinance\} from "@\/lib\/dashboard-finance"/);
+  assertJsMatch(page,/selectedMonth=\{dashboardMonth\} onSelectMonth=\{setDashboardMonth\}/);
+  assertJsMatch(dashboard,/financeMonthOptions\(orders,now,timeZone,\{timestamp,dateKey\},selectedMonth\?\?undefined\)/);
+  assertJsMatch(dashboard,/monthlyFinance\(orders,now,timeZone,\{timestamp,dateKey\},selectedMonth\?\?undefined\)/);
+  assertJsMatch(dashboard,/<select aria-label="选择统计月份" value=\{monthly\.month\}/);
   for(const label of ["采购总额","销售总额","毛利润（估）","月采购额","月销售额","月利润（估）"]){
     assert.ok(dashboard.includes(`<span>${label}</span>`),`管理员订单概览缺少 ${label}`);
   }

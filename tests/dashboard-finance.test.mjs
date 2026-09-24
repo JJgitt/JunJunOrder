@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {monthlyFinance} from "../lib/dashboard-finance.ts";
+import {financeMonthOptions, monthlyFinance} from "../lib/dashboard-finance.ts";
 import {dateKey, timestamp} from "../lib/time.ts";
 
 const calendar = {dateKey, timestamp};
@@ -21,6 +21,9 @@ test("monthly finance uses the server calendar month across midnight and year bo
     assert.deepEqual(monthlyFinance(orders, now, "UTC", calendar), {
         month: "2026-12", purchase: 120, sales: 180, profit: 60, unpricedShippedQuantity: 0,
     });
+    assert.deepEqual(monthlyFinance(orders, now, "Asia/Shanghai", calendar, "2026-12"), {
+        month: "2026-12", purchase: 20, sales: 30, profit: 10, unpricedShippedQuantity: 0,
+    });
 });
 
 test("sales and estimated profit use each item's shipment month, not the order month or settlement state", () => {
@@ -33,6 +36,9 @@ test("sales and estimated profit use each item's shipment month, not the order m
     ];
     assert.deepEqual(monthlyFinance(orders, Date.parse("2026-10-24T10:00:00+08:00"), "Asia/Shanghai", calendar), {
         month: "2026-10", purchase: 70, sales: 380, profit: 80, unpricedShippedQuantity: 0,
+    });
+    assert.deepEqual(monthlyFinance(orders, Date.parse("2026-10-24T10:00:00+08:00"), "Asia/Shanghai", calendar, "2026-09"), {
+        month: "2026-09", purchase: 500, sales: 260, profit: 60, unpricedShippedQuantity: 0,
     });
 });
 
@@ -69,4 +75,30 @@ test("missing and future timestamps do not contribute to the current month", () 
     assert.deepEqual(monthlyFinance(orders, now, "Asia/Shanghai", calendar), {
         month: "2026-10", purchase: 0.3, sales: 0, profit: 0, unpricedShippedQuantity: 0,
     });
+});
+
+test("a historical month with no transactions shows zero and invalid or future selections fall back to the server month", () => {
+    const now = Date.parse("2026-10-24T10:00:00+08:00");
+    const orders = [order("2026-10-02T10:00:00+08:00", "已入库", 50)];
+    assert.deepEqual(monthlyFinance(orders, now, "Asia/Shanghai", calendar, "2026-08"), {
+        month: "2026-08", purchase: 0, sales: 0, profit: 0, unpricedShippedQuantity: 0,
+    });
+    for (const invalid of ["2026-11", "2026-13", "2026-1", "invalid"]) {
+        assert.equal(monthlyFinance(orders, now, "Asia/Shanghai", calendar, invalid).month, "2026-10");
+    }
+});
+
+test("month choices include a recent year, older order months, and a retained selected month", () => {
+    const now = Date.parse("2026-09-24T10:00:00+08:00");
+    const recent = financeMonthOptions([], now, "Asia/Shanghai", calendar);
+    assert.equal(recent.length, 12);
+    assert.equal(recent[0], "2026-09");
+    assert.equal(recent.at(-1), "2025-10");
+
+    const orders = [order("2024-12-15T10:00:00+08:00", "已发货", 20, [item(20, 30, "2025-01-05T10:00:00+08:00")])];
+    const months = financeMonthOptions(orders, now, "Asia/Shanghai", calendar, "2024-11");
+    assert.equal(months[0], "2026-09");
+    assert.equal(months.at(-1), "2024-11");
+    assert.ok(months.includes("2025-06"), "months without orders remain selectable");
+    assert.equal(months.length, new Set(months).size);
 });

@@ -95,7 +95,9 @@ button:disabled { cursor: not-allowed; }
 .finance-card { padding: 20px 16px; gap: 12px; }
 .finance-card b { font-size: clamp(16px, 4.1vw, 22px); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .finance-card > .cumulative-profit, .finance-card > div:last-of-type { border-bottom: 0; }
-.finance-month-heading { margin: 8px 0 0; padding: 16px 0 2px; border-top: 1px solid #dce5f2; color: var(--primary-dark); font-size: 13px; }
+.finance-card > .finance-month-toolbar { margin: 8px 0 0; padding: 16px 0 2px; border-top: 1px solid #dce5f2; border-bottom: 0; gap: 10px; flex-wrap: wrap; }
+.finance-month-heading { margin: 0; color: var(--primary-dark); font-size: 14px; }
+.finance-month-toolbar select { min-height: 44px; max-width: 100%; padding: 0 12px; border: 1px solid #cfdcf0; border-radius: 12px; background: #f4f8ff; color: var(--primary-dark); font-size: 16px; font-weight: 600; }
 .finance-card .profit.negative b { color: var(--danger); }
 .finance-note { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 

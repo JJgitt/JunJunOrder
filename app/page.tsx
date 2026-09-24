@@ -6,7 +6,7 @@ import {useRouter} from "next/navigation";
 import Image from "next/image";
 import {courierTrackingUrl, findOrdersByCourierNo, findTransitCandidatesByCourierTail, normalizeCourierNo} from "@/lib/courier";
 import {buildOrderCopyText} from "@/lib/order-copy";
-import {monthlyFinance} from "@/lib/dashboard-finance";
+import {financeMonthOptions, monthlyFinance} from "@/lib/dashboard-finance";
 import {paginateOrders} from "@/lib/order-pagination";
 import {postReceiptTimelineEvents} from "@/lib/order-timeline";
 import {dateKey, dayRange, timestamp, waitingLabel, type ServerClock} from "@/lib/time";
@@ -172,6 +172,7 @@ export default function Home() {
     const [buyerTab, setBuyerTab] = useState<BuyerTab>("home");
     const [adminOrderListState, setAdminOrderListState] = useState(initialAdminOrderListState);
     const [buyerOrderListState, setBuyerOrderListState] = useState(initialBuyerOrderListState);
+    const [dashboardMonth, setDashboardMonth] = useState<string | null>(null);
     const [orders, setOrders] = useState<PurchaseOrder[]>([]);
     const [stock, setStock] = useState<StockItem[]>([]);
     const [notices, setNotices] = useState<DashboardNotice[]>([]);
@@ -535,7 +536,7 @@ export default function Home() {
 
         <div className="page-stage">
             {role === "admin" && adminTab === "dashboard" &&
-                <AdminDashboard orders={orders} stock={stock} notices={notices} onAddNotice={createNotice} onUpdateNotice={updateNotice} onSetNoticeCompleted={setNoticeCompleted} onCreate={() => {
+                <AdminDashboard orders={orders} stock={stock} notices={notices} selectedMonth={dashboardMonth} onSelectMonth={setDashboardMonth} onAddNotice={createNotice} onUpdateNotice={updateNotice} onSetNoticeCompleted={setNoticeCompleted} onCreate={() => {
                     startNewUpload();
                     setAdminTab("upload");
                 }} onReceipt={() => setOverlay("receipt")} onOrders={() => setAdminTab("orders")}
@@ -674,6 +675,8 @@ function AdminDashboard({
                              orders,
                              stock,
                              notices,
+                             selectedMonth,
+                             onSelectMonth,
                              onAddNotice,
                              onUpdateNotice,
                              onSetNoticeCompleted,
@@ -681,7 +684,7 @@ function AdminDashboard({
                             onReceipt,
                             onOrders,
                             onStock
-                         }: { orders: PurchaseOrder[]; stock: StockItem[]; notices: DashboardNotice[]; onAddNotice: (content: string, noticeDate: string) => Promise<boolean>; onUpdateNotice: (id: string, content: string, noticeDate: string) => Promise<boolean>; onSetNoticeCompleted: (id: string, completed: boolean) => Promise<boolean>; onCreate: () => void; onReceipt: () => void; onOrders: () => void; onStock: () => void }) {
+                         }: { orders: PurchaseOrder[]; stock: StockItem[]; notices: DashboardNotice[]; selectedMonth: string | null; onSelectMonth: (month: string | null) => void; onAddNotice: (content: string, noticeDate: string) => Promise<boolean>; onUpdateNotice: (id: string, content: string, noticeDate: string) => Promise<boolean>; onSetNoticeCompleted: (id: string, completed: boolean) => Promise<boolean>; onCreate: () => void; onReceipt: () => void; onOrders: () => void; onStock: () => void }) {
     const [noticeDraft, setNoticeDraft] = useState("");
     const [noticeBusy, setNoticeBusy] = useState(false);
     const {now, timeZone, dateTime} = useServerClock();
@@ -698,7 +701,9 @@ function AdminDashboard({
     const inToday = orders.filter(o => o.receivedAt && dateKey(o.receivedAt, timeZone) === today).length;
     const purchase = orders.reduce((sum, o) => sum + o.amount, 0);
     const sales = orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + (i.salePrice ?? 0), 0), 0);
-    const monthly = monthlyFinance(orders, now, timeZone, {timestamp, dateKey});
+    const currentMonth = today.slice(0, 7);
+    const monthOptions = financeMonthOptions(orders, now, timeZone, {timestamp, dateKey}, selectedMonth ?? undefined);
+    const monthly = monthlyFinance(orders, now, timeZone, {timestamp, dateKey}, selectedMonth ?? undefined);
     async function submitNotice(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         const content = noticeDraft.trim();
@@ -797,18 +802,26 @@ function AdminDashboard({
                     </div>}
                 </li>)}</ul> : <p className="dashboard-notice-empty">暂无注意事项，添加后会保存在数据库中。</p>}
         </section>
-        <SectionHead title="订单概览" note="当前已加载订单"/>
+        <SectionHead title="订单概览" note="累计与月度数据"/>
         <div className="finance-card">
             <div><span>采购总额</span><b>{money(purchase)}</b></div>
             <div><span>销售总额</span><b>{money(sales)}</b></div>
             <div className="profit cumulative-profit">
                 <span>毛利润（估）</span><b>{money(Math.max(0, sales - orders.reduce((s, o) => s + o.items.filter(i => i.salePrice).reduce((x, i) => x + i.amount, 0), 0)))}</b>
             </div>
-            <h4 className="finance-month-heading">本月 · {monthly.month}</h4>
+            <div className="finance-month-toolbar">
+                <h4 className="finance-month-heading">月度统计</h4>
+                <select aria-label="选择统计月份" value={monthly.month}
+                        onChange={event => onSelectMonth(event.target.value === currentMonth ? null : event.target.value)}>
+                    {monthOptions.map(month => <option key={month} value={month}>
+                        {month === currentMonth ? "本月 · " : ""}{Number(month.slice(0, 4))}年{Number(month.slice(5, 7))}月
+                    </option>)}
+                </select>
+            </div>
             <div><span>月采购额</span><b>{money(monthly.purchase)}</b></div>
             <div><span>月销售额</span><b>{money(monthly.sales)}</b></div>
             <div className={`profit ${monthly.profit < 0 ? "negative" : ""}`}><span>月利润（估）</span><b>{money(monthly.profit)}</b></div>
-            <p className="finance-note">采购按录单时间统计（不含驳回）；销售与利润按发货时间及已填写的预估售价计算。{monthly.unpricedShippedQuantity > 0 ? `本月另有 ${monthly.unpricedShippedQuantity} 件已发货商品未填售价，未计入销售与利润。` : ""}</p>
+            <p className="finance-note">采购按录单时间统计（不含驳回）；销售与利润按发货时间及已填写的预估售价计算。{monthly.unpricedShippedQuantity > 0 ? `所选月份另有 ${monthly.unpricedShippedQuantity} 件已发货商品未填售价，未计入销售与利润。` : ""}</p>
         </div>
     </section>;
 }
