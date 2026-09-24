@@ -682,7 +682,7 @@ function AdminDashboard({
                          }: { orders: PurchaseOrder[]; stock: StockItem[]; notices: DashboardNotice[]; onAddNotice: (content: string, noticeDate: string) => Promise<boolean>; onUpdateNotice: (id: string, content: string, noticeDate: string) => Promise<boolean>; onSetNoticeCompleted: (id: string, completed: boolean) => Promise<boolean>; onCreate: () => void; onReceipt: () => void; onOrders: () => void; onStock: () => void }) {
     const [noticeDraft, setNoticeDraft] = useState("");
     const [noticeBusy, setNoticeBusy] = useState(false);
-    const {now, timeZone} = useServerClock();
+    const {now, timeZone, dateTime} = useServerClock();
     const today = dateKey(now, timeZone);
     const [noticeDate, setNoticeDate] = useState(today);
     const [editingNoticeId, setEditingNoticeId] = useState<string | null>(null);
@@ -787,7 +787,8 @@ function AdminDashboard({
                         <label><input type="checkbox" checked={notice.completed} disabled={noticeBusy}
                                       onChange={() => void toggleNotice(notice)}/><span className="sr-only">标记事项完成</span>
                             <span className="dashboard-notice-info"><span className="dashboard-notice-text">{notice.content}</span>
-                                <time dateTime={notice.noticeDate}>{notice.noticeDate}</time></span></label>
+                                <time dateTime={notice.noticeDate}>{notice.noticeDate}</time>
+                                {notice.completed && notice.completedAt ? <time dateTime={notice.completedAt}>完成时间：{dateTime(notice.completedAt)}</time> : null}</span></label>
                         <button type="button" className="dashboard-notice-edit-button" disabled={noticeBusy}
                                 onClick={() => startEditNotice(notice)}>编辑</button>
                     </div>}

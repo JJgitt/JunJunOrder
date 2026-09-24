@@ -1043,6 +1043,14 @@ test("completed dashboard notices remain visible for seven days only",async()=>{
   assert.match(page,/completedAt\?: string \| null/);
 });
 
+test("completed dashboard notices show their completion time in the server time zone",async()=>{
+  const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
+  const dashboard=page.slice(page.indexOf("function AdminDashboard("),page.indexOf('<SectionHead title="订单概览"'));
+  assertJsMatch(dashboard,/const \{now,timeZone,dateTime\}=useServerClock\(\)/);
+  assertJsMatch(dashboard,/notice\.completed&&notice\.completedAt\?/);
+  assertJsMatch(dashboard,/<time[^>]*dateTime=\{notice\.completedAt\}[^>]*>完成时间：\{dateTime\(notice\.completedAt\)\}<\/time>:null/);
+});
+
 test("dashboard notice date and content can be edited with existing dates backfilled",async()=>{
   const [page,route,schema,migration,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
