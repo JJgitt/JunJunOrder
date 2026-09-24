@@ -439,6 +439,19 @@ test("buyer snapshots stop at receipt and hide all shipment state and logistics"
   assert.doesNotMatch(appRoute,/location:row\.location\?\?undefined/);
 });
 
+test("order detail timeline gates per-item shipment events to administrators",async()=>{
+  const [page,appRoute]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
+  ]);
+  assertJsMatch(page,/postReceiptTimelineEvents\(order,canManage,timestamp\)/);
+  assertJsMatch(page,/postReceiptEvents\.map\(event=>event\.kind==="shipped"\?/);
+  assertJsMatch(page,/key=\{`shipped-\$\{event\.item\.id\}`\}/);
+  assertJsMatch(page,/<b>\{dateTime\(event\.at\)\}<\/b><span>\{event\.item\.title\} · \{event\.item\.size\}码 ×\{event\.item\.qty\} 已发货<\/span>/);
+  assert.match(appRoute,/\.\.\.\(isAdmin\?\{\s*shipped:Boolean\(item\.shippedAt\)/);
+  assert.match(appRoute,/outboundCompany:item\.outboundCompany\?\?undefined,outboundCourier:item\.outboundCourierNo\?\?undefined,shippedAt:item\.shippedAt\?\?undefined/);
+});
+
 test("administrator ships each order item individually with resale details",async()=>{
   const [page,appRoute,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),

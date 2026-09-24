@@ -87,6 +87,10 @@ test("admin snapshot preserves order, image and stock grouping order", async () 
   assert.equal(data.orders[0].amount, 40);
   assert.equal(data.orders[0].items[0].purchaseCourierNo, "new");
   assert.equal(data.orders[0].items[1].purchaseCourierNo, "c2");
+  assert.equal(data.orders[0].items[0].shipped, false);
+  assert.equal(data.orders[0].items[0].shippedAt, undefined);
+  assert.equal(data.orders[0].items[1].shipped, true);
+  assert.equal(data.orders[0].items[1].shippedAt, "2026-09-23");
   assert.equal(data.orders[1].status, "已发货");
   assert.equal(data.orders[1].approvedAt, "approved");
   assert.deepEqual(data.stock.map(row => row.locations), [["库位二", "库位三"], ["库位一"], []]);
@@ -100,7 +104,13 @@ test("buyer snapshot keeps role-specific fields and excludes other buyers", asyn
   assert.deepEqual(data.orders.map(order => order.status), ["已入库", "已入库"]);
   assert.deepEqual(data.orders[0].items.map(item => item.id), ["i2", "i4"]);
   assert.deepEqual(data.orders[0].images.map(image => image.id), ["image2", "image3"]);
-  assert.equal("shipped" in data.orders[0].items[0], false);
+  for (const order of data.orders) {
+    for (const item of order.items) {
+      for (const field of ["shipped", "shippedAt", "outboundCompany", "outboundCourier", "resaleNo", "salePrice"]) {
+        assert.equal(field in item, false, `buyer item ${item.id} must not expose ${field}`);
+      }
+    }
+  }
   assert.equal("purchaserPhone" in data.orders[0], false);
   assert.equal("location" in data.orders[0], false);
   assert.deepEqual(data.stock, []);

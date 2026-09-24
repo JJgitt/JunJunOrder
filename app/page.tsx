@@ -7,6 +7,7 @@ import Image from "next/image";
 import {courierTrackingUrl, findOrdersByCourierNo, findTransitCandidatesByCourierTail, normalizeCourierNo} from "@/lib/courier";
 import {buildOrderCopyText} from "@/lib/order-copy";
 import {paginateOrders} from "@/lib/order-pagination";
+import {postReceiptTimelineEvents} from "@/lib/order-timeline";
 import {dateKey, dayRange, timestamp, waitingLabel, type ServerClock} from "@/lib/time";
 import type {KnowledgeMatch} from "@/lib/product-knowledge-match";
 import {fillProductIdentity} from "@/lib/product-knowledge-fill";
@@ -2038,6 +2039,7 @@ function OrderDetail({
                          onShipItem
                      }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onReject: () => void; onSettle: () => void; onSettlementAmount: () => void; onSettlementProof: () => void; onShipItem: (itemId: string) => void }) {
     const {dateTime} = useServerClock();
+    const postReceiptEvents = postReceiptTimelineEvents(order, canManage, timestamp);
     return <Modal title="订单详情" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
         <div className={`detail-card edge-${statusTone[order.status]}`}>
             <div className="detail-title">
@@ -2096,8 +2098,10 @@ function OrderDetail({
                 {order.status !== "待审核" && order.status !== "已驳回" &&
                     <li><b>{dateTime(order.approvedAt)}</b><span>管理员审核通过</span></li>}{order.receivedAt &&
                 <li><b>{dateTime(order.receivedAt)}</b><span>收货入库{showLocation && order.location ? ` · ${order.location}` : ""}</span></li>}{canManage && order.items.some(item => item.resaleNo) &&
-                <li><b>未记录</b><span>二级平台成交时间未单独记录</span></li>}{order.settled &&
-                <li><b>{dateTime(order.settledAt)}</b><span>{order.settledByName || "管理员"}完成采购结款{order.settledAmount != null ? ` · ${money(order.settledAmount)}` : ""}</span></li>}</ol>
+                <li><b>未记录</b><span>二级平台成交时间未单独记录</span></li>}
+                {postReceiptEvents.map(event => event.kind === "shipped" ?
+                    <li key={`shipped-${event.item.id}`}><b>{dateTime(event.at)}</b><span>{event.item.title} · {event.item.size}码 ×{event.item.qty} 已发货</span></li> :
+                    <li key="settled"><b>{dateTime(event.at)}</b><span>{order.settledByName || "管理员"}完成采购结款{order.settledAmount != null ? ` · ${money(order.settledAmount)}` : ""}</span></li>)}</ol>
         </div>
         {canManage && canRejectOrder(order) && order.status !== "待审核" &&
         <button className="primary-button danger-button"
