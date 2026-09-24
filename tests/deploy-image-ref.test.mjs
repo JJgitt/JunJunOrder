@@ -69,3 +69,13 @@ test("workflow deploys the Aliyun China build and does not push from GitHub", as
   assert.doesNotMatch(workflow, /SWR_PASSWORD:\s*['"]?[A-Za-z0-9+/=]{20,}/);
   assert.doesNotMatch(workflow, /ACR_PASSWORD:\s*['"]?[A-Za-z0-9+/=]{20,}/);
 });
+
+test("ACR build uses pinned Docker Official Images outside Docker Hub", async () => {
+  const dockerfile = await readFile(new URL("../Dockerfile", import.meta.url), "utf8");
+  const stages = [...dockerfile.matchAll(/^FROM\s+(\S+)\s+AS\s+(\w+)/gm)];
+  assert.deepEqual(stages.map(([, , stage]) => stage), ["revision", "dependencies", "builder", "runner"]);
+  for (const [ , image, stage] of stages) {
+    const name = stage === "revision" ? "alpine:3.20" : "node:22-alpine";
+    assert.match(image, new RegExp(`^public\\.ecr\\.aws/docker/library/${name.replace(".", "\\.")}@sha256:[a-f0-9]{64}$`));
+  }
+});

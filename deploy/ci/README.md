@@ -72,7 +72,9 @@ GHCR 包应保持私有，并关联本仓库及授予本仓库 Actions 访问权
 3. 服务器 `/usr/local/sbin/hongyun-deploy` 须会等待 `main` 标签里的 `/app/source-revision` 与本次提交一致。
 4. GitHub Secrets `ACR_USERNAME`、`ACR_PASSWORD` 仍是控制台「访问凭证」里的固定密码。
 
-镜像里的 `/app/source-revision` 在 ACR 构建时由 `git rev-parse HEAD` 写入。个人版构建规则的标签是固定的 `main`，所以用这个文件区分是不是这次提交。构建超时为 30 分钟。基础镜像 `node:22-alpine` 是公开镜像，个人版允许使用。
+镜像里的 `/app/source-revision` 在 ACR 构建时由 `git rev-parse HEAD` 写入。个人版构建规则的标签是固定的 `main`，所以用这个文件区分是不是这次提交。构建超时为 30 分钟。
+
+基础镜像使用 AWS ECR Public 中 Docker 官方账号的 `node:22-alpine` 与 `alpine:3.20`，并锁定已核验的 OCI 摘要。这样不会在 ACR 构建时向 Docker Hub 请求基础镜像，避开个人版共享出口的 429 限流。升级 Node/Alpine 时需核验新摘要并同步更新 `Dockerfile`。若中国内地构建器访问 ECR Public 不稳定，按[阿里云官方建议](https://help.aliyun.com/zh/acr/product-overview/notice-about-speed-limits-on-image-pulling-from-docker-hub-in-container-registry-personal-edition)，将这两个基础镜像同步到同地域同账号的 ACR 仓库后再替换 `FROM`；不要改用未经核验的第三方镜像代理。
 
 回滚仍可手动传入 GHCR、SWR 或 ACR 的 digest。自动发布不再推这些仓库。
 
