@@ -237,7 +237,7 @@ test("buyers can edit their own purchase orders until receipt",async()=>{
     readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
   ]);
   assertJsMatch(page,/const buyerCanEditOrder = \(status:OrderStatus\) => status === "待审核" \|\| status === "在途" \|\| status === "已驳回"/);
-  assertJsMatch(page,/<BuyerOrders orders=\{orders\} onOpen=\{openOrder\} onEdit=/);
+  assertJsMatch(page,/<BuyerOrders orders=\{orders\} viewState=\{buyerOrderListState\} setViewState=\{setBuyerOrderListState\} onOpen=\{openOrder\} onEdit=/);
   assertJsMatch(page,/编辑采购单/);
   assertJsMatch(page,/入库前均可修改并保存/);
   assert.match(appRoute,/const buyerEditableStatuses=\["待审核","在途","已驳回"\] as const/);
@@ -834,7 +834,8 @@ test("admin order list filters by multiple purchasers at once",async()=>{
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
-  assertJsMatch(page,/const \[buyers,setBuyers\] = useState<string\[\]>\(\[\]\)/);
+  assertJsMatch(page,/buyers:\[\]/);
+  assertJsMatch(page,/const setBuyers = fieldSetter\(setViewState,"buyers"\)/);
   assertJsMatch(page,/\(buyers\.length === 0 \|\| buyers\.includes\(order\.purchaser\)\)/);
   assertJsMatch(page,/const toggleBuyer = \(name:string\) => \{ resetPageSelection\(\); setBuyers\(current => current\.includes\(name\) \? current\.filter\(item => item !== name\) : \[\.\.\.current, name\]\); \}/);
   assertJsMatch(page,/buyers\.length <= 2 \? buyers\.join\("、"\) : `\$\{buyers\[0\]\} 等 \$\{buyers\.length\} 人`/);
@@ -858,7 +859,8 @@ test("admin and buyer order lists filter by multiple statuses at once",async()=>
   assertJsMatch(page,/const toggleStatusFilter = \(current:string\[\], value:string\) => value === "全部" \? \[\] : current\.includes\(value\)/);
   assertJsMatch(page,/function StatusFilter\(/);
   assertJsMatch(page,/aria-label="按状态筛选，可多选"/);
-  assertJsMatch(page,/const \[statuses,setStatuses\] = useState<string\[\]>\(\[\]\)/);
+  assertJsMatch(page,/statuses:\[\]/);
+  assertJsMatch(page,/const setStatuses = fieldSetter\(setViewState,"statuses"\)/);
   assertJsMatch(page,/matchesStatusFilter\(order, statuses\)/);
   assertJsMatch(page,/matchesStatusFilter\(o, statuses\)/);
   assertJsMatch(page,/<StatusFilter options=\{\["全部","待审核","在途","待发货","已发货","已驳回"\]\} value=\{statuses\} onChange=\{value => \{ resetPageSelection\(\); setStatuses\(value\); \}\} \/>/);
@@ -878,7 +880,8 @@ test("admin and buyer order lists filter by settlement status",async()=>{
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
     readFile(new URL("../app/touch-forms.css",import.meta.url),"utf8"),
   ]);
-  assertJsMatch(page,/const \[settlement,setSettlement\] = useState\("全部结款状态"\)/);
+  assertJsMatch(page,/settlement:"全部结款状态"/);
+  assertJsMatch(page,/const setSettlement = fieldSetter\(setViewState,"settlement"\)/);
   assertJsMatch(page,/\(settlement === "全部结款状态" \|\| order\.settled === \(settlement === "已结款"\)\)/);
   assertJsMatch(page,/\[orders,query,statuses,platform,settlement,buyers,dateDays,dateStart,dateEnd,timeZone,sort\]/);
   assertJsMatch(page,/<select aria-label="结款状态" value=\{settlement\}/);
@@ -896,8 +899,9 @@ test("order list advanced filters start collapsed without clearing their values"
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/workspace-ui.css",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/function AdminOrders\([\s\S]*?const \[moreFiltersOpen, setMoreFiltersOpen\] = useState\(false\)/);
-  assert.match(page,/function BuyerOrders\([\s\S]*?const \[moreFiltersOpen, setMoreFiltersOpen\] = useState\(false\)/);
+  assertJsMatch(page,/moreFiltersOpen:false/);
+  assertJsMatch(page,/function AdminOrders\([\s\S]*?const setMoreFiltersOpen = fieldSetter\(setViewState,"moreFiltersOpen"\)/);
+  assertJsMatch(page,/function BuyerOrders\([\s\S]*?const setMoreFiltersOpen = fieldSetter\(setViewState,"moreFiltersOpen"\)/);
   assert.match(page,/aria-expanded=\{moreFiltersOpen\} aria-controls="admin-order-advanced-filters"/);
   assert.match(page,/id="admin-order-advanced-filters" className="order-advanced-panel" hidden=\{!moreFiltersOpen\}/);
   assert.match(page,/id="buyer-order-advanced-filters" className="order-advanced-panel" hidden=\{!moreFiltersOpen\}/);
@@ -982,6 +986,46 @@ test("admin and buyer paginate filtered results, with page-scoped batch actions"
   assert.match(styles,/\.order-pagination-controls select \{[^}]*font-size: 16px/);
 });
 
+test("editing an order keeps admin and buyer list filters in the surviving Home state", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const home = page.slice(page.indexOf("export default function Home()"), page.indexOf("function AppHeader("));
+  const admin = page.slice(page.indexOf("function AdminOrders("), page.indexOf("function OrderCard("));
+  const buyer = page.slice(page.indexOf("function BuyerOrders("), page.indexOf("function OrderPagination("));
+  const adminTag = home.match(/<AdminOrders\b[\s\S]*?\/>/)?.[0] ?? "";
+  const buyerTag = home.match(/<BuyerOrders\b[\s\S]*?\/>/)?.[0] ?? "";
+
+  assertJsMatch(page, /const initialAdminOrderListState/);
+  assertJsMatch(page, /const initialBuyerOrderListState/);
+  assertJsMatch(home, /const \[adminOrderListState, setAdminOrderListState\] = useState\(initialAdminOrderListState\)/);
+  assertJsMatch(home, /const \[buyerOrderListState, setBuyerOrderListState\] = useState\(initialBuyerOrderListState\)/);
+  assertJsMatch(adminTag, /viewState=\{adminOrderListState\}/);
+  assertJsMatch(adminTag, /setViewState=\{setAdminOrderListState\}/);
+  assertJsMatch(buyerTag, /viewState=\{buyerOrderListState\}/);
+  assertJsMatch(buyerTag, /setViewState=\{setBuyerOrderListState\}/);
+
+  for (const [section, fields] of [
+    [admin, ["query", "statuses", "platform", "settlement", "buyers", "dateDays", "sort", "page", "moreFiltersOpen"]],
+    [buyer, ["query", "statuses", "platform", "settlement", "page", "moreFiltersOpen"]],
+  ]) {
+    assertJsMatch(section, /viewState/);
+    for (const field of fields) {
+      assertJsNotMatch(section, new RegExp(`const\\[${field},set[A-Za-z]+\\]=useState`));
+    }
+  }
+
+  // Both cancel and save return through the same Home instance, without resetting its view state.
+  assertJsMatch(home, /onEdit=\{\(id\)=>\{setSelectedId\(id\);setAdminTab\("upload"\);\}\}/);
+  assertJsMatch(home, /onCancel=\{\(\)=>setAdminTab\("orders"\)\}/);
+  assertJsMatch(home, /<BuyerOrders[\s\S]*?onEdit=\{\(id\)=>\{setSelectedId\(id\);setBuyerTab\("upload"\);\}\}/);
+  assertJsMatch(home, /if\(currentUser\?\.role==="admin"\)setAdminTab\("orders"\);elsesetBuyerTab\("mine"\)/);
+  assertJsNotMatch(home.slice(home.indexOf("const applySnapshot"), home.indexOf("const load")), /set(?:Admin|Buyer)OrderListState/);
+
+  // Bulk selection and confirmation sheets are deliberately short-lived when leaving the list.
+  assertJsMatch(admin, /const \[selectedIds, setSelectedIds\] = useState<string\[\]>\(\[\]\)/);
+  assertJsMatch(admin, /const \[deleteOpen, setDeleteOpen\] = useState\(false\)/);
+  assertJsNotMatch(home, /const \[selectedIds, setSelectedIds\]/);
+});
+
 test("completed dashboard notices remain visible for seven days only",async()=>{
   const [schema,route,migration,page]=await Promise.all([
     readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
@@ -1038,7 +1082,8 @@ test("admin order list offers mutually exclusive three-state time sorting",async
   ]);
   assertJsMatch(page,/type OrderSortKey = "createdAt" \| "receivedAt" \| "shippedAt"/);
   assertJsMatch(page,/\{key:"createdAt",label:"上传时间"\},\{key:"receivedAt",label:"入库时间"\},\{key:"shippedAt",label:"发货时间"\}/);
-  assertJsMatch(page,/const \[sort,setSort\] = useState<OrderSort>\(null\)/);
+  assertJsMatch(page,/sort:null/);
+  assertJsMatch(page,/const setSort = fieldSetter\(setViewState,"sort"\)/);
   assertJsMatch(page,/current\?\.key !== key \? \{key,direction:"desc"\} : current\.direction === "desc" \? \{key,direction:"asc"\} : null/);
   assertJsMatch(page,/点击按钮依次切换倒序、顺序和默认/);
   assertJsMatch(page,/sortPurchaseOrders\(orders\.filter\(/);

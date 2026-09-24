@@ -1,6 +1,6 @@
 "use client";
 
-import {FormEvent, useCallback, useEffect, useMemo, useRef, useState} from "react";
+import {type Dispatch, FormEvent, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {createPortal} from "react-dom";
 import {useRouter} from "next/navigation";
 import Image from "next/image";
@@ -19,6 +19,13 @@ type BuyerTab = "home" | "upload" | "mine";
 type OrderStatus = "待审核" | "在途" | "已入库" | "待发货" | "已发货" | "已驳回";
 type OrderSortKey = "createdAt" | "receivedAt" | "shippedAt";
 type OrderSort = { key: OrderSortKey; direction: "asc" | "desc" } | null;
+type AdminOrderListState = {
+    query: string; statuses: string[]; platform: string; settlement: string; buyers: string[];
+    dateDays: number; sort: OrderSort; page: number; moreFiltersOpen: boolean;
+};
+type BuyerOrderListState = {
+    query: string; statuses: string[]; platform: string; settlement: string; page: number; moreFiltersOpen: boolean;
+};
 type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "detail" | "reject" | "ship" | "settle" | "settlement-amount" | "settlement-proof" | null;
 type OrderImage = { id: string; url: string; fileName: string; uploadedBy: string; createdAt: string };
 
@@ -74,6 +81,20 @@ const orderSortOptions: Array<{ key: OrderSortKey; label: string }> = [
     {key: "receivedAt", label: "入库时间"},
     {key: "shippedAt", label: "发货时间"}
 ];
+const initialAdminOrderListState: AdminOrderListState = {
+    query: "", statuses: [], platform: "全部渠道", settlement: "全部结款状态", buyers: [],
+    dateDays: 30, sort: null, page: 1, moreFiltersOpen: false
+};
+const initialBuyerOrderListState: BuyerOrderListState = {
+    query: "", statuses: [], platform: "全部渠道", settlement: "全部结款状态", page: 1, moreFiltersOpen: false
+};
+/** The order list unmounts while editing; keep its view state in Home across tab changes and data refreshes. */
+function fieldSetter<State, Key extends keyof State>(setState: Dispatch<SetStateAction<State>>, key: Key): Dispatch<SetStateAction<State[Key]>> {
+    return next => setState(current => ({
+        ...current,
+        [key]: typeof next === "function" ? (next as (value: State[Key]) => State[Key])(current[key]) : next
+    }));
+}
 const validTimestamp = (value?: string) => {
     const parsed = value ? timestamp(value) : Number.NaN;
     return Number.isFinite(parsed) ? parsed : null;
@@ -147,6 +168,8 @@ export default function Home() {
     const [people, setPeople] = useState<AppUser[]>([]);
     const [adminTab, setAdminTab] = useState<AdminTab>("dashboard");
     const [buyerTab, setBuyerTab] = useState<BuyerTab>("home");
+    const [adminOrderListState, setAdminOrderListState] = useState(initialAdminOrderListState);
+    const [buyerOrderListState, setBuyerOrderListState] = useState(initialBuyerOrderListState);
     const [orders, setOrders] = useState<PurchaseOrder[]>([]);
     const [stock, setStock] = useState<StockItem[]>([]);
     const [notices, setNotices] = useState<DashboardNotice[]>([]);
@@ -517,7 +540,7 @@ export default function Home() {
                                 onStock={() => setAdminTab("stock")}/>}
             {role === "admin" && adminTab === "stock" &&
                 <StockPage stock={stock} onSuggest={() => notify("已生成 3 条采购建议")}/>}
-            {role === "admin" && adminTab === "orders" && <AdminOrders orders={orders} onCreate={() => {
+            {role === "admin" && adminTab === "orders" && <AdminOrders orders={orders} viewState={adminOrderListState} setViewState={setAdminOrderListState} onCreate={() => {
                 startNewUpload();
                 setAdminTab("upload");
             }} onEdit={(id) => {
@@ -573,7 +596,7 @@ export default function Home() {
                             editing={orders.find(item => item.id === selectedId && buyerCanEditOrder(item.status))}
                             onSubmit={upload}/>}
             {role === "buyer" && buyerTab === "mine" &&
-                <BuyerOrders orders={orders} onOpen={openOrder} onEdit={(id) => {
+                <BuyerOrders orders={orders} viewState={buyerOrderListState} setViewState={setBuyerOrderListState} onOpen={openOrder} onEdit={(id) => {
                     setSelectedId(id);
                     setBuyerTab("upload");
                 }}/>}
@@ -860,6 +883,8 @@ function StockPage({stock, onSuggest}: { stock: StockItem[]; onSuggest: () => vo
 
 function AdminOrders({
                           orders,
+                          viewState,
+                          setViewState,
                           onCreate,
                           onRefresh,
                           onEdit,
@@ -873,21 +898,22 @@ function AdminOrders({
                          onShip,
                          onSettle,
                          onNotify
-                      }: { orders: PurchaseOrder[]; onCreate: () => void; onRefresh: () => Promise<boolean>; onEdit: (id: string) => void; onDelete: (ids: string[]) => Promise<boolean>; onBatchShip: (shipments: Array<{ orderId: string; courier: string; company: string }>) => Promise<boolean>; onBatchSettle: (ids: string[]) => Promise<boolean>; onOpen: (id: string) => void; onApprove: (id: string) => void; onReceive: (id: string) => void; onReject: (id: string) => void; onShip: (id: string) => void; onSettle: (id: string) => void; onNotify: (text: string) => void }) {
-    const [query, setQuery] = useState("");
-    const [statuses, setStatuses] = useState<string[]>([]);
-    const [platform, setPlatform] = useState("全部渠道");
-    const [settlement, setSettlement] = useState("全部结款状态");
-    const [buyers, setBuyers] = useState<string[]>([]);
+                      }: { orders: PurchaseOrder[]; viewState: AdminOrderListState; setViewState: Dispatch<SetStateAction<AdminOrderListState>>; onCreate: () => void; onRefresh: () => Promise<boolean>; onEdit: (id: string) => void; onDelete: (ids: string[]) => Promise<boolean>; onBatchShip: (shipments: Array<{ orderId: string; courier: string; company: string }>) => Promise<boolean>; onBatchSettle: (ids: string[]) => Promise<boolean>; onOpen: (id: string) => void; onApprove: (id: string) => void; onReceive: (id: string) => void; onReject: (id: string) => void; onShip: (id: string) => void; onSettle: (id: string) => void; onNotify: (text: string) => void }) {
+    const {query, statuses, platform, settlement, buyers, dateDays, sort, page, moreFiltersOpen} = viewState;
+    const setQuery = fieldSetter(setViewState, "query");
+    const setStatuses = fieldSetter(setViewState, "statuses");
+    const setPlatform = fieldSetter(setViewState, "platform");
+    const setSettlement = fieldSetter(setViewState, "settlement");
+    const setBuyers = fieldSetter(setViewState, "buyers");
+    const setDateDays = fieldSetter(setViewState, "dateDays");
+    const setSort = fieldSetter(setViewState, "sort");
+    const setPage = fieldSetter(setViewState, "page");
+    const setMoreFiltersOpen = fieldSetter(setViewState, "moreFiltersOpen");
     const [buyerOpen, setBuyerOpen] = useState(false);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
-    const [page, setPage] = useState(1);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [batchShipOpen, setBatchShipOpen] = useState(false);
     const [batchSettleOpen, setBatchSettleOpen] = useState(false);
-    const [dateDays, setDateDays] = useState(30);
-    const [sort, setSort] = useState<OrderSort>(null);
-    const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [exporting, setExporting] = useState(false);
     const {now, timeZone} = useServerClock();
@@ -1535,15 +1561,18 @@ function UploadPage({
 
 function BuyerOrders({
                          orders,
+                         viewState,
+                         setViewState,
                          onOpen,
                          onEdit
-                     }: { orders: PurchaseOrder[]; onOpen: (id: string) => void; onEdit: (id: string) => void }) {
-    const [statuses, setStatuses] = useState<string[]>([]);
-    const [query, setQuery] = useState("");
-    const [platform, setPlatform] = useState("全部渠道");
-    const [settlement, setSettlement] = useState("全部结款状态");
-    const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
-    const [page, setPage] = useState(1);
+                     }: { orders: PurchaseOrder[]; viewState: BuyerOrderListState; setViewState: Dispatch<SetStateAction<BuyerOrderListState>>; onOpen: (id: string) => void; onEdit: (id: string) => void }) {
+    const {query, statuses, platform, settlement, page, moreFiltersOpen} = viewState;
+    const setQuery = fieldSetter(setViewState, "query");
+    const setStatuses = fieldSetter(setViewState, "statuses");
+    const setPlatform = fieldSetter(setViewState, "platform");
+    const setSettlement = fieldSetter(setViewState, "settlement");
+    const setPage = fieldSetter(setViewState, "page");
+    const setMoreFiltersOpen = fieldSetter(setViewState, "moreFiltersOpen");
     const changePage = (nextPage: number) => setPage(nextPage);
     const visible = orders.filter(o => matchesStatusFilter(o, statuses) && (platform === "全部渠道" || o.platform === platform) && (settlement === "全部结款状态" || o.settled === (settlement === "已结款")) && `${o.title}${o.items.map(item => `${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}`).join("")}${o.platformNo}`.toLowerCase().includes(query.toLowerCase()));
     const pagination = paginateOrders(visible, page);
