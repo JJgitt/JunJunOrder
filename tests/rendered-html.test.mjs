@@ -214,6 +214,7 @@ test("administrator can edit orders and batch delete with inventory-safe backend
   assertJsMatch(page,/currentUser\?\.role==="admin"\?"update-order":"resubmit-order"/);
   assertJsMatch(page,/>编辑<\/button>/);
   assertJsMatch(page,/全选当前结果/);
+  assertJsMatch(page,/全选本页/);
   assertJsMatch(page,/批量删除/);
   assertJsMatch(page,/function DeleteOrdersSheet/);
   assertJsMatch(page,/此操作不可撤销/);
@@ -627,7 +628,7 @@ test("order list headers summarize visible orders, purchased quantity, and paid 
   assertJsNotMatch(page,/note=\{`\$\{visible\.length\} 笔`\}/);
 });
 
-test("administrator exports selected orders or the current filtered result as Excel",async()=>{
+test("administrator exports selected orders or the current page as Excel",async()=>{
   const [page,exportRoute,workbookSource,styles,pkg]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/api/export/route.ts",import.meta.url),"utf8"),
@@ -635,10 +636,10 @@ test("administrator exports selected orders or the current filtered result as Ex
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
     readFile(new URL("../package.json",import.meta.url),"utf8"),
   ]);
-  assertJsMatch(page,/const exportOrders=selectedIds\.length\?selectedOrders:visible/);
+  assertJsMatch(page,/const exportOrders=selectedPageIds\.length\?selectedOrders:pageOrders/);
   assertJsMatch(page,/fetch\("\/api\/export",\{method:"POST",headers:\{"content-type":"application\/json"\},body:JSON\.stringify\(\{orderIds:exportOrders\.map\(order=>order\.id\)\}\)\}\)/);
   assertJsMatch(page,/className="batch-export-button"/);
-  assertJsMatch(page,/selectedIds\.length\?`导出已选 \$\{selectedIds\.length\}`:`导出当前 \$\{visible\.length\}`/);
+  assertJsMatch(page,/selectedPageIds\.length\?`导出\$\{pagination\.paginated\?"本页已选":"已选"\} \$\{selectedPageIds\.length\}`:`导出\$\{pagination\.paginated\?"本页":"当前"\} \$\{pageOrders\.length\}`/);
   assertJsMatch(page,/onClick=\{\(\) => setDeleteOpen\(true\)\}>批量删除<\/button><button type="button" className="batch-export-button"/,"export sits to the right of batch delete");
   assert.match(exportRoute,/export async function POST\(request:Request\)/);
   assert.match(exportRoute,/assertSameOrigin\(request\)/);
@@ -663,7 +664,7 @@ test("administrator copies the same export scope as a pasteable purchase list",a
   assertJsMatch(page,/const text=buildOrderCopyText\(exportOrders,now,timeZone\)/);
   assertJsMatch(page,/await copyText\(text\)/);
   assertJsMatch(page,/new Blob\(\[text\],\{type:"text\/plain;charset=utf-8"\}\)/,"clipboard failure falls back to a txt download");
-  assertJsMatch(page,/`导出当前 \$\{visible\.length\}`\}<\/button><button type="button" className="batch-copy-button" disabled=\{!exportOrders\.length\}/,"copy button sits right after the Excel export button");
+  assertJsMatch(page,/\$\{pageOrders\.length\}`\}<\/button><button type="button" className="batch-copy-button" disabled=\{!exportOrders\.length\}/,"copy button sits right after the Excel export button");
   assertJsMatch(page,/onClick=\{\(\) => void copyOrderText\(\)\}>导出文案<\/button>/);
   assertCssMatch(styles,/\.batch-toolbar \.batch-copy-button\{background:#0f766e\}/);
 });
@@ -724,7 +725,7 @@ test("multi-unit item rows show a smaller unit price under the line total",async
 test("admin batch selection summarizes selected orders and item quantity",async()=>{
   const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
   assertJsMatch(page,/selectedItemQuantity=selectedOrders\.reduce\(\(sum,order\)=>sum\+order\.items\.reduce\(\(qty,item\)=>qty\+item\.qty,0\),0\)/);
-  assertJsMatch(page,/已选择 \$\{selectedIds\.length\} 笔 · 共 \$\{selectedItemQuantity\} 件/);
+  assertJsMatch(page,/\$\{pagination\.paginated\?"本页":""\}已选择 \$\{selectedPageIds\.length\} 笔 · 共 \$\{selectedItemQuantity\} 件/);
 });
 
 test("order entry recognizes screenshots through a vision model and prefills the form",async()=>{
@@ -835,12 +836,12 @@ test("admin order list filters by multiple purchasers at once",async()=>{
   ]);
   assertJsMatch(page,/const \[buyers,setBuyers\] = useState<string\[\]>\(\[\]\)/);
   assertJsMatch(page,/\(buyers\.length === 0 \|\| buyers\.includes\(order\.purchaser\)\)/);
-  assertJsMatch(page,/const toggleBuyer = \(name:string\) => setBuyers\(current => current\.includes\(name\) \? current\.filter\(item => item !== name\) : \[\.\.\.current, name\]\)/);
+  assertJsMatch(page,/const toggleBuyer = \(name:string\) => \{ resetPageSelection\(\); setBuyers\(current => current\.includes\(name\) \? current\.filter\(item => item !== name\) : \[\.\.\.current, name\]\); \}/);
   assertJsMatch(page,/buyers\.length <= 2 \? buyers\.join\("、"\) : `\$\{buyers\[0\]\} 等 \$\{buyers\.length\} 人`/);
   assertJsMatch(page,/className=\{`buyer-filter-trigger \$\{buyers\.length \? "active" : ""\}/);
   assertJsMatch(page,/className="buyer-filter-panel" role="group"/);
   assertJsMatch(page,/<b>选择采购员<\/b>/);
-  assertJsMatch(page,/className="buyer-filter-clear" onClick=\{\(\) => setBuyers\(\[\]\)\}/);
+  assertJsMatch(page,/className="buyer-filter-clear" onClick=\{\(\) => \{ resetPageSelection\(\); setBuyers\(\[\]\); \}\}/);
   assertJsMatch(page,/className="buyer-filter-done" onClick=\{\(\) => setBuyerOpen\(false\)\}/);
   assertJsMatch(page,/setStatuses\(\["待发货"\]\);setPlatform\("全部渠道"\);setBuyers\(\[\]\);/);
   assertJsNotMatch(page,/<option>全部采购员<\/option>/);
@@ -860,8 +861,8 @@ test("admin and buyer order lists filter by multiple statuses at once",async()=>
   assertJsMatch(page,/const \[statuses,setStatuses\] = useState<string\[\]>\(\[\]\)/);
   assertJsMatch(page,/matchesStatusFilter\(order, statuses\)/);
   assertJsMatch(page,/matchesStatusFilter\(o, statuses\)/);
-  assertJsMatch(page,/<StatusFilter options=\{\["全部","待审核","在途","待发货","已发货","已驳回"\]\} value=\{statuses\} onChange=\{setStatuses\} \/>/);
-  assertJsMatch(page,/<StatusFilter options=\{\["全部","待审核","在途","已入库","已驳回"\]\} value=\{statuses\} onChange=\{setStatuses\} \/>/);
+  assertJsMatch(page,/<StatusFilter options=\{\["全部","待审核","在途","待发货","已发货","已驳回"\]\} value=\{statuses\} onChange=\{value => \{ resetPageSelection\(\); setStatuses\(value\); \}\} \/>/);
+  assertJsMatch(page,/<StatusFilter options=\{\["全部","待审核","在途","已入库","已驳回"\]\} value=\{statuses\} onChange=\{value => \{ setPage\(1\); setStatuses\(value\); \}\} \/>/);
   assertJsMatch(page,/className="status-filter-clear" onClick=\{\(\) => onChange\(\[\]\)\}/);
   assertJsMatch(page,/className="status-filter-summary" role="status" aria-live="polite"/);
   assertJsMatch(page,/className="status-filter-values" aria-label="已选择的状态"/);
@@ -879,7 +880,7 @@ test("admin and buyer order lists filter by settlement status",async()=>{
   ]);
   assertJsMatch(page,/const \[settlement,setSettlement\] = useState\("全部结款状态"\)/);
   assertJsMatch(page,/\(settlement === "全部结款状态" \|\| order\.settled === \(settlement === "已结款"\)\)/);
-  assertJsMatch(page,/\[orders,query,statuses,platform,settlement,buyers,dateStart,dateEnd,timeZone,sort\]/);
+  assertJsMatch(page,/\[orders,query,statuses,platform,settlement,buyers,dateDays,dateStart,dateEnd,timeZone,sort\]/);
   assertJsMatch(page,/<select aria-label="结款状态" value=\{settlement\}/);
   assertJsMatch(page,/<option>全部结款状态<\/option><option>已结款<\/option><option>未结款<\/option>/);
   assertJsMatch(page,/setSettlement\("全部结款状态"\)/);
@@ -953,6 +954,32 @@ test("administrator dashboard notice checklist is persisted and completed items 
   assert.match(page,/onAddNotice=\{createNotice\}/);
   assert.match(page,/type="checkbox" checked=\{notice.completed\}/);
   assert.match(styles,/\.dashboard-notice-list \.completed \.dashboard-notice-text \{[^}]*text-decoration: line-through/);
+});
+
+test("admin and buyer paginate filtered results, with page-scoped batch actions",async()=>{
+  const [page,styles]=await Promise.all([
+    readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/workspace-ui.css",import.meta.url),"utf8"),
+  ]);
+  assertJsMatch(page,/const pagination=paginateOrders\(visible,page\)/);
+  assertJsMatch(page,/const pageOrders=pagination\.items/);
+  assertJsMatch(page,/const selectedPageIds=selectedIds\.filter\(id=>pageOrderIds\.has\(id\)\)/);
+  assertJsMatch(page,/const exportOrders=selectedPageIds\.length\?selectedOrders:pageOrders/);
+  assertJsMatch(page,/pagination\.paginated\?\(allVisibleSelected\?"取消本页全选":"全选本页"\):\(allVisibleSelected\?"取消全选":"全选当前结果"\)/);
+  assertJsMatch(page,/onDelete\(selectedPageIds\)/);
+  assertJsMatch(page,/pageOrders\.map\(order=><OrderCard/);
+  assertJsMatch(page,/pagination\.items\.map\(order=><BuyerOrderCard/);
+  assertJsMatch(page,/<SectionHead title="采购订单" note=\{orderListSummary\(visible\)\}/);
+  assertJsMatch(page,/<SectionHead title="我的采购订单" note=\{orderListSummary\(visible\)\}/);
+  assertJsMatch(page,/const changePage=\(nextPage:number\)=>\{setPage\(nextPage\);setSelectedIds\(\[\]\);\}/);
+  assertJsMatch(page,/<option value=\{0\}>全部时间<\/option>/);
+  assertJsMatch(page,/dateDays===0\|\|\(dateKey\(order\.createdAt,timeZone\)>=dateStart/);
+  assertJsMatch(page,/if\(!paginated\)return null/);
+  assertJsMatch(page,/aria-label="上一页"/);
+  assertJsMatch(page,/aria-label="下一页"/);
+  assertJsMatch(page,/aria-label="跳转页码"/);
+  assert.match(styles,/\.order-pagination \{/);
+  assert.match(styles,/\.order-pagination-controls select \{[^}]*font-size: 16px/);
 });
 
 test("completed dashboard notices remain visible for seven days only",async()=>{

@@ -50,8 +50,8 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
   const isAdmin=user.role==="admin";
   const clock=serverClock();
   const rows=isAdmin
-    ?await db.select().from(purchaseOrders).orderBy(desc(purchaseOrders.createdAt)).limit(500)
-    :await db.select().from(purchaseOrders).where(eq(purchaseOrders.purchaserId,user.id)).orderBy(desc(purchaseOrders.createdAt)).limit(300);
+    ?await db.select().from(purchaseOrders).orderBy(desc(purchaseOrders.createdAt),desc(purchaseOrders.id))
+    :await db.select().from(purchaseOrders).where(eq(purchaseOrders.purchaserId,user.id)).orderBy(desc(purchaseOrders.createdAt),desc(purchaseOrders.id));
   const people=isAdmin?await db.select().from(users).orderBy(users.createdAt):[user];
   const names=new Map(people.map(person=>[person.id,person.name]));
   const phones=new Map(people.map(person=>[person.id,person.phone]));

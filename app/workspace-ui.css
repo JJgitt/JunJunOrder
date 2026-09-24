@@ -150,6 +150,16 @@ button:disabled { cursor: not-allowed; }
 .batch-toolbar button { min-width: 0; min-height: 40px; padding: 8px 4px; border-radius: 10px; white-space: nowrap; font-size: 12px; }
 .batch-toolbar button:disabled { opacity: .45; }
 
+.order-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 14px 0; padding: 12px; border: 1px solid #dce5f2; border-radius: 14px; background: #fff; color: #536179; }
+.order-pagination-range { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.order-pagination-controls { display: flex; align-items: center; gap: 8px; }
+.order-pagination-controls button, .order-pagination-controls select { min-height: 42px; border: 1px solid #d5e1f2; border-radius: 10px; background: #f7faff; color: #244276; font-size: 13px; font-weight: 700; }
+.order-pagination-controls button { padding: 8px 11px; cursor: pointer; }
+.order-pagination-controls button:disabled { opacity: .4; cursor: not-allowed; }
+.order-pagination-controls label { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+.order-pagination-controls select { min-width: 86px; padding: 7px; font-size: 16px; }
+@media (max-width: 540px) { .order-pagination { justify-content: center; text-align: center; } .order-pagination-range { width: 100%; } .order-pagination-controls { width: 100%; justify-content: space-between; } .order-pagination-controls button { flex: 1; } }
+
 .order-list { gap: 14px; }
 .order-card { border-left-width: 3px; border-radius: 18px; box-shadow: var(--surface-shadow); }
 .order-main { padding: 16px; }

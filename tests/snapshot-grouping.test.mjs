@@ -45,9 +45,9 @@ const lotRows = [
   { sku: "a|b", size: "c", location: "库位三" },
 ];
 
-function handler(user) {
+function handler(user, orderRows = orders) {
   const data = new Map([
-    [tables.purchaseOrders, orders], [tables.users, [admin, buyer, otherBuyer]], [tables.orderImages, images],
+    [tables.purchaseOrders, orderRows], [tables.users, [admin, buyer, otherBuyer]], [tables.orderImages, images],
     [tables.orderItems, items], [tables.auditLogs, [{ entityId: "o1", orderId: "o1", createdAt: "approved" }]],
     [tables.inventory, inventoryRows], [tables.inventoryLots, lotRows], [tables.dashboardNotices, []],
   ]);
@@ -106,4 +106,20 @@ test("buyer snapshot keeps role-specific fields and excludes other buyers", asyn
   assert.deepEqual(data.stock, []);
   assert.deepEqual(data.notices, []);
   assert.deepEqual(data.users.map(person => person.id), ["buyer"]);
+});
+
+test("snapshot keeps older admin and buyer orders beyond the former 500/300 limits", async () => {
+  const manyOrders = Array.from({ length: 501 }, (_, index) => ({
+    ...orders[0], id: `old-${index}`, platformOrderNo: `p-${index}`, purchaserId: index < 301 ? buyer.id : otherBuyer.id,
+  }));
+  const adminResponse = await handler(admin, manyOrders);
+  const adminData = await adminResponse.json();
+  assert.equal(adminData.orders.length, 501);
+  assert.equal(adminData.orders.at(-1).id, "old-500");
+
+  const buyerResponse = await handler(buyer, manyOrders);
+  const buyerData = await buyerResponse.json();
+  assert.equal(buyerData.orders.length, 301);
+  assert.equal(buyerData.orders.at(-1).id, "old-300");
+  assert.equal(buyerData.orders.some(order => order.id === "old-301"), false);
 });

@@ -6,6 +6,7 @@ import {useRouter} from "next/navigation";
 import Image from "next/image";
 import {courierTrackingUrl, findOrdersByCourierNo, findTransitCandidatesByCourierTail, normalizeCourierNo} from "@/lib/courier";
 import {buildOrderCopyText} from "@/lib/order-copy";
+import {paginateOrders} from "@/lib/order-pagination";
 import {dateKey, dayRange, timestamp, waitingLabel, type ServerClock} from "@/lib/time";
 import type {KnowledgeMatch} from "@/lib/product-knowledge-match";
 import {fillProductIdentity} from "@/lib/product-knowledge-fill";
@@ -880,6 +881,7 @@ function AdminOrders({
     const [buyers, setBuyers] = useState<string[]>([]);
     const [buyerOpen, setBuyerOpen] = useState(false);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [page, setPage] = useState(1);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [batchShipOpen, setBatchShipOpen] = useState(false);
     const [batchSettleOpen, setBatchSettleOpen] = useState(false);
@@ -889,17 +891,19 @@ function AdminOrders({
     const [refreshing, setRefreshing] = useState(false);
     const [exporting, setExporting] = useState(false);
     const {now, timeZone} = useServerClock();
-    const {start: dateStart, end: dateEnd} = dayRange(now, timeZone, dateDays);
+    const {start: dateStart, end: dateEnd} = dayRange(now, timeZone, dateDays || 1);
     const readyCount = orders.filter(order => readyToShip(order.status)).length;
     const purchasers = useMemo(() => Array.from(new Set(orders.map(order => order.purchaser))).sort((a, b) => a.localeCompare(b, "zh-CN")), [orders]);
     const buyerSummary = buyers.length === 0 ? "全部采购员" : buyers.length <= 2 ? buyers.join("、") : `${buyers[0]} 等 ${buyers.length} 人`;
-    const toggleBuyer = (name: string) => setBuyers(current => current.includes(name) ? current.filter(item => item !== name) : [...current, name]);
-    const cycleSort = (key: OrderSortKey) => setSort(current => current?.key !== key ? {key, direction: "desc"} : current.direction === "desc" ? {key, direction: "asc"} : null);
+    const resetPageSelection = () => { setPage(1); setSelectedIds([]); };
+    const toggleBuyer = (name: string) => { resetPageSelection(); setBuyers(current => current.includes(name) ? current.filter(item => item !== name) : [...current, name]); };
+    const cycleSort = (key: OrderSortKey) => { resetPageSelection(); setSort(current => current?.key !== key ? {key, direction: "desc"} : current.direction === "desc" ? {key, direction: "asc"} : null); };
     const activeFilterCount = Number(Boolean(query.trim())) + Number(statuses.length > 0) + Number(platform !== "全部渠道") +
         Number(buyers.length > 0) + Number(dateDays !== 30) + Number(settlement !== "全部结款状态") + Number(sort !== null);
     const advancedFilterCount = Number(dateDays !== 30) + Number(settlement !== "全部结款状态") + Number(sort !== null);
-    const advancedFilterSummary = `${dateDays === 1 ? "今天" : `近${dateDays}天`} · ${settlement} · ${sort ? `${orderSortOptions.find(option => option.key === sort.key)?.label}${sort.direction === "desc" ? "倒序" : "顺序"}` : "默认排序"}`;
+    const advancedFilterSummary = `${dateDays === 0 ? "全部时间" : dateDays === 1 ? "今天" : `近${dateDays}天`} · ${settlement} · ${sort ? `${orderSortOptions.find(option => option.key === sort.key)?.label}${sort.direction === "desc" ? "倒序" : "顺序"}` : "默认排序"}`;
     const clearAllFilters = () => {
+        resetPageSelection();
         setQuery("");
         setStatuses([]);
         setPlatform("全部渠道");
@@ -909,18 +913,23 @@ function AdminOrders({
         setSettlement("全部结款状态");
         setSort(null);
     };
-    const visible = useMemo(() => sortPurchaseOrders(orders.filter(order => dateKey(order.createdAt, timeZone) >= dateStart && dateKey(order.createdAt, timeZone) <= dateEnd && matchesStatusFilter(order, statuses) && (platform === "全部渠道" || order.platform === platform) && (settlement === "全部结款状态" || order.settled === (settlement === "已结款")) && (buyers.length === 0 || buyers.includes(order.purchaser)) && `${order.id}${order.platformNo}${order.items.map(item => `${item.title}${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}${item.outboundCourier ?? ""}`).join("")}`.toLowerCase().includes(query.toLowerCase())), sort), [orders, query, statuses, platform, settlement, buyers, dateStart, dateEnd, timeZone, sort]);
-    const selectedSet = new Set(selectedIds), selectedOrders = orders.filter(order => selectedSet.has(order.id)),
+    const visible = useMemo(() => sortPurchaseOrders(orders.filter(order => (dateDays === 0 || (dateKey(order.createdAt, timeZone) >= dateStart && dateKey(order.createdAt, timeZone) <= dateEnd)) && matchesStatusFilter(order, statuses) && (platform === "全部渠道" || order.platform === platform) && (settlement === "全部结款状态" || order.settled === (settlement === "已结款")) && (buyers.length === 0 || buyers.includes(order.purchaser)) && `${order.id}${order.platformNo}${order.items.map(item => `${item.title}${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}${item.outboundCourier ?? ""}`).join("")}`.toLowerCase().includes(query.toLowerCase())), sort), [orders, query, statuses, platform, settlement, buyers, dateDays, dateStart, dateEnd, timeZone, sort]);
+    const pagination = paginateOrders(visible, page);
+    const pageOrders = pagination.items;
+    const pageOrderIds = new Set(pageOrders.map(order => order.id));
+    const selectedPageIds = selectedIds.filter(id => pageOrderIds.has(id));
+    const selectedSet = new Set(selectedPageIds), selectedOrders = pageOrders.filter(order => selectedSet.has(order.id)),
         selectedReady = selectedOrders.filter(order => readyToShip(order.status)),
         selectedSettleReady = selectedOrders.filter(order => order.receivedAt && !order.settled),
         selectedItemQuantity = selectedOrders.reduce((sum, order) => sum + order.items.reduce((qty, item) => qty + item.qty, 0), 0),
-        allVisibleSelected = visible.length > 0 && visible.every(order => selectedSet.has(order.id));
-    const exportOrders = selectedIds.length ? selectedOrders : visible;
-    const toggle = (id: string) => setSelectedIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
-    const toggleAll = () => setSelectedIds(current => allVisibleSelected ? current.filter(id => !visible.some(order => order.id === id)) : Array.from(new Set([...current, ...visible.map(order => order.id)])));
+        allVisibleSelected = pageOrders.length > 0 && pageOrders.every(order => selectedSet.has(order.id));
+    const exportOrders = selectedPageIds.length ? selectedOrders : pageOrders;
+    const toggle = (id: string) => setSelectedIds(current => current.includes(id) ? current.filter(item => item !== id) : [...selectedPageIds, id]);
+    const toggleAll = () => setSelectedIds(allVisibleSelected ? [] : pageOrders.map(order => order.id));
+    const changePage = (nextPage: number) => { setPage(nextPage); setSelectedIds([]); };
 
     async function confirmDelete() {
-        if (await onDelete(selectedIds)) {
+        if (await onDelete(selectedPageIds)) {
             setSelectedIds([]);
             setDeleteOpen(false);
         }
@@ -935,6 +944,7 @@ function AdminOrders({
 
     async function refreshOrders() {
         if (refreshing) return;
+        setSelectedIds([]);
         setRefreshing(true);
         try {
             await onRefresh();
@@ -1006,16 +1016,19 @@ function AdminOrders({
     return <section className="enter">
         <button className="admin-order-create" onClick={onCreate}>
             <span><b>＋ 新增采购订单</b><small>管理员代录订单，保存后进入统一审核流程</small></span><em>去创建 ›</em></button>
-        <Search value={query} onChange={setQuery} placeholder="搜索单号 / 快递单号 / 货号" historyKey="admin-orders"/>
+        <Search value={query} onChange={value => { resetPageSelection(); setQuery(value); }} placeholder="搜索单号 / 快递单号 / 货号" historyKey="admin-orders"/>
         {readyCount > 0 && <button className="shipping-guide" onClick={() => {
+            resetPageSelection();
+            setQuery("");
             setStatuses(["待发货"]);
             setPlatform("全部渠道");
             setBuyers([]);
             setSettlement("全部结款状态");
+            setDateDays(0);
         }}><i>🚚</i><span><b>{readyCount} 笔订单等待更新发货信息</b><small>可单笔更新，或勾选多笔订单批量填写发货物流</small></span><em>查看 ›</em>
         </button>}
-        <StatusFilter options={["全部", "待审核", "在途", "待发货", "已发货", "已驳回"]} value={statuses} onChange={setStatuses}/>
-        <div className="select-row order-filter-row order-primary-filter-row"><select aria-label="采购渠道" value={platform} onChange={e => setPlatform(e.target.value)}>
+        <StatusFilter options={["全部", "待审核", "在途", "待发货", "已发货", "已驳回"]} value={statuses} onChange={value => { resetPageSelection(); setStatuses(value); }}/>
+        <div className="select-row order-filter-row order-primary-filter-row"><select aria-label="采购渠道" value={platform} onChange={e => { resetPageSelection(); setPlatform(e.target.value); }}>
             <option>全部渠道</option>
             {purchaseChannels.map(channel => <option key={channel}>{channel}</option>)}</select>
             <button type="button"
@@ -1025,7 +1038,7 @@ function AdminOrders({
         {buyerOpen && <div className="buyer-filter-panel" role="group" aria-label="按采购员筛选">
             <div className="buyer-filter-head">
                 <b>选择采购员</b><span>可多选 · {buyers.length ? `已选 ${buyers.length} 位` : "未选择时显示全部"}</span>{buyers.length > 0 &&
-                <button type="button" className="buyer-filter-clear" onClick={() => setBuyers([])}>清空</button>}</div>
+                <button type="button" className="buyer-filter-clear" onClick={() => { resetPageSelection(); setBuyers([]); }}>清空</button>}</div>
             <div className="buyer-filter-options">{purchasers.map(name => {
                 const checked = buyers.includes(name);
                 const count = orders.filter(order => order.purchaser === name).length;
@@ -1044,13 +1057,14 @@ function AdminOrders({
         </button>
         <div id="admin-order-advanced-filters" className="order-advanced-panel" hidden={!moreFiltersOpen}>
             <div className="select-row order-advanced-row">
-                <select aria-label="日期" value={dateDays} onChange={e => setDateDays(Number(e.target.value))}>
+                <select aria-label="日期" value={dateDays} onChange={e => { resetPageSelection(); setDateDays(Number(e.target.value)); }}>
                     <option value={30}>近30天</option>
                     <option value={7}>近7天</option>
                     <option value={1}>今天</option>
                     <option value={90}>近90天</option>
+                    <option value={0}>全部时间</option>
                 </select>
-                <select aria-label="结款状态" value={settlement} onChange={e => setSettlement(e.target.value)}>
+                <select aria-label="结款状态" value={settlement} onChange={e => { resetPageSelection(); setSettlement(e.target.value); }}>
                     <option>全部结款状态</option>
                     <option>已结款</option>
                     <option>未结款</option>
@@ -1085,21 +1099,22 @@ function AdminOrders({
             </div>
         </div>
         <SectionHead title="采购订单" note={orderListSummary(visible)}/>
-        <div className="batch-toolbar"><label><input type="checkbox" checked={allVisibleSelected} onChange={toggleAll}/><span>{allVisibleSelected ? "取消全选" : "全选当前结果"}</span></label><b>{selectedIds.length ? `已选择 ${selectedIds.length} 笔 · 共 ${selectedItemQuantity} 件` : "可批量选择订单"}</b>
+        <OrderPagination {...pagination} onPageChange={changePage} position="top"/>
+        <div className="batch-toolbar"><label><input type="checkbox" checked={allVisibleSelected} onChange={toggleAll}/><span>{pagination.paginated ? (allVisibleSelected ? "取消本页全选" : "全选本页") : (allVisibleSelected ? "取消全选" : "全选当前结果")}</span></label><b>{selectedPageIds.length ? `${pagination.paginated ? "本页" : ""}已选择 ${selectedPageIds.length} 笔 · 共 ${selectedItemQuantity} 件` : pagination.paginated ? "批量操作仅限当前页" : "可批量选择订单"}</b>
             <button className="batch-settle-button" disabled={!selectedSettleReady.length}
                     onClick={() => setBatchSettleOpen(true)}>批量结款{selectedSettleReady.length ? ` ${selectedSettleReady.length}` : ""}</button>
             <button className="batch-ship-button" disabled={!selectedReady.length}
                     onClick={() => setBatchShipOpen(true)}>批量发货{selectedReady.length ? ` ${selectedReady.length}` : ""}</button>
-            <button className="batch-delete-button" disabled={!selectedIds.length}
+            <button className="batch-delete-button" disabled={!selectedPageIds.length}
                     onClick={() => setDeleteOpen(true)}>批量删除
             </button>
             <button type="button" className="batch-export-button" disabled={exporting || !exportOrders.length}
-                    aria-busy={exporting} onClick={() => void downloadExcel()}>{exporting ? "正在导出…" : selectedIds.length ? `导出已选 ${selectedIds.length}` : `导出当前 ${visible.length}`}</button>
+                    aria-busy={exporting} onClick={() => void downloadExcel()}>{exporting ? "正在导出…" : selectedPageIds.length ? `导出${pagination.paginated ? "本页已选" : "已选"} ${selectedPageIds.length}` : `导出${pagination.paginated ? "本页" : "当前"} ${pageOrders.length}`}</button>
             <button type="button" className="batch-copy-button" disabled={!exportOrders.length}
                     title="按货号、商品名、尺码合并件数，复制成可粘贴的采购清单"
                     onClick={() => void copyOrderText()}>导出文案</button>
         </div>
-        <div className="order-list">{visible.map(order => <OrderCard key={order.id} order={order} selectable
+        <div className="order-list">{pageOrders.map(order => <OrderCard key={order.id} order={order} selectable
                                                                      selected={selectedSet.has(order.id)}
                                                                      onSelect={() => toggle(order.id)}
                                                                      onOpen={() => onOpen(order.id)}
@@ -1115,7 +1130,8 @@ function AdminOrders({
             <button className="small-primary purple-action" onClick={() => onShip(order.id)}>🚚
                 去发货</button> : order.status === "已发货" ? <button className="small-primary shipping-edit-action"
                                                                 onClick={() => onShip(order.id)}>编辑发货信息</button> : null}</>}/>)}</div>
-        {deleteOpen && <DeleteOrdersSheet count={selectedIds.length} onClose={() => setDeleteOpen(false)}
+        <OrderPagination {...pagination} onPageChange={changePage} position="bottom"/>
+        {deleteOpen && <DeleteOrdersSheet count={selectedPageIds.length} onClose={() => setDeleteOpen(false)}
                                           onSubmit={confirmDelete}/>} {batchSettleOpen &&
         <BatchSettlementSheet orders={selectedSettleReady} onClose={() => setBatchSettleOpen(false)} onSubmit={confirmBatchSettle}/>} {batchShipOpen &&
         <BatchShipSheet orders={selectedReady} onClose={() => setBatchShipOpen(false)} onSubmit={confirmBatchShip}/>}
@@ -1527,13 +1543,16 @@ function BuyerOrders({
     const [platform, setPlatform] = useState("全部渠道");
     const [settlement, setSettlement] = useState("全部结款状态");
     const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+    const [page, setPage] = useState(1);
+    const changePage = (nextPage: number) => setPage(nextPage);
     const visible = orders.filter(o => matchesStatusFilter(o, statuses) && (platform === "全部渠道" || o.platform === platform) && (settlement === "全部结款状态" || o.settled === (settlement === "已结款")) && `${o.title}${o.items.map(item => `${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}`).join("")}${o.platformNo}`.toLowerCase().includes(query.toLowerCase()));
-    return <section className="enter"><Search value={query} onChange={setQuery} placeholder="搜索商品 / 订单号 / 快递单号"
+    const pagination = paginateOrders(visible, page);
+    return <section className="enter"><Search value={query} onChange={value => { setPage(1); setQuery(value); }} placeholder="搜索商品 / 订单号 / 快递单号"
                                               historyKey="buyer-orders"/><StatusFilter
-        options={["全部", "待审核", "在途", "已入库", "已驳回"]} value={statuses} onChange={setStatuses}/>
+        options={["全部", "待审核", "在途", "已入库", "已驳回"]} value={statuses} onChange={value => { setPage(1); setStatuses(value); }}/>
         <div className="chip-row scroll">{["全部渠道", ...purchaseChannels].map(v => <button key={v}
                                                                                          className={platform === v ? "active" : ""}
-                                                                                         onClick={() => setPlatform(v)}>{v}</button>)}</div>
+                                                                                         onClick={() => { setPage(1); setPlatform(v); }}>{v}</button>)}</div>
         <button type="button" className={`order-more-filters-toggle ${settlement !== "全部结款状态" ? "active" : ""}`}
                 aria-expanded={moreFiltersOpen} aria-controls="buyer-order-advanced-filters"
                 onClick={() => setMoreFiltersOpen(open => !open)}>
@@ -1542,14 +1561,30 @@ function BuyerOrders({
             <span className="order-more-filters-chevron" aria-hidden="true">{moreFiltersOpen ? "收起⌃" : "展开⌄"}</span>
         </button>
         <div id="buyer-order-advanced-filters" className="order-advanced-panel" hidden={!moreFiltersOpen}><label className="buyer-settlement-filter"><span>结款状态</span>
-            <select aria-label="结款状态" value={settlement} onChange={event => setSettlement(event.target.value)}>
+            <select aria-label="结款状态" value={settlement} onChange={event => { setPage(1); setSettlement(event.target.value); }}>
                 <option>全部结款状态</option><option>已结款</option><option>未结款</option>
             </select></label></div>
         <SectionHead title="我的采购订单" note={orderListSummary(visible)}/>
-        <div className="order-list">{visible.map(order => <BuyerOrderCard key={order.id} order={order}
+        <OrderPagination {...pagination} onPageChange={changePage} position="top"/>
+        <div className="order-list">{pagination.items.map(order => <BuyerOrderCard key={order.id} order={order}
                                                                           onOpen={() => onOpen(order.id)}
                                                                           onEdit={() => onEdit(order.id)}/>)}</div>
+        <OrderPagination {...pagination} onPageChange={changePage} position="bottom"/>
     </section>;
+}
+
+function OrderPagination({page, pageCount, start, end, total, paginated, position, onPageChange}: ReturnType<typeof paginateOrders<PurchaseOrder>> & {position: "top" | "bottom"; onPageChange: (page: number) => void}) {
+    if (!paginated) return null;
+    return <nav className="order-pagination" aria-label={`订单分页（${position === "top" ? "列表顶部" : "列表底部"}）`}>
+        <span className="order-pagination-range">显示第 {start}–{end} 笔，共 {total} 笔</span>
+        <div className="order-pagination-controls">
+            <button type="button" aria-label="上一页" disabled={page === 1} onClick={() => onPageChange(page - 1)}>‹ 上一页</button>
+            <label><span>页码</span><select aria-label="跳转页码" value={page} onChange={event => onPageChange(Number(event.target.value))}>
+                {Array.from({length: pageCount}, (_, index) => <option value={index + 1} key={index + 1}>{index + 1} / {pageCount}</option>)}
+            </select></label>
+            <button type="button" aria-label="下一页" disabled={page === pageCount} onClick={() => onPageChange(page + 1)}>下一页 ›</button>
+        </div>
+    </nav>;
 }
 
 function AdminProfile({
