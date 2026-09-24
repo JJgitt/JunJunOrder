@@ -16,18 +16,33 @@ const uid=(prefix:string)=>`${prefix}_${crypto.randomUUID()}`;
 const orderId=()=>{const clock=serverClock();return `PO${dateKey(clock.now,clock.timeZone).replaceAll("-","")}-${crypto.randomUUID().slice(0,6).toUpperCase()}`;};
 const string=(value:unknown)=>typeof value==="string"?value.trim():"";
 const validNoticeDate=(value:string)=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(`${value}T00:00:00Z`))&&new Date(`${value}T00:00:00Z`).toISOString().slice(0,10)===value;
-const positiveInt=(value:unknown,fallback=1)=>Math.max(1,Math.floor(Number(value)||fallback));
-const cents=(value:unknown)=>Math.max(0,Math.round(Number(value)*100));
+const maxDbInt=2_147_483_647;
+const positiveInt=(value:unknown,fallback=1)=>{
+  if(value==null||value==="")return fallback;
+  const parsed=Number(value);
+  return Number.isInteger(parsed)&&parsed>=1&&parsed<=maxDbInt?parsed:NaN;
+};
+const cents=(value:unknown)=>{
+  const amount=Math.round(Number(value)*100);
+  return Number.isFinite(amount)&&amount<=maxDbInt?Math.max(0,amount):NaN;
+};
 const optionalPositiveCents=(value:unknown)=>{const text=typeof value==="number"?String(value):string(value);if(!text)return null;const amount=Math.round(Number(text)*100);return Number.isFinite(amount)&&amount>0&&amount<=2_147_483_647?amount:undefined};
 const conflict=(message:string)=>new Response(JSON.stringify({error:message}),{status:409,headers:{"content-type":"application/json"}});
 const notFound=(message:string)=>new Response(JSON.stringify({error:message}),{status:404,headers:{"content-type":"application/json"}});
 
 type ItemInput={id:string;title:string;sku:string;size:string;qty:number;amountCents:number;purchaseCourierCompany:string;purchaseCourierNo:string};
-const parseItems=(value:unknown):ItemInput[]=>(Array.isArray(value)?value:[]).slice(0,20).map(item=>{
+const parseItems=(value:unknown):ItemInput[]=>(Array.isArray(value)?value:[]).slice(0,21).map(item=>{
   const record=item&&typeof item==="object"?item as Record<string,unknown>:{};
   return {id:string(record.id),title:string(record.title),sku:string(record.sku),size:string(record.size),qty:positiveInt(record.qty),amountCents:cents(record.amount),purchaseCourierCompany:string(record.purchaseCourierCompany),purchaseCourierNo:string(record.purchaseCourierNo)};
 });
-const invalidItems=(items:ItemInput[])=>!items.length||items.some(item=>!item.title||!item.sku||!item.size||item.amountCents<=0||!item.purchaseCourierCompany||!item.purchaseCourierNo);
+const itemValidationError=(items:ItemInput[])=>{
+  if(items.length>20)return "每笔采购单最多录入 20 个商品";
+  const ids=items.map(item=>item.id).filter(Boolean);
+  if(new Set(ids).size!==ids.length)return "同一个商品行不能重复提交";
+  if(!items.length||items.some(item=>!item.title||!item.sku||!item.size||!Number.isInteger(item.qty)||item.qty<1||!Number.isInteger(item.amountCents)||item.amountCents<=0||!item.purchaseCourierCompany||!item.purchaseCourierNo))
+    return "请完整填写每个商品的信息、采购快递公司与采购快递单号，并检查数量与金额";
+  return null;
+};
 const buyerEditableStatuses=["待审核","在途","已驳回"] as const;
 
 async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
@@ -44,10 +59,23 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
   const imageRows=rows.length?await db.select({id:orderImages.id,orderId:orderImages.orderId,kind:orderImages.kind,fileName:orderImages.fileName,uploadedBy:orderImages.uploadedBy,createdAt:orderImages.createdAt}).from(orderImages).where(inArray(orderImages.orderId,rows.map(row=>row.id))):[];
   const itemRows=rows.length?await db.select().from(orderItems).where(inArray(orderItems.orderId,rows.map(row=>row.id))):[];
   const approvals=rows.length?await db.select({orderId:auditLogs.entityId,createdAt:auditLogs.createdAt}).from(auditLogs).where(and(eq(auditLogs.entityType,"purchase_order"),eq(auditLogs.action,"approve"),inArray(auditLogs.entityId,rows.map(row=>row.id)))).orderBy(desc(auditLogs.createdAt)):[];
+  const itemsByOrder=new Map<string,typeof itemRows>();
+  for(const item of itemRows){
+    const group=itemsByOrder.get(item.orderId);
+    if(group)group.push(item);else itemsByOrder.set(item.orderId,[item]);
+  }
+  const orderImagesByOrder=new Map<string,typeof imageRows>();
+  const settlementImagesByOrder=new Map<string,typeof imageRows>();
+  for(const image of imageRows){
+    const groups=image.kind==="order"?orderImagesByOrder:image.kind==="settlement"?settlementImagesByOrder:null;
+    if(!groups)continue;
+    const group=groups.get(image.orderId);
+    if(group)group.push(image);else groups.set(image.orderId,[image]);
+  }
   const approvedAt=new Map<string,string>();
   for(const event of approvals)if(!approvedAt.has(event.orderId))approvedAt.set(event.orderId,event.createdAt);
   const orders=rows.map(row=>{
-    const rawItems=itemRows.filter(item=>item.orderId===row.id);
+    const rawItems=itemsByOrder.get(row.id)??[];
     const allShipped=rawItems.length>0&&rawItems.every(item=>item.shippedAt);
     const derived=row.status==="已入库"?(allShipped?"已发货":"待发货"):row.status;
     const status=!isAdmin&&["已入库","待发货","已发货"].includes(row.status)?"已入库":derived;
@@ -68,15 +96,23 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
       settled:row.settled,settledAt:row.settledAt??undefined,settledAmount:row.settledAmountCents==null?undefined:row.settledAmountCents/100,receivedAt:row.receivedAt??undefined,
       ...(isAdmin?{purchaserPhone:phones.get(row.purchaserId)??"",purchaserWechatId:wechatIds.get(row.purchaserId)??""}:{}),
       title:items[0]?.title??"",itemCount:items.length,amount:items.reduce((sum,item)=>sum+item.amount,0),items,
-      images:imageRows.filter(image=>image.orderId===row.id&&image.kind==="order").map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
-      settlementProofs:imageRows.filter(image=>image.orderId===row.id&&image.kind==="settlement").map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
+      images:(orderImagesByOrder.get(row.id)??[]).map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
+      settlementProofs:(settlementImagesByOrder.get(row.id)??[]).map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
       ...(isAdmin?{...(row.location?{location:row.location}:{}),settledByName:row.settledBy?names.get(row.settledBy)??"管理员":undefined}:{}),
     };
   });
   let stock:Array<{sku:string;title:string;size:string;count:number;locations:string[]}>=[];
   if(isAdmin){
     const [items,lots]=await Promise.all([db.select().from(inventory),db.select().from(inventoryLots).where(isNull(inventoryLots.shippedAt))]);
-    stock=items.map(item=>({sku:item.sku,title:item.title,size:item.size,count:item.quantity,locations:Array.from(new Set(lots.filter(lot=>lot.sku===item.sku&&lot.size===item.size).map(lot=>lot.location)))}));
+    const locationsBySku=new Map<string,Map<string,Set<string>>>();
+    for(const lot of lots){
+      let bySize=locationsBySku.get(lot.sku);
+      if(!bySize){bySize=new Map();locationsBySku.set(lot.sku,bySize);}
+      let locations=bySize.get(lot.size);
+      if(!locations){locations=new Set();bySize.set(lot.size,locations);}
+      locations.add(lot.location);
+    }
+    stock=items.map(item=>({sku:item.sku,title:item.title,size:item.size,count:item.quantity,locations:Array.from(locationsBySku.get(item.sku)?.get(item.size)??[])}));
   }
   const completedNoticeCutoff=new Date(timestamp(clock.now)-7*24*60*60*1000).toISOString();
   const notices=isAdmin?await db.select().from(dashboardNotices).where(or(eq(dashboardNotices.completed,false),gte(dashboardNotices.completedAt,completedNoticeCutoff))).orderBy(desc(dashboardNotices.createdAt)):[];
@@ -129,7 +165,8 @@ export async function POST(request:Request){
       const platform=string(body.platform),platformNo=string(body.platformNo);
       const items=parseItems(body.items);
       if(!platform)return Response.json({error:"请填写采购渠道"},{status:400});
-      if(invalidItems(items))return Response.json({error:"请完整填写每个商品的信息、采购快递公司与采购快递单号"},{status:400});
+      const itemError=itemValidationError(items);
+      if(itemError)return Response.json({error:itemError},{status:400});
       const courierCompany=items[0].purchaseCourierCompany,courierNo=items[0].purchaseCourierNo;
       const id=orderId(),timestamp=now();
       await db.transaction(async tx=>{
@@ -144,7 +181,8 @@ export async function POST(request:Request){
       const id=string(body.orderId),platform=string(body.platform),platformNo=string(body.platformNo);
       const items=parseItems(body.items);
       if(!id||!platform)return Response.json({error:"请填写采购渠道"},{status:400});
-      if(invalidItems(items))return Response.json({error:"请完整填写每个商品的信息、采购快递公司与采购快递单号"},{status:400});
+      const itemError=itemValidationError(items);
+      if(itemError)return Response.json({error:itemError},{status:400});
       const courierCompany=items[0].purchaseCourierCompany,courierNo=items[0].purchaseCourierNo;
       await db.transaction(async tx=>{
         const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,id)).for("update").limit(1);
@@ -165,7 +203,8 @@ export async function POST(request:Request){
       const id=string(body.orderId),platform=string(body.platform),platformNo=string(body.platformNo);
       const items=parseItems(body.items);
       if(!id||!platform)return Response.json({error:"请填写采购渠道"},{status:400});
-      if(invalidItems(items))return Response.json({error:"请完整填写每个商品的信息、采购快递公司与采购快递单号"},{status:400});
+      const itemError=itemValidationError(items);
+      if(itemError)return Response.json({error:itemError},{status:400});
       const courierCompany=items[0].purchaseCourierCompany,courierNo=items[0].purchaseCourierNo;
       await db.transaction(async tx=>{
         const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,id)).for("update").limit(1);
@@ -192,9 +231,9 @@ export async function POST(request:Request){
           const lot=lotByItem.get(old.id);
           if(lot){
             await tx.update(inventory).set({quantity:sql`greatest(0,${inventory.quantity}-${lot.qty})`,updatedAt:timestamp}).where(and(eq(inventory.sku,lot.sku),eq(inventory.size,lot.size)));
+            await tx.insert(inventoryMovements).values({id:uid("move"),orderId:id,sku:lot.sku,size:lot.size,changeQty:-lot.qty,type:"adjust",location:lot.location,actorId:user.id,createdAt:timestamp});
             await tx.delete(inventoryLots).where(eq(inventoryLots.itemId,old.id));
           }
-          await tx.delete(inventoryMovements).where(and(eq(inventoryMovements.orderId,id),eq(inventoryMovements.sku,old.sku),eq(inventoryMovements.size,old.size)));
           await tx.delete(orderItems).where(eq(orderItems.id,old.id));
         }
         for(const item of items){
@@ -208,10 +247,15 @@ export async function POST(request:Request){
             await tx.update(orderItems).set({title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents,purchaseCourierCompany:item.purchaseCourierCompany,purchaseCourierNo:item.purchaseCourierNo,updatedAt:timestamp}).where(eq(orderItems.id,old.id));
             const lot=lotByItem.get(old.id);
             if(lot){
-              await tx.update(inventory).set({quantity:sql`greatest(0,${inventory.quantity}-${lot.qty})`,updatedAt:timestamp}).where(and(eq(inventory.sku,lot.sku),eq(inventory.size,lot.size)));
-              await tx.insert(inventory).values({sku:item.sku,size:item.size,title:item.title,quantity:item.qty,updatedAt:timestamp}).onConflictDoUpdate({target:[inventory.sku,inventory.size],set:{title:item.title,quantity:sql`${inventory.quantity}+${item.qty}`,updatedAt:timestamp}});
-              await tx.update(inventoryLots).set({sku:item.sku,size:item.size,qty:item.qty}).where(eq(inventoryLots.itemId,old.id));
-              await tx.update(inventoryMovements).set({sku:item.sku,size:item.size,changeQty:item.qty}).where(and(eq(inventoryMovements.orderId,id),eq(inventoryMovements.type,"receive"),eq(inventoryMovements.sku,old.sku),eq(inventoryMovements.size,old.size)));
+              if(lot.sku!==item.sku||lot.size!==item.size||lot.qty!==item.qty){
+                await tx.update(inventory).set({quantity:sql`greatest(0,${inventory.quantity}-${lot.qty})`,updatedAt:timestamp}).where(and(eq(inventory.sku,lot.sku),eq(inventory.size,lot.size)));
+                await tx.insert(inventoryMovements).values({id:uid("move"),orderId:id,sku:lot.sku,size:lot.size,changeQty:-lot.qty,type:"adjust",location:lot.location,actorId:user.id,createdAt:timestamp});
+                await tx.insert(inventory).values({sku:item.sku,size:item.size,title:item.title,quantity:item.qty,updatedAt:timestamp}).onConflictDoUpdate({target:[inventory.sku,inventory.size],set:{title:item.title,quantity:sql`${inventory.quantity}+${item.qty}`,updatedAt:timestamp}});
+                await tx.insert(inventoryMovements).values({id:uid("move"),orderId:id,sku:item.sku,size:item.size,changeQty:item.qty,type:"receive",location:lot.location,actorId:user.id,createdAt:timestamp});
+                await tx.update(inventoryLots).set({sku:item.sku,size:item.size,qty:item.qty}).where(eq(inventoryLots.itemId,old.id));
+              }else if(old.title!==item.title){
+                await tx.update(inventory).set({title:item.title,updatedAt:timestamp}).where(and(eq(inventory.sku,item.sku),eq(inventory.size,item.size)));
+              }
             }
           }else{
             const itemId=uid("item");

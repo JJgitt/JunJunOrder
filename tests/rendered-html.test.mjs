@@ -1106,7 +1106,8 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assert.match(schema,/kind: text\("kind", \{ enum: \["order", "settlement"\] \}\)\.notNull\(\)\.default\("order"\)/);
   assert.match(proofMigration,/ADD COLUMN "kind" text DEFAULT 'order' NOT NULL/);
   assert.match(proofMigration,/CHECK \("kind" IN \('order', 'settlement'\)\)/);
-  assert.match(appRoute,/settlementProofs:imageRows\.filter\(image=>image\.orderId===row\.id&&image\.kind==="settlement"\)/);
+  assert.match(appRoute,/const settlementImagesByOrder=new Map<string,typeof imageRows>\(\)/);
+  assert.match(appRoute,/settlementProofs:\(settlementImagesByOrder\.get\(row\.id\)\?\?\[\]\)\.map/);
   const settleBlock=appRoute.slice(appRoute.indexOf('if(action==="settle-order")'),appRoute.indexOf('if(action==="revert-receive")'));
   assert.doesNotMatch(settleBlock,/set\(\{[^}]*status:/);
   const shipBlock=appRoute.slice(appRoute.indexOf('if(action==="ship")'),appRoute.indexOf('if(action==="update-shipping")'));

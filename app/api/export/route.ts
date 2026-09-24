@@ -2,12 +2,12 @@ import { asc, desc, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
 import { orderItems, purchaseOrders, users } from "@/db/schema";
 import { assertSameOrigin, requireAdmin, requireAppUser, routeError } from "@/lib/auth";
+import { csvCell } from "@/lib/export-csv";
 import { createOrdersWorkbook } from "@/lib/order-export";
 import { serverClock } from "@/lib/server-time";
 import { dateKey, formatDateTime } from "@/lib/time";
 
 export const dynamic="force-dynamic";
-const csv=(value:unknown)=>`"${String(value??"").replaceAll('"','""')}"`;
 
 export async function GET(request:Request){
   try{
@@ -35,7 +35,7 @@ export async function GET(request:Request){
         return [order.id,order.platform,order.platformOrderNo,item.title,item.sku,item.size,item.qty,(item.amountCents/100).toFixed(2),item.purchaseCourierCompany||order.courierCompany,item.purchaseCourierNo||order.courierNo,status,order.settled?"已结款":"未结款",order.settledAmountCents==null?"":(order.settledAmountCents/100).toFixed(2),order.settledAt?formatDateTime(order.settledAt,clock.timeZone):"",names.get(order.purchaserId),order.location,item.resaleOrderNo,item.salePriceCents==null?"":(item.salePriceCents/100).toFixed(2),item.outboundCourierNo,formatDateTime(order.createdAt,clock.timeZone)];
       });
     });
-    const content="\uFEFF"+[header,...rows].map(row=>row.map(csv).join(",")).join("\r\n");
+    const content="\uFEFF"+[header,...rows].map(row=>row.map(csvCell).join(",")).join("\r\n");
     return new Response(content,{headers:{"content-type":"text/csv; charset=utf-8","content-disposition":`attachment; filename="junjun-orders-${dateKey(clock.now,clock.timeZone)}.csv"`,"cache-control":"no-store"}});
   }catch(error){
     return routeError(error);
