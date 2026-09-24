@@ -6,6 +6,7 @@ import {useRouter} from "next/navigation";
 import Image from "next/image";
 import {courierTrackingUrl, findOrdersByCourierNo, findTransitCandidatesByCourierTail, normalizeCourierNo} from "@/lib/courier";
 import {buildOrderCopyText} from "@/lib/order-copy";
+import {monthlyFinance} from "@/lib/dashboard-finance";
 import {paginateOrders} from "@/lib/order-pagination";
 import {postReceiptTimelineEvents} from "@/lib/order-timeline";
 import {dateKey, dayRange, timestamp, waitingLabel, type ServerClock} from "@/lib/time";
@@ -697,6 +698,7 @@ function AdminDashboard({
     const inToday = orders.filter(o => o.receivedAt && dateKey(o.receivedAt, timeZone) === today).length;
     const purchase = orders.reduce((sum, o) => sum + o.amount, 0);
     const sales = orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + (i.salePrice ?? 0), 0), 0);
+    const monthly = monthlyFinance(orders, now, timeZone, {timestamp, dateKey});
     async function submitNotice(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         const content = noticeDraft.trim();
@@ -799,9 +801,14 @@ function AdminDashboard({
         <div className="finance-card">
             <div><span>采购总额</span><b>{money(purchase)}</b></div>
             <div><span>销售总额</span><b>{money(sales)}</b></div>
-            <div className="profit">
+            <div className="profit cumulative-profit">
                 <span>毛利润（估）</span><b>{money(Math.max(0, sales - orders.reduce((s, o) => s + o.items.filter(i => i.salePrice).reduce((x, i) => x + i.amount, 0), 0)))}</b>
             </div>
+            <h4 className="finance-month-heading">本月 · {monthly.month}</h4>
+            <div><span>月采购额</span><b>{money(monthly.purchase)}</b></div>
+            <div><span>月销售额</span><b>{money(monthly.sales)}</b></div>
+            <div className={`profit ${monthly.profit < 0 ? "negative" : ""}`}><span>月利润（估）</span><b>{money(monthly.profit)}</b></div>
+            <p className="finance-note">采购按录单时间统计（不含驳回）；销售与利润按发货时间及已填写的预估售价计算。{monthly.unpricedShippedQuantity > 0 ? `本月另有 ${monthly.unpricedShippedQuantity} 件已发货商品未填售价，未计入销售与利润。` : ""}</p>
         </div>
     </section>;
 }

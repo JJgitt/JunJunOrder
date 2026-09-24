@@ -1064,6 +1064,16 @@ test("completed dashboard notices show their completion time in the server time 
   assertJsMatch(dashboard,/<time[^>]*dateTime=\{notice\.completedAt\}[^>]*>完成时间：\{dateTime\(notice\.completedAt\)\}<\/time>:null/);
 });
 
+test("administrator order overview adds server-month purchase, sales and estimated profit alongside all-time totals",async()=>{
+  const page=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");
+  const dashboard=page.slice(page.indexOf("function AdminDashboard("),page.indexOf("function SectionHead("));
+  assertJsMatch(page,/import \{monthlyFinance\} from "@\/lib\/dashboard-finance"/);
+  assertJsMatch(dashboard,/monthlyFinance\(orders,now,timeZone,\{timestamp,dateKey\}\)/);
+  for(const label of ["采购总额","销售总额","毛利润（估）","月采购额","月销售额","月利润（估）"]){
+    assert.ok(dashboard.includes(`<span>${label}</span>`),`管理员订单概览缺少 ${label}`);
+  }
+});
+
 test("dashboard notice date and content can be edited with existing dates backfilled",async()=>{
   const [page,route,schema,migration,styles]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
