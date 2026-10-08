@@ -13,6 +13,7 @@
 export const recognizablePlatforms = ["京东", "拼多多", "淘宝", "唯品会", "抖音", "其他"] as const;
 export const recognizableCouriers = ["顺丰速运", "京东物流", "中通快递", "圆通速递", "申通快递", "韵达快递", "极兔速递", "邮政EMS"] as const;
 
+/** amount is the normalized whole-line paid total; model input uses a per-unit amount. */
 export type RecognizedItem = { title: string; sku: string; skuSource: "explicit" | "specification" | "title"; size: string; qty: number; amount: number | null };
 export type RecognizedOrder = {
   platform: string;
@@ -38,7 +39,7 @@ export const visionPrompt = `你是采购订单录入助手。用户会上传一
       "skuSource": "sku 的来源：截图明确标注货号/款号/型号填 explicit；仅来自颜色/款式规格填 specification；都没有填 title",
       "size": "只填写规格中的尺码部分，如 42、41.5、XS、M、L、XL、均码；不要混入颜色或款式描述；没有填空字符串",
       "qty": 购买数量（整数，默认 1）,
-      "amount": 该商品实付金额（数字，单位元）；优先取"实付/到手/合计"金额，找不到填 null
+      "amount": 该商品单件实付金额（数字，单位元）；优先取单件"实付/到手"金额，不要把多件合计直接填在这里；找不到或无法确认时填 null
     }
   ],
   "notes": ["对不确定字段的简短说明，没有则为空数组"]
@@ -49,7 +50,9 @@ export const visionPrompt = `你是采购订单录入助手。用户会上传一
 2. 数字字段输出数字类型，不要带货币符号或引号。
 3. 看不清或没有的字段按上面说明填空字符串 / null，不要猜。
 4. 多张图请合并成一份订单：渠道、订单号、快递信息取最完整的一份，商品行去重后全部保留。
-5. 若截图只有物流页、快递面单或运单号，没有商品名称/货号/尺码，items 必须输出空数组，不要编造商品；只填写能看到的快递公司和快递单号，以及能看到的平台、订单号。`;
+5. 若截图只有物流页、快递面单或运单号，没有商品名称/货号/尺码，items 必须输出空数组，不要编造商品；只填写能看到的快递公司和快递单号，以及能看到的平台、订单号。
+6. 同款商品数量大于 1 时，amount 仍只输出单件实付金额，不要乘数量，系统会统一计算 amount × qty 并回填实付合计。例如单件到手 ¥279、数量 ×2，应输出 amount:279、qty:2。
+7. 如果截图只明确显示该商品行全部数量的实付合计，单件金额应为该行实付合计 ÷ qty；保留足够小数位，不要提前舍入到两位小数，系统会在乘数量后统一精确到分。不要使用划线原价或优惠券面额，也不要把包含多个不同商品的整单合计当成其中一款的金额；无法确定单件实付时填 null 并在 notes 提醒核对。`;
 
 export const waybillPrompt = `你是快递面单识别助手。用户会上传一张快递面单、物流贴或运单照片，请只抽取快递公司和运单号。
 
@@ -116,6 +119,17 @@ const str = (value: unknown) => String(value ?? "").trim();
 const positiveInt = (value: unknown) => { const n = Math.floor(Number(value)); return Number.isFinite(n) && n > 0 ? n : 1; };
 const amountOrNull = (value: unknown) => { if (value === null || value === undefined || value === "") return null; const n = Number(String(value).replace(/[¥￥,，\s]/g, "")); return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null; };
 
+/** Multiply the extracted unit amount once, then round the whole line to integer cents. */
+const recognizedLineAmount = (value: unknown, qty: number): number | null => {
+  if (value === null || value === undefined) return null;
+  const text = String(value).replace(/[¥￥,，\s]/g, "");
+  if (!text) return null;
+  const unitAmount = Number(text);
+  if (!Number.isFinite(unitAmount) || unitAmount < 0) return null;
+  const totalCents = Math.round(unitAmount * qty * 100);
+  return Number.isSafeInteger(totalCents) && totalCents <= 2_147_483_647 ? totalCents / 100 : null;
+};
+
 const sizeToken = /(?:XXXXL|XXXL|XXL|XL|XXXS|XXS|XS|FREE|均码|S|M|L|F|\d{1,3}(?:\.\d{1,2})?)/i;
 const specificationSeparator = /[\s,，/|;；·、]+/;
 
@@ -164,6 +178,7 @@ export function normalizeRecognition(payload: unknown): RecognizedOrder {
     .map(item => (item && typeof item === "object" ? item as Record<string, unknown> : {}))
     .map(item => {
       const title = str(item.title);
+      const qty = positiveInt(item.qty);
       const specification = splitRecognizedSpecification(item.size);
       const rawSku = str(item.sku);
       const skuSource: RecognizedItem["skuSource"] = !rawSku
@@ -177,8 +192,8 @@ export function normalizeRecognition(payload: unknown): RecognizedOrder {
         sku: rawSku || specification.skuCandidate || title,
         skuSource,
         size: specification.size,
-        qty: positiveInt(item.qty),
-        amount: amountOrNull(item.amount),
+        qty,
+        amount: recognizedLineAmount(item.amount, qty),
       };
     })
     .filter(item => item.title || item.sku || item.size)

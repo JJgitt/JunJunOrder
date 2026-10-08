@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isVisionTimeout, normalizeRecognition, normalizeSettlementAmount, recognizeOrderImage } from "../lib/vision.ts";
+import { isVisionTimeout, normalizeRecognition, normalizeSettlementAmount, recognizeOrderImage, visionPrompt } from "../lib/vision.ts";
 
 test("vision timeouts are classified without treating unrelated errors as timeouts", () => {
   assert.equal(isVisionTimeout(Object.assign(new Error("request expired"), { name: "TimeoutError" })), true);
@@ -30,6 +30,97 @@ test("order recognition treats upstream HTTP and response-body timeouts alike", 
     const bodyTimeout = Object.assign(new Error("body timed out"), { name: "TimeoutError" });
     globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => { throw bodyTimeout; } });
     await assert.rejects(recognizeOrderImage(image), error => error === bodyTimeout);
+  } finally {
+    globalThis.fetch = previousFetch;
+    for (const [name, value] of [
+      ["VISION_API_BASE", previousConfig.base],
+      ["VISION_API_KEY", previousConfig.key],
+      ["VISION_MODEL", previousConfig.model],
+    ]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+
+test("recognized unit paid amounts become each product line's total paid amount", () => {
+  const result = normalizeRecognition({ items: [
+    { title: "羽绒服", size: "M", qty: 2, amount: 279 },
+    { title: "羽绒服", size: "L", qty: 3, amount: 129.99 },
+    { title: "跑鞋", qty: 1, amount: "¥439.50" },
+  ] });
+  assert.deepEqual(result.items.map(item => ({ qty: item.qty, amount: item.amount })), [
+    { qty: 2, amount: 558 },
+    { qty: 3, amount: 389.97 },
+    { qty: 1, amount: 439.5 },
+  ]);
+});
+
+test("missing or invalid recognized paid amounts remain unknown for multi-piece lines", () => {
+  for (const amount of [undefined, null, "", "¥", "￥，", "金额不明", -1, Infinity]) {
+    const result = normalizeRecognition({ items: [{ title: "外套", qty: 2, amount }] });
+    assert.equal(result.items[0].amount, null);
+    assert.equal(result.items[0].qty, 2);
+  }
+});
+
+test("line totals round only after quantity multiplication, preserving derived unit prices", () => {
+  const result = normalizeRecognition({ items: [
+    { title: "两件套", qty: 2, amount: 323.995 },
+    { title: "三件套", qty: 3, amount: 100 / 3 },
+    { title: "赠品", qty: 2, amount: 0 },
+  ] });
+  assert.deepEqual(result.items.map(item => item.amount), [647.99, 100, 0]);
+});
+
+test("unrepresentable line paid totals stay unknown instead of overflowing stored integer cents", () => {
+  const result = normalizeRecognition({ items: [
+    { title: "合法上限", qty: 1, amount: 21474836.47 },
+    { title: "总额超限", qty: 2, amount: 21474836.47 },
+    { title: "单价超限", qty: 1, amount: 21474836.48 },
+    { title: "异常大数", qty: 2, amount: Number.MAX_VALUE },
+  ] });
+  assert.deepEqual(result.items.map(item => item.amount), [21474836.47, null, null, null]);
+});
+
+test("recognized quantities default to one before calculating the line paid total", () => {
+  for (const qty of [undefined, null, 0, -2, "未知", Infinity]) {
+    const result = normalizeRecognition({ items: [{ title: "睡衣", qty, amount: 129.99 }] });
+    assert.equal(result.items[0].qty, 1);
+    assert.equal(result.items[0].amount, 129.99);
+  }
+  const result = normalizeRecognition({ items: [{ title: "睡衣", qty: "2", amount: 129.99 }] });
+  assert.equal(result.items[0].qty, 2);
+  assert.equal(result.items[0].amount, 259.98);
+});
+
+test("successful order recognition requests unit prices and converts them to line totals once", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousConfig = {
+    base: process.env.VISION_API_BASE,
+    key: process.env.VISION_API_KEY,
+    model: process.env.VISION_MODEL,
+  };
+  process.env.VISION_API_BASE = "https://example.invalid/v1";
+  process.env.VISION_API_KEY = "test-only";
+  process.env.VISION_MODEL = "test-model";
+  const image = new File([Uint8Array.of(1)], "order.jpg", { type: "image/jpeg" });
+  let requestedPrompt;
+  try {
+    globalThis.fetch = async (url, options) => {
+      assert.equal(url, "https://example.invalid/v1/chat/completions");
+      const request = JSON.parse(options.body);
+      requestedPrompt = request.messages.find(message => message.role === "system").content;
+      return Response.json({ choices: [{ message: { content: JSON.stringify({ items: [
+        { title: "同款外套", qty: 2, amount: 279 },
+        { title: "长袖睡衣", qty: 3, amount: 129.99 },
+      ] }) } }] });
+    };
+    const result = await recognizeOrderImage(image);
+    assert.deepEqual(result.items.map(item => item.amount), [558, 389.97]);
+    assert.equal(requestedPrompt, visionPrompt);
+    assert.match(requestedPrompt, /单件.*实付|实付.*单件/s);
+    assert.match(requestedPrompt, /不要.*乘.*数量|不.*乘.*数量/s);
   } finally {
     globalThis.fetch = previousFetch;
     for (const [name, value] of [

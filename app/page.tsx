@@ -1422,7 +1422,8 @@ function UploadPage({
                 }
                 return next;
             });
-            setRecognition({filled, missing, notes: data.notes});
+            setRecognition({filled, missing, notes: data.items.some(item => item.qty > 1 && item.amount != null)
+                ? [...data.notes, "多件同款的实付金额已按单件金额 × 数量计算，请核对合计。"] : data.notes});
         } catch (error) {
             setRecognition({
                 filled: [],
@@ -1580,7 +1581,7 @@ function UploadPage({
                                                   onChange={e => setFiles(Array.from(e.target.files ?? []).slice(0, 3))}/><i>＋</i><b>{files.length ? `已选择 ${files.length} 张截图` : "上传订单截图"}</b><span>持久化保存，最多 3 张、单张不超过 5MB</span></label>
             <button className="primary-button" disabled={submitting || !itemsValid || (mode === "admin" && !purchaserId)}
                     type="submit">{submitting ? "正在保存…" : editing ? (mode === "admin" ? "保存订单修改" : editing.status === "已驳回" ? "重新提交审核" : "保存修改") : mode === "admin" ? "创建采购订单" : "提交订单"}</button>
-            <p className="form-footnote">平台订单号选填；每个商品需分别填写采购快递公司与快递单号</p></form>
+            <p className="form-footnote">平台订单号选填；每个商品需分别填写采购快递公司与快递单号；实付金额为该款全部数量的合计</p></form>
     </section>;
 }
 
