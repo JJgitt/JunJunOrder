@@ -33,7 +33,9 @@ async function verifyPagination(tx, suffix) {
     };
   });
   await tx`INSERT INTO product_knowledge ${tx(fixtures, "id", "title", "sku", "aliases", "source", "created_at", "updated_at")}`;
-  const database = drizzle(tx, { schema });
+  // postgres.begin() omits the root parser options from its scoped SQL client.
+  // Keep the reserved transaction connection while supplying Drizzle's parser config.
+  const database = drizzle(Object.assign(tx, { options: db.options }), { schema });
   const modules = {
     "@/db": { getDb: () => ({ transaction: callback => callback(database) }) },
     "@/db/schema": schema,
