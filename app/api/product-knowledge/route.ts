@@ -1,4 +1,4 @@
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, count, desc, eq, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { auditLogs, productKnowledge } from "@/db/schema";
 import { assertSameOrigin, requireAdmin, requireAppUser, routeError } from "@/lib/auth";
@@ -18,8 +18,40 @@ export async function GET(request: Request) {
   try {
     const user = await requireAppUser(request);
     requireAdmin(user);
-    const rows = await getDb().select().from(productKnowledge).orderBy(desc(productKnowledge.updatedAt));
-    return Response.json({ products: rows.map(row => ({ ...row, aliases: aliasesOf(row.aliases) })) }, { headers: { "cache-control": "no-store" } });
+    const params = new URL(request.url).searchParams;
+    const requestedPage = Number(params.get("page") ?? "1");
+    const pageSize = Number(params.get("pageSize") ?? "5");
+    const query = (params.get("q") ?? "").trim().toLocaleLowerCase();
+    if (!Number.isSafeInteger(requestedPage) || requestedPage < 1 || requestedPage > 2_147_483_647 || ![5, 10, 50].includes(pageSize) || query.length > 200) {
+      return Response.json({ error: "分页参数无效，每页条数仅支持 5、10、50，搜索内容最多 200 字" }, { status: 400 });
+    }
+    // Literal substring matching preserves searches containing %, _ and JSON punctuation.
+    // Ignore malformed legacy aliases just as aliasesOf() does when reading a product.
+    const filter = query ? or(
+      sql`strpos(lower(${productKnowledge.title}), ${query}) > 0`,
+      sql`strpos(lower(${productKnowledge.sku}), ${query}) > 0`,
+      sql`exists (select 1 from jsonb_array_elements(
+        case when ${productKnowledge.aliases} is json array then ${productKnowledge.aliases}::jsonb else '[]'::jsonb end
+      ) as alias(value) where jsonb_typeof(alias.value) = 'string' and strpos(lower(alias.value #>> '{}'), ${query}) > 0)`,
+    ) : undefined;
+    const result = await getDb().transaction(async tx => {
+      const [counts] = await tx.select({
+        allTotal: count(),
+        historicalTotal: sql<number>`count(*) filter (where ${productKnowledge.source} = 'historical')::int`,
+        total: sql<number>`count(*) filter (where ${filter ?? sql`true`})::int`,
+      }).from(productKnowledge);
+      const totalPages = Math.max(1, Math.ceil(counts.total / pageSize));
+      const page = Math.min(requestedPage, totalPages);
+      const rows = counts.total ? await tx.select().from(productKnowledge).where(filter)
+        .orderBy(desc(productKnowledge.updatedAt), desc(productKnowledge.id))
+        .limit(pageSize).offset((page - 1) * pageSize) : [];
+      return {
+        products: rows.map(row => ({ ...row, aliases: aliasesOf(row.aliases) })),
+        pagination: { page, pageSize, total: counts.total, totalPages },
+        counts: { allTotal: counts.allTotal, historicalTotal: counts.historicalTotal },
+      };
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+    return Response.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) { return routeError(error); }
 }
 
