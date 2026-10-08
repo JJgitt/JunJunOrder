@@ -167,12 +167,18 @@ export async function POST(request:Request){
       if(!platform)return Response.json({error:"请填写采购渠道"},{status:400});
       const itemError=itemValidationError(items);
       if(itemError)return Response.json({error:itemError},{status:400});
+      const purchaserId=body.purchaserId===undefined?user.id:string(body.purchaserId);
+      if(purchaserId!==user.id)requireAdmin(user);
       const courierCompany=items[0].purchaseCourierCompany,courierNo=items[0].purchaseCourierNo;
       const id=orderId(),timestamp=now();
       await db.transaction(async tx=>{
-        await tx.insert(purchaseOrders).values({id,platform,platformOrderNo:platformNo,courierCompany,courierNo,purchaserId:user.id,createdAt:timestamp,updatedAt:timestamp});
+        if(purchaserId!==user.id){
+          const [purchaser]=await tx.select().from(users).where(eq(users.id,purchaserId)).for("share").limit(1);
+          if(!purchaser||!purchaser.active||purchaser.approvalStatus!=="approved")throw conflict("请选择已审批通过且启用的采购人");
+        }
+        await tx.insert(purchaseOrders).values({id,platform,platformOrderNo:platformNo,courierCompany,courierNo,purchaserId,createdAt:timestamp,updatedAt:timestamp});
         await tx.insert(orderItems).values(items.map(item=>({id:uid("item"),orderId:id,title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents,purchaseCourierCompany:item.purchaseCourierCompany,purchaseCourierNo:item.purchaseCourierNo,createdAt:timestamp,updatedAt:timestamp})));
-        await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"create",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({itemCount:items.length})});
+        await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"create",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({itemCount:items.length,purchaserId})});
       });
       return Response.json({data:await snapshot(user),createdOrderId:id},{status:201});
     }

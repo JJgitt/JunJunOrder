@@ -486,7 +486,7 @@ export default function Home() {
             const action = editing ? (currentUser?.role === "admin" ? "update-order" : "resubmit-order") : "create-order";
             const result = await mutate(action, {
                 ...(editing ? {orderId: order.id} : {}),
-                ...(editing && currentUser?.role === "admin" ? {purchaserId: order.purchaserId} : {}),
+                ...(currentUser?.role === "admin" ? {purchaserId: order.purchaserId} : {}),
                 platform: order.platform,
                 platformNo: order.platformNo,
                 courierCompany: order.courierCompany,
@@ -566,6 +566,7 @@ export default function Home() {
 
             {role === "admin" && adminTab === "upload" &&
                 <UploadPage key={`upload-${selectedId || "new"}-${uploadNonce}`} mode="admin"
+                            currentUserId={currentUser.id}
                             people={people}
                             editing={orders.find(item => item.id === selectedId)} onCancel={() => setAdminTab("orders")}
                             onSubmit={upload}/>}
@@ -1333,10 +1334,11 @@ function UploadPage({
                         mode,
                         editing,
                         people = [],
+                        currentUserId = "",
                         onCancel,
                         onSubmit
-                    }: { mode: "admin" | "buyer"; editing?: PurchaseOrder; people?: AppUser[]; onCancel?: () => void; onSubmit: (order: PurchaseOrder, files: File[]) => Promise<void> }) {
-    const [purchaserId, setPurchaserId] = useState(editing?.purchaserId ?? "");
+                    }: { mode: "admin" | "buyer"; editing?: PurchaseOrder; people?: AppUser[]; currentUserId?: string; onCancel?: () => void; onSubmit: (order: PurchaseOrder, files: File[]) => Promise<void> }) {
+    const [purchaserId, setPurchaserId] = useState(editing?.purchaserId ?? currentUserId);
     const purchaserOptions = people.filter(person => person.id === editing?.purchaserId || (person.active && person.approvalStatus === "approved"));
     const [platform, setPlatform] = useState(editing?.platform ?? "京东"), [platformNo, setPlatformNo] = useState(editing?.platformNo ?? ""), [files, setFiles] = useState<File[]>([]), [submitting, setSubmitting] = useState(false);
     const [items, setItems] = useState<OrderItemDraft[]>(() => editing ? editing.items.map(item => {
@@ -1437,7 +1439,7 @@ function UploadPage({
 
     async function submit(event: FormEvent) {
         event.preventDefault();
-        if (!itemsValid) return;
+        if (!itemsValid || (mode === "admin" && !purchaserId)) return;
         const normalizedItems = items.map(item => ({
             id: item.id,
             title: item.title.trim(),
@@ -1458,7 +1460,7 @@ function UploadPage({
                 courierNo: normalizedItems[0].purchaseCourierNo,
                 status: "待审核",
                 purchaser: "",
-                ...(mode === "admin" && editing ? {purchaserId} : {}),
+                ...(mode === "admin" ? {purchaserId} : {}),
                 settled: editing?.settled ?? false,
                 settledAt: editing?.settledAt,
                 settledAmount: editing?.settledAmount,
@@ -1486,11 +1488,12 @@ function UploadPage({
         <UploadTutorialLink compact/>
         {editing?.rejectReason && <div className="inline-warning"><b>驳回原因</b><span>{editing.rejectReason}</span></div>}
         <form className="purchase-form" autoComplete="off" onSubmit={submit}>
-            {mode === "admin" && editing && <label><span>采购人 *</span>
-                <select value={purchaserId} required onChange={event => setPurchaserId(event.target.value)}>
-                    {!purchaserOptions.some(person => person.id === purchaserId) && <option value={purchaserId}>{editing.purchaser}（当前采购人）</option>}
+            {mode === "admin" && <label><span>采购人 *</span>
+                <select value={purchaserId} required disabled={submitting} onChange={event => setPurchaserId(event.target.value)}>
+                    {!purchaserId && <option value="" disabled>请选择采购人</option>}
+                    {editing && !purchaserOptions.some(person => person.id === purchaserId) && <option value={purchaserId}>{editing.purchaser}（当前采购人）</option>}
                     {purchaserOptions.map(person => <option key={person.id} value={person.id}>
-                        {person.name} · {person.wechatId}{person.id === editing.purchaserId ? "（当前）" : ""}
+                        {person.name} · {person.wechatId}{person.id === currentUserId ? "（自己）" : person.id === editing?.purchaserId ? "（当前）" : ""}
                     </option>)}
                 </select>
             </label>}
@@ -1575,7 +1578,7 @@ function UploadPage({
             </div>
             <label className="upload-zone"><input type="file" accept="image/*" multiple
                                                   onChange={e => setFiles(Array.from(e.target.files ?? []).slice(0, 3))}/><i>＋</i><b>{files.length ? `已选择 ${files.length} 张截图` : "上传订单截图"}</b><span>持久化保存，最多 3 张、单张不超过 5MB</span></label>
-            <button className="primary-button" disabled={submitting || !itemsValid}
+            <button className="primary-button" disabled={submitting || !itemsValid || (mode === "admin" && !purchaserId)}
                     type="submit">{submitting ? "正在保存…" : editing ? (mode === "admin" ? "保存订单修改" : editing.status === "已驳回" ? "重新提交审核" : "保存修改") : mode === "admin" ? "创建采购订单" : "提交订单"}</button>
             <p className="form-footnote">平台订单号选填；每个商品需分别填写采购快递公司与快递单号</p></form>
     </section>;
