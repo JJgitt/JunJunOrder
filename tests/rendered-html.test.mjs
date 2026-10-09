@@ -29,6 +29,40 @@ function assertCssMatch(source, pattern) {
   assert.match(compactCss(source), pattern);
 }
 
+test("settled list entries use readable gold distinct from pending and shipping", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assertJsMatch(page, /className=\{`order-settlement \$\{order\.settled \? "settled" : "pending"\}`\}/);
+  const rule = selector => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = css.match(new RegExp(`${escaped}\\s*\\{([^}]+)\\}`));
+    assert.ok(match, `${selector} must have a dedicated rule`);
+    return match[1];
+  };
+  assert.match(rule(".order-settlement"), /background: #f8fafc/);
+  const settled = rule(".order-settlement.settled");
+  assert.match(settled, /border-color: #e4c36a/);
+  assert.match(settled, /box-shadow: inset 3px 0 0 #c99724/);
+  assert.match(rule(".order-settlement.settled > span"), /font-weight: 700/);
+  const backgrounds = [...settled.match(/background: ([^;]+)/)[1].matchAll(/#[\da-f]{6}/gi)].map(match => match[0]);
+  assert.equal(backgrounds.length, 2, "gold gradient must have two color stops");
+  const text = settled.match(/(?:^|;)\s*color: (#[\da-f]{6})/i)[1];
+  const time = rule(".order-settlement.settled time").match(/color: (#[\da-f]{6})/i)[1];
+  const luminance = hex => {
+    const channels = hex.slice(1).match(/../g).map(channel => {
+      const value = parseInt(channel, 16) / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  };
+  for (const foreground of [text, time]) {
+    for (const background of backgrounds) {
+      const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+      assert.ok((values[0] + 0.05) / (values[1] + 0.05) >= 4.5, `${foreground} must remain readable on ${background}`);
+    }
+  }
+});
+
 test("touch forms prevent iOS focus zoom while keeping field text compact", async () => {
   const css = await readFile(new URL("../app/touch-forms.css", import.meta.url), "utf8");
   const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");

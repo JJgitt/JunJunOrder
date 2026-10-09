@@ -791,10 +791,10 @@ button:active {
     gap: 8px;
     margin-top: 8px;
     padding: 8px 9px;
-    border: 1px solid #f0dfba;
+    border: 1px solid #e2e8f0;
     border-radius: 10px;
-    background: #fffbf1;
-    color: #8b6d32
+    background: #f8fafc;
+    color: #64748b
 }
 
 .order-settlement > span {
@@ -825,9 +825,18 @@ button:active {
 }
 
 .order-settlement.settled {
-    border-color: #cce8d5;
-    background: #f0faf3;
-    color: #17733a
+    border-color: #e4c36a;
+    background: linear-gradient(135deg, #fff9e7, #ffefbd);
+    color: #80520c;
+    box-shadow: inset 3px 0 0 #c99724
+}
+
+.order-settlement.settled > span {
+    font-weight: 700
+}
+
+.order-settlement.settled time {
+    color: #846327
 }
 
 .settlement-action {
