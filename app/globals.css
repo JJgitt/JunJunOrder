@@ -5157,6 +5157,72 @@ button:active {
     gap: 7px
 }
 
+.order-images:not(.settlement-proof-gallery) .order-images-head-actions button {
+    border-color: #c7d8ff;
+    background: #f1f6ff;
+    color: var(--primary-dark)
+}
+
+.order-image-upload-note {
+    margin: 0 0 14px;
+    padding: 12px;
+    border-radius: 12px;
+    background: #f1f6ff;
+    color: #526581;
+    font-size: 12px;
+    line-height: 1.7
+}
+
+.order-image-upload-list {
+    display: grid;
+    gap: 8px;
+    margin: 0 0 14px;
+    padding: 0;
+    list-style: none
+}
+
+.order-image-upload-list li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px
+}
+
+.order-image-upload-list li > div {
+    flex: 1;
+    min-width: 0
+}
+
+.order-image-upload-list b {
+    display: block;
+    overflow-wrap: anywhere;
+    font-size: 12px
+}
+
+.order-image-upload-list small {
+    color: #64748b;
+    font-size: 11px
+}
+
+.order-image-upload-list button {
+    flex: none;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 12px
+}
+
+.order-image-upload-error {
+    color: #b91c1c;
+    font-size: 12px;
+    line-height: 1.6
+}
+
 .order-images-grid button {
     padding: 0;
     text-align: left;

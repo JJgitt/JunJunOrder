@@ -1,10 +1,11 @@
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, open, unlink } from "node:fs/promises";
 import path from "node:path";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { orderImages, purchaseOrders } from "@/db/schema";
+import { auditLogs, orderImages, purchaseOrders } from "@/db/schema";
 import { assertSameOrigin, requireAppUser, routeError } from "@/lib/auth";
 import { imageExtension, uploadPath } from "@/lib/file-storage";
+import { orderImageUploadError } from "@/lib/order-image-upload";
 
 export const dynamic="force-dynamic";
 export const runtime="nodejs";
@@ -17,19 +18,38 @@ export async function POST(request:Request){
     const db=getDb(),[order]=await db.select().from(purchaseOrders).where(eq(purchaseOrders.id,orderId)).limit(1);
     if(!order)return Response.json({error:"订单不存在"},{status:404});
     if(user.role!=="admin"&&order.purchaserId!==user.id)return Response.json({error:"无权上传此订单的附件"},{status:403});
-    const files=form.getAll("files").filter((value):value is File=>value instanceof File).slice(0,3);
-    if(!files.length)return Response.json({error:"请选择图片"},{status:400});
-    const uploaded:string[]=[];
-    for(const file of files){
-      const extension=imageExtension(file.type);
-      if(!extension||file.size>5*1024*1024)throw new Error("仅支持 5MB 以内的 JPG、PNG、WebP、GIF 或 HEIC 图片");
-      const id=`img_${crypto.randomUUID()}`,objectKey=`orders/${orderId}/${id}${extension}`,target=uploadPath(objectKey);
-      await mkdir(path.dirname(target),{recursive:true});
-      await writeFile(target,Buffer.from(await file.arrayBuffer()),{flag:"wx"});
-      try{await db.insert(orderImages).values({id,orderId,kind:"order",objectKey,fileName:file.name,contentType:file.type,sizeBytes:file.size,uploadedBy:user.id});uploaded.push(id);}
-      catch(error){await unlink(target).catch(()=>undefined);throw error;}
+    const entries=form.getAll("files");
+    if(entries.some(value=>!(value instanceof File)))return Response.json({error:"请选择有效的订单图片"},{status:400});
+    const files=entries as File[],validationError=orderImageUploadError(files);
+    if(validationError)return Response.json({error:validationError},{status:400});
+    const writtenPaths:string[]=[];
+    let uploaded:{id:string;fileName:string;createdAt:string}[];
+    try{
+      uploaded=await db.transaction(async tx=>{
+        // Serialize against reassignment/deletion and recheck ownership before touching disk.
+        const [currentOrder]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,orderId)).for("update").limit(1);
+        if(!currentOrder)throw Response.json({error:"订单不存在"},{status:404});
+        if(user.role!=="admin"&&currentOrder.purchaserId!==user.id)throw Response.json({error:"无权上传此订单的附件"},{status:403});
+        const values=[];
+        for(const file of files){
+          const id=`img_${crypto.randomUUID()}`,objectKey=`orders/${orderId}/${id}${imageExtension(file.type)}`,target=uploadPath(objectKey);
+          const buffer=Buffer.from(await file.arrayBuffer());
+          await mkdir(path.dirname(target),{recursive:true});
+          // Track only files created by this request, including partially written files.
+          const handle=await open(target,"wx");
+          writtenPaths.push(target);
+          try{await handle.writeFile(buffer);}finally{await handle.close();}
+          values.push({id,orderId,kind:"order" as const,objectKey,fileName:file.name,contentType:file.type,sizeBytes:file.size,uploadedBy:user.id});
+        }
+        const rows=await tx.insert(orderImages).values(values).returning({id:orderImages.id,fileName:orderImages.fileName,createdAt:orderImages.createdAt});
+        await tx.insert(auditLogs).values({id:`audit_${crypto.randomUUID()}`,actorId:user.id,action:"append_order_images",entityType:"purchase_order",entityId:orderId,detailJson:JSON.stringify({imageIds:rows.map(row=>row.id),count:rows.length})});
+        return rows;
+      });
+    }catch(error){
+      await Promise.all(writtenPaths.map(target=>unlink(target).catch(cleanupError=>console.error("Failed to clean up new order image",cleanupError))));
+      throw error;
     }
-    return Response.json({imageIds:uploaded},{status:201});
+    return Response.json({imageIds:uploaded.map(row=>row.id),images:uploaded.map(row=>({...row,url:`/api/files/${row.id}`,uploadedBy:user.name}))},{status:201});
   }catch(error){return routeError(error);}
 }
 

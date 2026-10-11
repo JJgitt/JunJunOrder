@@ -10,6 +10,8 @@ const compile = source => ts.transpileModule(source, {
 }).outputText;
 const orderCode = compile(await readFile(new URL("../app/api/app/route.ts", import.meta.url), "utf8"));
 const imageCode = compile(await readFile(new URL("../app/api/order-images/route.ts", import.meta.url), "utf8"));
+const imageUpload = {};
+new Function("require", "exports", compile(await readFile(new URL("../lib/order-image-upload.ts", import.meta.url), "utf8")))(require, imageUpload);
 const admin = { id: "admin", name: "管理员", role: "admin", active: true, approvalStatus: "approved", phone: "", wechatId: "admin", createdAt: "2026-10-08T00:00:00.000Z" };
 const buyer = { ...admin, id: "buyer", name: "采购员", role: "buyer", wechatId: "buyer" };
 const otherAdmin = { ...admin, id: "other-admin", name: "另一管理员", wechatId: "other-admin" };
@@ -51,11 +53,14 @@ function fixture({ actor = admin, people = [admin, buyer, otherAdmin] } = {}) {
     } }),
     insert: table => ({ values: value => {
       const rows = Array.isArray(value) ? value : [value];
+      const inserted = [];
       for (const row of rows) {
         operations.push({ action: "insert", table: table.name, values: structuredClone(row) });
-        getState()[table.name].push({ ...(table === tables.purchaseOrders ? { status: "待审核", settled: false } : {}), ...structuredClone(row) });
+        const saved = { ...(table === tables.purchaseOrders ? { status: "待审核", settled: false } : {}), ...(table === tables.orderImages ? { createdAt: new Date("2026-10-08T00:00:00.000Z") } : {}), ...structuredClone(row) };
+        getState()[table.name].push(saved);
+        inserted.push(structuredClone(saved));
       }
-      return Promise.resolve();
+      return { returning: async () => inserted, then: (resolve, reject) => Promise.resolve().then(resolve, reject) };
     } }),
   });
   const db = {
@@ -77,7 +82,15 @@ function fixture({ actor = admin, people = [admin, buyer, otherAdmin] } = {}) {
     "@/lib/server-time": { serverClock: () => ({ now: "2026-10-08T00:00:00.000Z", timeZone: "Asia/Shanghai" }) },
     "@/lib/time": { dateKey: () => "2026-10-08", timestamp: value => Date.parse(value) },
     "@/lib/file-storage": { imageExtension: type => type === "image/png" ? ".png" : null, uploadPath: key => `/uploads/${key}` },
-    "node:fs/promises": { mkdir: async () => {}, writeFile: async path => { files.add(path); }, unlink: async path => { files.delete(path); } },
+    "@/lib/order-image-upload": imageUpload,
+    "node:fs/promises": {
+      mkdir: async () => {}, writeFile: async path => { files.add(path); }, unlink: async path => { files.delete(path); },
+      open: async (path, flag) => {
+        assert.equal(flag, "wx");
+        files.add(path);
+        return { writeFile: async () => {}, close: async () => {} };
+      },
+    },
   };
   const load = code => {
     const route = {};

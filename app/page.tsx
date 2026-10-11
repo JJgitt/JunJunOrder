@@ -9,6 +9,7 @@ import {buildOrderCopyText} from "@/lib/order-copy";
 import {financeMonthOptions, monthlyFinance} from "@/lib/dashboard-finance";
 import {paginateOrders} from "@/lib/order-pagination";
 import {postReceiptTimelineEvents} from "@/lib/order-timeline";
+import {orderImageUploadError} from "@/lib/order-image-upload";
 import {dateKey, dayRange, timestamp, waitingLabel, type ServerClock} from "@/lib/time";
 import type {KnowledgeMatch} from "@/lib/product-knowledge-match";
 import {fillProductIdentity} from "@/lib/product-knowledge-fill";
@@ -28,7 +29,7 @@ type AdminOrderListState = {
 type BuyerOrderListState = {
     query: string; statuses: string[]; platform: string; settlement: string; page: number; moreFiltersOpen: boolean;
 };
-type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "detail" | "reject" | "ship" | "settle" | "settlement-amount" | "settlement-proof" | null;
+type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "detail" | "order-images" | "reject" | "ship" | "settle" | "settlement-amount" | "settlement-proof" | null;
 type OrderImage = { id: string; url: string; fileName: string; uploadedBy: string; createdAt: string };
 
 type OrderItem = {
@@ -300,6 +301,8 @@ export default function Home() {
     }
 
     async function uploadOrderFiles(orderId: string, files: File[]) {
+        const validationError = orderImageUploadError(files);
+        if (validationError) throw new Error(validationError);
         const form = new FormData();
         form.set("orderId", orderId);
         files.forEach(file => form.append("files", file));
@@ -308,6 +311,14 @@ export default function Home() {
             const json = await response.json() as { error?: string };
             throw new Error(json.error ?? "图片上传失败");
         }
+        return await response.json() as {imageIds: string[]; images: OrderImage[]};
+    }
+
+    async function appendOrderImages(orderId: string, files: File[]) {
+        const result = await uploadOrderFiles(orderId, files);
+        setOrders(current => current.map(order => order.id === orderId ? {...order, images: [...order.images, ...result.images]} : order));
+        setOverlay("detail");
+        notify(`已补充 ${result.images.length} 张订单图片，原图片已保留`);
     }
 
     async function run(action: string, payload: Record<string, unknown>, success: string) {
@@ -385,6 +396,8 @@ export default function Home() {
 
     async function receive(id: string, location: string, files: File[] = []) {
         try {
+            const validationError = files.length ? orderImageUploadError(files) : null;
+            if (validationError) throw new Error(validationError);
             await mutate("receive", {orderId: id, location});
         } catch (error) {
             notify(error instanceof Error ? error.message : "入库失败");
@@ -482,6 +495,8 @@ export default function Home() {
 
     async function upload(order: PurchaseOrder, files: File[]) {
         try {
+            const validationError = files.length ? orderImageUploadError(files) : null;
+            if (validationError) throw new Error(validationError);
             const editing = orders.find(item => item.id === order.id);
             const action = editing ? (currentUser?.role === "admin" ? "update-order" : "resubmit-order") : "create-order";
             const result = await mutate(action, {
@@ -630,10 +645,13 @@ export default function Home() {
                          onSettle={() => setOverlay("settle")}
                          onSettlementAmount={() => setOverlay("settlement-amount")}
                          onSettlementProof={() => setOverlay("settlement-proof")}
+                         onOrderImages={() => setOverlay("order-images")}
                          onShipItem={(itemId) => {
                              setSelectedItemId(itemId);
                              setOverlay("ship");
                          }}/>}
+        {overlay === "order-images" && selected &&
+            <OrderImageUploadSheet key={selected.id} order={selected} onClose={() => setOverlay("detail")} onSubmit={appendOrderImages}/>}
         {role === "admin" && overlay === "revert-receive" && selected &&
             <RevertReceiveSheet order={selected} onClose={() => setOverlay(null)} onSubmit={revertReceive}/>}
         {role === "admin" && overlay === "reject" && selected &&
@@ -1578,7 +1596,7 @@ function UploadPage({
                 </div>
             </div>
             <label className="upload-zone"><input type="file" accept="image/*" multiple
-                                                  onChange={e => setFiles(Array.from(e.target.files ?? []).slice(0, 3))}/><i>＋</i><b>{files.length ? `已选择 ${files.length} 张截图` : "上传订单截图"}</b><span>持久化保存，最多 3 张、单张不超过 5MB</span></label>
+                                                  onChange={e => setFiles(Array.from(e.target.files ?? []).slice(0, 3))}/><i>＋</i><b>{files.length ? `已选择 ${files.length} 张截图` : "上传订单截图"}</b><span>持久化保存，最多 3 张、单张不超过 5MB、合计不超过 8MB</span></label>
             <button className="primary-button" disabled={submitting || !itemsValid || (mode === "admin" && !purchaserId)}
                     type="submit">{submitting ? "正在保存…" : editing ? (mode === "admin" ? "保存订单修改" : editing.status === "已驳回" ? "重新提交审核" : "保存修改") : mode === "admin" ? "创建采购订单" : "提交订单"}</button>
             <p className="form-footnote">平台订单号选填；每个商品需分别填写采购快递公司与快递单号；实付金额为该款全部数量的合计</p></form>
@@ -2042,7 +2060,7 @@ function ManualReceiveSheet({
                                                                                                  items={order.items}
                                                                                                  showItem/>}/></div>
         <OrderImages images={order.images}/><LocationPicker location={location} recentLocations={recentLocations} onChange={setLocation}/><label className="receipt-upload"><input type="file" accept="image/*" multiple
-                                                    onChange={e => setFiles(Array.from(e.target.files ?? []).slice(0, 3))}/><i>＋</i><span><b>{files.length ? `已选择 ${files.length} 张入库截图` : "入库截图（选填）"}</b><small>最多 3 张、单张不超过 5MB</small></span></label>
+                                                    onChange={e => setFiles(Array.from(e.target.files ?? []).slice(0, 3))}/><i>＋</i><span><b>{files.length ? `已选择 ${files.length} 张入库截图` : "入库截图（选填）"}</b><small>最多 3 张、单张不超过 5MB、合计不超过 8MB</small></span></label>
         <button className="primary-button receive-confirm-button" disabled={!location.trim() || busy}
                 onClick={() => void confirm()}>{busy ? "正在入库…" : "确认入库并增加库存"}</button>
         <p className="form-footnote manual-receive-note">确认后订单将变为“已入库”，对应 SKU 库存同步增加。</p></Modal>;
@@ -2060,8 +2078,9 @@ function OrderDetail({
                          onSettle,
                          onSettlementAmount,
                          onSettlementProof,
+                         onOrderImages,
                          onShipItem
-                     }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onReject: () => void; onSettle: () => void; onSettlementAmount: () => void; onSettlementProof: () => void; onShipItem: (itemId: string) => void }) {
+                     }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onReject: () => void; onSettle: () => void; onSettlementAmount: () => void; onSettlementProof: () => void; onOrderImages: () => void; onShipItem: (itemId: string) => void }) {
     const {dateTime} = useServerClock();
     const postReceiptEvents = postReceiptTimelineEvents(order, canManage, timestamp);
     return <Modal title="订单详情" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
@@ -2110,7 +2129,7 @@ function OrderDetail({
                 </div>}
             </div>)}
         </div>
-        <OrderImages images={order.images}/>
+        <OrderImages images={order.images} emptyText="暂无订单图片，可继续补充" actionLabel="补充图片" onAction={onOrderImages}/>
         {order.settled && <OrderImages images={order.settlementProofs} title="结款截图" variant="settlement"
                                       subtitle={`已结款 · ${order.settledAmount != null ? money(order.settledAmount) : "金额未记录"} · ${dateTime(order.settledAt)}`} emptyText="本次结款未上传截图"
                                       actionLabel={canManage ? order.settlementProofs.length ? "更换截图" : "补传截图" : undefined}
@@ -2137,6 +2156,55 @@ function OrderDetail({
             手动确认入库</button>}{canManage && order.receivedAt && !order.settled &&
         <button className="primary-button settlement-confirm-button" onClick={onSettle}>¥ 确认采购结款</button>}{canManage && !order.settled && readyToShip(order.status) && !order.items.some(item => item.shipped) &&
         <button className="revert-receive-button" onClick={onRevertReceive}>↩ 退回在途（撤销入库）</button>}</Modal>;
+}
+
+function OrderImageUploadSheet({order, onClose, onSubmit}: {
+    order: PurchaseOrder; onClose: () => void; onSubmit: (id: string, files: File[]) => Promise<void>
+}) {
+    const [files, setFiles] = useState<File[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState("");
+    const saving = useRef(false);
+    function chooseFiles(selected: FileList | null) {
+        const next = Array.from(selected ?? []);
+        if (!next.length) return;
+        const message = orderImageUploadError(next);
+        if (message) {setError(message); return;}
+        setFiles(next);
+        setError("");
+    }
+    async function confirm() {
+        if (saving.current) return;
+        const message = orderImageUploadError(files);
+        if (message) {setError(message); return;}
+        saving.current = true;
+        setBusy(true);
+        setError("");
+        try {
+            await onSubmit(order.id, files);
+        } catch (failure) {
+            setError(failure instanceof Error ? failure.message : "图片上传失败，请重试");
+        } finally {
+            saving.current = false;
+            setBusy(false);
+        }
+    }
+    return <Modal title="补充订单图片" subtitle={order.id} subtitleCopyValue={order.id} onClose={() => {if (!saving.current) onClose();}}>
+        <p className="order-image-upload-note">新图片将追加到此订单，原图片会保留。补图不会重新识图、修改订单信息或改变审核、入库和结款状态。</p>
+        <OrderImages images={order.images} emptyText="此订单暂无图片"/>
+        <label className="receipt-upload order-image-upload-picker">
+            <input type="file" aria-label="选择补充订单图片" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" multiple disabled={busy}
+                   onChange={event => {chooseFiles(event.target.files); event.target.value = "";}}/>
+            <i>＋</i><span><b>{files.length ? `已选择 ${files.length} 张，点击可重新选择` : "选择要补充的图片"}</b><small>每次最多 3 张，单张不超过 5MB，合计不超过 8MB</small></span>
+        </label>
+        {files.length > 0 && <ul className="order-image-upload-list">{files.map((file, index) => <li key={`${file.name}-${index}`}>
+            <div><b>{file.name}</b><small>{(file.size / 1024 / 1024).toFixed(2)} MB</small></div>
+            <button type="button" aria-label={`移除图片 ${file.name}`} disabled={busy} onClick={() => {setFiles(current => current.filter((_, i) => i !== index)); setError("");}}>移除</button>
+        </li>)}</ul>}
+        {error && <p className="order-image-upload-error" role="alert">{error}</p>}
+        <div className="dual-actions">
+            <button type="button" className="secondary-button" disabled={busy} onClick={onClose}>取消</button>
+            <button type="button" className="primary-button" disabled={busy || !files.length} onClick={() => void confirm()}>{busy ? "正在上传…" : `确认补充${files.length ? ` ${files.length} 张` : ""}`}</button>
+        </div>
+    </Modal>;
 }
 
 function SettlementSheet({
