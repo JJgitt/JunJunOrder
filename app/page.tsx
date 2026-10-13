@@ -2223,17 +2223,20 @@ function SettlementSheet({
 
     useEffect(() => () => { recognitionRequest.current += 1; }, []);
 
-    async function recognizeProof(file: File) {
+    async function recognizeProof(file: File, input?: HTMLInputElement) {
         const requestId = ++recognitionRequest.current;
         setRecognitionMessage("");
         setRecognizing(true);
         try {
             const prepared = await prepareSettlementProof(file);
             if (recognitionRequest.current !== requestId) return;
+            if (input) input.value = "";
             setProof(prepared);
-            const form = new FormData();
-            form.set("image", prepared, prepared.name);
-            const response = await fetch("/api/settlements/recognize", {method: "POST", body: form});
+            const body = await prepared.arrayBuffer();
+            if (recognitionRequest.current !== requestId) return;
+            const response = await fetch("/api/settlements/recognize", {
+                method: "POST", headers: {"content-type": prepared.type, "x-settlement-file-name": encodeURIComponent(prepared.name)}, body
+            });
             const json = await response.json() as { data?: { amount: number }; error?: string };
             if (!response.ok || !json.data || !Number.isFinite(json.data.amount) || json.data.amount <= 0) throw new Error(json.error || "未识别出金额，请手动输入或重新识别");
             if (recognitionRequest.current !== requestId) return;
@@ -2242,7 +2245,10 @@ function SettlementSheet({
         } catch (error) {
             if (recognitionRequest.current === requestId) setRecognitionMessage(error instanceof Error ? error.message : "未识别出金额，请手动输入");
         } finally {
-            if (recognitionRequest.current === requestId) setRecognizing(false);
+            if (recognitionRequest.current === requestId) {
+                if (input) input.value = "";
+                setRecognizing(false);
+            }
         }
     }
 
@@ -2269,7 +2275,7 @@ function SettlementSheet({
         <div className="settlement-proof-field">
             <label className={`receipt-upload settlement-proof-upload ${proof ? "selected" : ""}`}>
                 <input ref={proofInput} type="file" accept="image/*" disabled={busy || recognizing}
-                       onChange={event => {const file = event.target.files?.[0]; event.target.value = ""; if (file) {setProof(null); void recognizeProof(file);}}}/>
+                       onChange={event => {const input = event.target, file = input.files?.[0]; if (file) {setProof(null); void recognizeProof(file, input);}}}/>
                 <i>{recognizing ? "…" : proof ? "✓" : "＋"}</i><span><b>{proof ? proof.name : "上传结款截图（选填）"}</b>
                 <small>{recognizing ? "正在识别结款金额…" : proof ? "已选择，点击可更换图片" : "最多 1 张、图片不超过 5MB"}</small></span>
             </label>
@@ -2336,7 +2342,7 @@ function SettlementProofSheet({
 
     useEffect(() => () => { recognitionRequest.current += 1; }, []);
 
-    async function chooseProof(file: File | null) {
+    async function chooseProof(file: File | null, input?: HTMLInputElement) {
         if (!file) return;
         const requestId = ++recognitionRequest.current;
         setRecognitionMessage("");
@@ -2344,10 +2350,13 @@ function SettlementProofSheet({
         try {
             const prepared = await prepareSettlementProof(file);
             if (recognitionRequest.current !== requestId) return;
+            if (input) input.value = "";
             setProof(prepared);
-            const form = new FormData();
-            form.set("image", prepared, prepared.name);
-            const response = await fetch("/api/settlements/recognize", {method: "POST", body: form});
+            const body = await prepared.arrayBuffer();
+            if (recognitionRequest.current !== requestId) return;
+            const response = await fetch("/api/settlements/recognize", {
+                method: "POST", headers: {"content-type": prepared.type, "x-settlement-file-name": encodeURIComponent(prepared.name)}, body
+            });
             const json = await response.json() as { data?: { amount: number }; error?: string };
             if (!response.ok || !json.data || !Number.isFinite(json.data.amount) || json.data.amount <= 0) throw new Error(json.error || "未识别出金额，请手动输入");
             if (recognitionRequest.current !== requestId) return;
@@ -2356,7 +2365,10 @@ function SettlementProofSheet({
         } catch (error) {
             if (recognitionRequest.current === requestId) setRecognitionMessage(`${error instanceof Error ? error.message : "识别失败"}；已保留当前金额，可手动修改`);
         } finally {
-            if (recognitionRequest.current === requestId) setRecognizing(false);
+            if (recognitionRequest.current === requestId) {
+                if (input) input.value = "";
+                setRecognizing(false);
+            }
         }
     }
 
@@ -2382,7 +2394,7 @@ function SettlementProofSheet({
         </label>
         <label className={`receipt-upload settlement-proof-upload ${proof ? "selected" : ""}`}>
             <input type="file" accept="image/*" disabled={busy || recognizing}
-                   onChange={event => {const file = event.target.files?.[0]; event.target.value = ""; if (file) {setProof(null); void chooseProof(file);}}}/>
+                   onChange={event => {const input = event.target, file = input.files?.[0]; if (file) {setProof(null); void chooseProof(file, input);}}}/>
             <i>{proof ? "✓" : "＋"}</i><span><b>{proof ? proof.name : order.settlementProofs.length ? "选择新的结款截图" : "选择要补传的结款截图"}</b>
             <small>{recognizing ? "正在识别结款金额…" : "最多 1 张、图片不超过 5MB"}</small></span>
         </label>

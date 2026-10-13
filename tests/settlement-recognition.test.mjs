@@ -23,6 +23,12 @@ async function multipartRequest(image, { explicitFilename = false } = {}) {
   return new NextRequest(outgoing.url, { method: "POST", headers: outgoing.headers, body: await outgoing.arrayBuffer() });
 }
 
+function rawRequest(body = pngBytes, { type = "image/png", name = "付款凭证.png", length } = {}) {
+  const headers = { "content-type": type, "x-settlement-file-name": encodeURIComponent(name) };
+  if (length !== undefined) headers["content-length"] = String(length);
+  return new NextRequest("http://localhost/api/settlements/recognize", { method: "POST", headers, body });
+}
+
 function fixture({ role = "admin", configured = true } = {}) {
   const recognized = [], logs = [];
   const modules = {
@@ -114,6 +120,76 @@ test("settlement recognition still requires an administrator and configured visi
     const f = fixture(options);
     const response = await f.post(await multipartRequest(pngFile()));
     assert.equal(response.status, status);
+    assert.equal(f.recognized.length, 0);
+  }
+});
+
+for (const type of ["image/png", "application/octet-stream"]) {
+  test(`raw ${type} image bypasses multipart and preserves bytes and filename`, async () => {
+    const f = fixture();
+    const response = await f.post(rawRequest(pngBytes, { type }));
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { data: { amount: 258.5 } });
+    assert.equal(f.recognized.length, 1);
+    assert.equal(f.recognized[0].type, "image/png");
+    assert.equal(f.recognized[0].name, "付款凭证.png");
+    assert.deepEqual(new Uint8Array(await f.recognized[0].arrayBuffer()), pngBytes);
+  });
+}
+
+test("raw empty, oversized and unidentified uploads fail without invoking vision", async () => {
+  for (const [request, expected] of [
+    [rawRequest(new Uint8Array()), /空文件/],
+    [rawRequest(new Uint8Array(5 * 1024 * 1024 + 1)), /超过 5MB/],
+    [rawRequest(new TextEncoder().encode("not-image-data"), { type: "application/octet-stream" }), /未能确认图片格式/],
+  ]) {
+    const f = fixture();
+    const response = await f.post(request);
+    assert.equal(response.status, 400);
+    assert.match((await response.json()).error, expected);
+    assert.equal(f.recognized.length, 0);
+  }
+});
+
+test("declared oversized raw images are rejected before consuming the request body", async () => {
+  const request = rawRequest(pngBytes, { length: 5 * 1024 * 1024 + 1 });
+  const f = fixture();
+  const response = await f.post(request);
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /超过 5MB/);
+  assert.equal(request.bodyUsed, false);
+  assert.equal(f.recognized.length, 0);
+});
+
+test("chunked raw uploads without content-length are bounded and canceled on overflow", async () => {
+  let canceled = false, chunksLeft = 4;
+  const stream = new ReadableStream({
+    pull(controller) {
+      if (chunksLeft-- > 0) controller.enqueue(new Uint8Array(3 * 1024 * 1024));
+      else controller.close();
+    },
+    cancel() { canceled = true; },
+  });
+  const request = rawRequest(stream);
+  assert.equal(request.headers.has("content-length"), false);
+  const f = fixture();
+  const response = await f.post(request);
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /超过 5MB/);
+  assert.equal(canceled, true);
+  assert.equal(f.recognized.length, 0);
+});
+
+test("raw uploads require an administrator and configured vision before body reads", async () => {
+  for (const [options, status] of [
+    [{ role: null }, 401],
+    [{ role: "buyer" }, 403],
+    [{ configured: false }, 501],
+  ]) {
+    const f = fixture(options);
+    const request = rawRequest();
+    assert.equal((await f.post(request)).status, status);
+    assert.equal(request.bodyUsed, false);
     assert.equal(f.recognized.length, 0);
   }
 });

@@ -1282,7 +1282,8 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assertJsMatch(page,/实际结款金额 <em>选填<\/em>/);
   assertJsMatch(page,/const parsedAmount = amount\.trim\(\) \? Number\(amount\) : undefined/);
   assertJsMatch(page,/disabled=\{busy\|\|recognizing\|\|amountInvalid\}/);
-  assertJsMatch(page,/fetch\("\/api\/settlements\/recognize",\{method:"POST",body:form\}\)/);
+  assertJsMatch(page,/fetch\("\/api\/settlements\/recognize",\{method:"POST",headers:\{"content-type":prepared\.type,"x-settlement-file-name":encodeURIComponent\(prepared\.name\)\},body\}\)/);
+  assertJsMatch(page,/const body=await prepared\.arrayBuffer\(\)/);
   assertJsMatch(page,/正在识别结款金额/);
   assertJsMatch(page,/order\.settled&&<OrderImages images=\{order\.settlementProofs\} title="结款截图" variant="settlement"/);
   assertJsMatch(page,/emptyText="本次结款未上传截图"/);

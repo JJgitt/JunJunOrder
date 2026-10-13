@@ -159,8 +159,17 @@ function sheetFixture(response, { first = false } = {}) {
   }
   return {
     render, requests, saved,
-    upload: (file = pngFile()) => {
-      const target = { files: file ? [file] : [], value: file?.name ?? "" };
+    upload: (file = pngFile(), onClear = () => {}, sharedInput) => {
+      let value = file?.name ?? "";
+      const target = sharedInput ?? {
+        files: file ? [file] : [],
+        get value() { return value; },
+        set value(next) { value = next; if (!next) onClear(); },
+      };
+      if (sharedInput) {
+        target.files = file ? [file] : [];
+        target.value = file?.name ?? "";
+      }
       render().file.props.onChange({ target });
       return target;
     },
@@ -215,7 +224,9 @@ test("settlement proof preparation recovers supported image formats from missing
     }
   }
   const original = pngFile();
-  assert.equal(await prepareSettlementProof(original), original);
+  const prepared = await prepareSettlementProof(original);
+  assert.notEqual(prepared, original, "even correctly typed images must be detached from the mobile picker");
+  assert.deepEqual(await prepared.arrayBuffer(), await original.arrayBuffer());
 });
 
 test("settlement proof preparation rejects empty, oversized and unknown data", async () => {
@@ -236,11 +247,11 @@ test("first settlement recognizes and saves a proof with a repaired blank filena
     f.upload(file);
     await nextTurn();
     assert.equal(f.requests.length, 1);
-    const body = f.requests[0].options.body;
-    const request = new Request("http://localhost/api/settlements/recognize", { method: "POST", body });
-    const parsed = (await request.formData()).get("image");
-    assert.ok(parsed instanceof File);
-    assert.equal(parsed.name, "settlement-proof.png");
+    const { body, headers } = f.requests[0].options;
+    assert.ok(body instanceof ArrayBuffer);
+    assert.deepEqual(new Uint8Array(body), pngBytes);
+    assert.equal(new Headers(headers).get("content-type"), "image/png");
+    assert.equal(decodeURIComponent(new Headers(headers).get("x-settlement-file-name")), "settlement-proof.png");
     assert.equal(f.render().amount.props.value, "123.45");
     f.render().save.props.onClick();
     assert.equal(f.saved[0][1], 123.45);
@@ -255,11 +266,13 @@ for (const type of ["image/png", ""]) {
     const f = sheetFixture(result.promise, { first: true });
     const original = pngFile(type);
     const input = f.upload(original);
-    assert.equal(input.value, "", "same picture must be selectable again");
     await nextTurn();
+    assert.equal(input.value, "", "same picture must be selectable again once its bytes have been copied");
     assert.equal(f.requests.length, 1);
     assert.equal(f.requests[0].url, "/api/settlements/recognize");
-    assert.equal(f.requests[0].options.body.get("image").type, "image/png");
+    assert.ok(f.requests[0].options.body instanceof ArrayBuffer);
+    assert.deepEqual(new Uint8Array(f.requests[0].options.body), pngBytes);
+    assert.equal(new Headers(f.requests[0].options.headers).get("content-type"), "image/png");
     assert.match(f.render().text, /正在识别/);
     assert.equal(f.render().amount.props.disabled, true);
     assert.equal(f.render().save.props.disabled, true);
@@ -277,17 +290,58 @@ for (const type of ["image/png", ""]) {
 test("first settlement clears the picker for same-picture retry and preserves proof when picker is canceled", async () => {
   const f = sheetFixture(() => Response.json({ data: { amount: 88 } }), { first: true });
   const file = pngFile();
-  assert.equal(f.upload(file).value, "");
+  const firstInput = f.upload(file);
   await nextTurn();
-  assert.equal(f.upload(file).value, "");
+  assert.equal(firstInput.value, "");
+  const secondInput = f.upload(file);
   await nextTurn();
+  assert.equal(secondInput.value, "");
   assert.equal(f.requests.length, 2);
   f.upload(null);
   await nextTurn();
   assert.equal(f.requests.length, 2);
   f.render().save.props.onClick();
-  assert.equal(f.saved[0][2], file);
+  assert.notEqual(f.saved[0][2], file);
+  assert.deepEqual(await f.saved[0][2].arrayBuffer(), await file.arrayBuffer());
 });
+
+for (const first of [true, false]) {
+  test(`${first ? "first settlement" : "proof replacement"} copies picker bytes before clearing and uses memory for upload and save`, async () => {
+    const reading = deferred();
+    const result = deferred();
+    const f = sheetFixture(result.promise, { first });
+    const file = pngFile();
+    let readable = true, reads = 0;
+    Object.defineProperty(file, "arrayBuffer", { value: async () => {
+      reads += 1;
+      if (!readable) throw new Error("mobile picker reference was released");
+      await reading.promise;
+      if (!readable) throw new Error("mobile picker reference was released while reading");
+      return pngBytes.slice().buffer;
+    } });
+    const input = f.upload(file, () => { readable = false; });
+    assert.equal(reads, 1);
+    assert.equal(input.value, file.name, "picker must stay alive until all bytes are copied");
+    assert.equal(f.requests.length, 0);
+    reading.resolve();
+    await nextTurn();
+    assert.equal(input.value, "", "picker can reset before the vision request finishes");
+    assert.equal(readable, false);
+    assert.equal(f.requests.length, 1);
+    assert.ok(f.requests[0].options.body instanceof ArrayBuffer);
+    assert.deepEqual(new Uint8Array(f.requests[0].options.body), pngBytes);
+    assert.equal(new Headers(f.requests[0].options.headers).get("content-type"), "image/png");
+    assert.equal(decodeURIComponent(new Headers(f.requests[0].options.headers).get("x-settlement-file-name")), file.name);
+    result.resolve(Response.json({ data: { amount: 321.5 } }));
+    await nextTurn();
+    assert.equal(f.render().amount.props.value, "321.50");
+    f.render().save.props.onClick();
+    const savedFile = f.saved[0][first ? 2 : 1];
+    assert.notEqual(savedFile, file);
+    assert.deepEqual(new Uint8Array(await savedFile.arrayBuffer()), pngBytes);
+    assert.equal(reads, 1, "upload and save must not read the revoked original file");
+  });
+}
 
 for (const first of [true, false]) {
   test(`${first ? "first settlement" : "proof replacement"} can retry recognition after failure`, async () => {
@@ -304,6 +358,57 @@ for (const first of [true, false]) {
     assert.equal(f.render().amount.props.value, "120.50");
   });
 }
+
+test("late recognition from a removed proof cannot clear the shared picker while its replacement is being copied", async () => {
+  const firstResponse = deferred(), secondResponse = deferred(), secondReading = deferred();
+  const f = sheetFixture(attempt => attempt === 1 ? firstResponse.promise : secondResponse.promise, { first: true });
+  const firstFile = pngFile();
+  const secondFile = new File([pngBytes], "replacement.png", { type: "image/png" });
+  let value = "", secondReadable = true, secondReadStarted = false;
+  const input = {
+    files: [],
+    get value() { return value; },
+    set value(next) {
+      value = next;
+      if (!next && this.files[0] === secondFile) secondReadable = false;
+    },
+  };
+  Object.defineProperty(secondFile, "arrayBuffer", { value: async () => {
+    secondReadStarted = true;
+    if (!secondReadable) throw new Error("replacement picker was cleared before reading");
+    await secondReading.promise;
+    if (!secondReadable) throw new Error("replacement picker was cleared while reading");
+    return pngBytes.slice().buffer;
+  } });
+
+  f.upload(firstFile, undefined, input);
+  await nextTurn();
+  assert.equal(f.requests.length, 1);
+  f.render().remove.props.onClick();
+  f.upload(secondFile, undefined, input);
+  assert.equal(secondReadStarted, true);
+  assert.equal(input.value, secondFile.name);
+  firstResponse.resolve(Response.json({ data: { amount: 999 } }));
+  await nextTurn();
+  assert.equal(input.value, secondFile.name, "stale request cleanup must leave the new selection intact");
+  assert.equal(secondReadable, true);
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.render().save.props.disabled, true);
+  assert.equal(f.render().amount.props.value, "");
+
+  secondReading.resolve();
+  await nextTurn();
+  assert.equal(input.value, "", "only the replacement request may clear after copying its own bytes");
+  assert.equal(f.requests.length, 2);
+  assert.deepEqual(new Uint8Array(f.requests[1].options.body), pngBytes);
+  secondResponse.resolve(Response.json({ data: { amount: 321.5 } }));
+  await nextTurn();
+  assert.equal(f.render().amount.props.value, "321.50");
+  assert.equal(f.render().save.props.disabled, false);
+  f.render().save.props.onClick();
+  assert.equal(f.saved[0][1], 321.5);
+  assert.equal(f.saved[0][2].name, secondFile.name);
+});
 
 test("invalid first settlement proof never calls recognition or retains an invalid attachment", async () => {
   const f = sheetFixture(Response.json({ data: { amount: 1 } }), { first: true });
