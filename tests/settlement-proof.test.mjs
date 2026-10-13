@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import test from "node:test";
 import ts from "typescript";
+import { prepareSettlementProof } from "../lib/settlement-proof-upload.ts";
 
 const require = createRequire(import.meta.url);
 const source = await readFile(new URL("../app/api/settlements/proof/route.ts", import.meta.url), "utf8");
@@ -111,29 +112,59 @@ test("unsettled orders and buyers cannot update proof or amount", async () => {
 const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
 const sheetSource = page.slice(page.indexOf("function SettlementProofSheet("), page.indexOf("function RevertReceiveSheet("));
 const sheetCode = ts.transpileModule(sheetSource, { compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 } }).outputText;
-function sheetFixture(response) {
-  const state = [], refs = [], saved = [], requests = [];
-  let index = 0, refIndex = 0;
+const firstSheetSource = page.slice(page.indexOf("function SettlementSheet("), page.indexOf("function SettlementAmountSheet("));
+const firstSheetCode = ts.transpileModule(firstSheetSource, { compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 } }).outputText;
+const pngBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, ...new Array(24).fill(0)]);
+const pngFile = (type = "image/png") => new File([pngBytes], "proof.png", { type, lastModified: 123456789 });
+const nextTurn = () => new Promise(resolve => setImmediate(resolve));
+function deferred() {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return { promise, resolve };
+}
+function sheetFixture(response, { first = false } = {}) {
+  const state = [], refs = [], saved = [], requests = [], effects = [];
+  let index = 0, refIndex = 0, effectIndex = 0;
   const useState = initial => {
     const key = index++;
     if (!(key in state)) state[key] = initial;
-    return [state[key], value => { state[key] = value; }];
+    return [state[key], value => { state[key] = typeof value === "function" ? value(state[key]) : value; }];
   };
   const useRef = initial => refs[refIndex++] ?? (refs[refIndex - 1] = { current: initial });
+  const useEffect = callback => {
+    const key = effectIndex++;
+    if (!(key in effects)) effects[key] = callback();
+  };
+  const close = () => { effects.forEach(cleanup => cleanup?.()); };
   const React = { createElement: (type, props, ...children) => ({ type, props: { ...props, children } }) };
-  const fetch = async (url, options) => { requests.push({ url, options }); return response; };
-  const Sheet = new Function("React", "useState", "useRef", "useEffect", "fetch", "Modal", "OrderImages", "money", `${sheetCode}; return SettlementProofSheet;`)(React, useState, useRef, () => {}, fetch, "Modal", "OrderImages", value => `¥${value}`);
+  const fetch = async (url, options) => { requests.push({ url, options }); return typeof response === "function" ? response(requests.length) : response; };
+  const Sheet = new Function("React", "useState", "useRef", "useEffect", "fetch", "Modal", "OrderImages", "money", "prepareSettlementProof", `${first ? firstSheetCode : sheetCode}; return ${first ? "SettlementSheet" : "SettlementProofSheet"};`)(React, useState, useRef, useEffect, fetch, "Modal", "OrderImages", value => `¥${value}`, prepareSettlementProof);
   function nodes(node) {
     if (!node || typeof node !== "object") return [];
     return [node, ...(node.props?.children ?? []).flat(Infinity).flatMap(nodes)];
   }
   function render() {
-    index = 0; refIndex = 0;
-    const tree = Sheet({ order: { id: "test-order", settledAmount: 100, settlementProofs: [] }, onClose: () => {}, onSubmit: async (...args) => { saved.push(args); return true; } });
+    index = 0; refIndex = 0; effectIndex = 0;
+    const tree = Sheet({ order: { id: "test-order", amount: 100, purchaser: "test-buyer", status: "在途", items: [], settledAmount: 100, settlementProofs: [] }, onClose: close, onSubmit: async (...args) => { saved.push(args); return true; } });
     const all = nodes(tree);
-    return { file: all.find(n => n.type === "input" && n.props.type === "file"), amount: all.find(n => n.type === "input" && n.props.inputMode === "decimal"), save: all.find(n => n.type === "button" && n.props.className?.includes("primary-button")) };
+    return {
+      tree,
+      text: all.flatMap(n => (n.props?.children ?? []).flat(Infinity).filter(value => typeof value === "string")).join(" "),
+      file: all.find(n => n.type === "input" && n.props.type === "file"),
+      amount: all.find(n => n.type === "input" && n.props.inputMode === "decimal"),
+      save: all.find(n => n.type === "button" && n.props.className?.includes("primary-button")),
+      retry: all.find(n => n.type === "button" && n.props.className?.includes("settlement-recognize-retry")),
+      remove: all.find(n => n.type === "button" && n.props.className?.includes("settlement-proof-clear")),
+    };
   }
-  return { render, requests, saved, upload: () => render().file.props.onChange({ target: { files: [new File(["proof"], "proof.png", { type: "image/png" })], value: "proof.png" } }) };
+  return {
+    render, requests, saved,
+    upload: (file = pngFile()) => {
+      const target = { files: file ? [file] : [], value: file?.name ?? "" };
+      render().file.props.onChange({ target });
+      return target;
+    },
+  };
 }
 
 test("selecting a proof automatically fills recognized amount, then saves only after confirmation", async () => {
@@ -161,4 +192,137 @@ test("recognition failure preserves the original amount; blank can explicitly cl
   f.render().amount.props.onChange({ target: { value: "" } });
   f.render().save.props.onClick();
   assert.equal(f.saved[1][2], null);
+});
+
+test("settlement proof preparation recovers supported image formats from missing or generic MIME", async () => {
+  const enc = value => [...new TextEncoder().encode(value)];
+  const formats = [
+    [pngBytes, "image/png"],
+    [[255, 216, 255, 224], "image/jpeg"],
+    [enc("GIF89a"), "image/gif"],
+    [[...enc("RIFF"), 24, 0, 0, 0, ...enc("WEBP")], "image/webp"],
+    [[0, 0, 0, 24, ...enc("ftypheic"), 0, 0, 0, 0, ...enc("heic")], "image/heic"],
+    [[0, 0, 0, 24, ...enc("ftypmif1"), 0, 0, 0, 0, ...enc("mif1")], "image/heif"],
+  ];
+  for (const [bytes, expectedType] of formats) {
+    for (const type of ["", "application/octet-stream"]) {
+      const original = new File([Uint8Array.from(bytes)], "mobile-picture", { type, lastModified: 123456789 });
+      const prepared = await prepareSettlementProof(original);
+      assert.equal(prepared.type, expectedType);
+      assert.equal(prepared.name, original.name);
+      assert.equal(prepared.lastModified, original.lastModified);
+      assert.deepEqual(await prepared.arrayBuffer(), await original.arrayBuffer());
+    }
+  }
+  const original = pngFile();
+  assert.equal(await prepareSettlementProof(original), original);
+});
+
+test("settlement proof preparation rejects empty, oversized and unknown data", async () => {
+  for (const file of [
+    new File([], "empty.png", { type: "image/png" }),
+    new File([new Uint8Array(5 * 1024 * 1024 + 1)], "large.png", { type: "image/png" }),
+    new File(["not an image"], "fake.png"),
+    new File(["<svg></svg>"], "vector.svg", { type: "image/svg+xml" }),
+  ]) {
+    await assert.rejects(() => prepareSettlementProof(file), file.name);
+  }
+});
+
+for (const type of ["image/png", ""]) {
+  test(`first settlement recognizes ${type || "missing MIME"} image and saves the normalized proof`, async () => {
+    const result = deferred();
+    const f = sheetFixture(result.promise, { first: true });
+    const original = pngFile(type);
+    const input = f.upload(original);
+    assert.equal(input.value, "", "same picture must be selectable again");
+    await nextTurn();
+    assert.equal(f.requests.length, 1);
+    assert.equal(f.requests[0].url, "/api/settlements/recognize");
+    assert.equal(f.requests[0].options.body.get("image").type, "image/png");
+    assert.match(f.render().text, /正在识别/);
+    assert.equal(f.render().amount.props.disabled, true);
+    assert.equal(f.render().save.props.disabled, true);
+    result.resolve(Response.json({ data: { amount: 258.5 } }));
+    await nextTurn();
+    assert.equal(f.render().amount.props.value, "258.50");
+    assert.equal(f.saved.length, 0);
+    f.render().save.props.onClick();
+    assert.equal(f.saved[0][1], 258.5);
+    assert.equal(f.saved[0][2].type, "image/png");
+    assert.deepEqual(await f.saved[0][2].arrayBuffer(), await original.arrayBuffer());
+  });
+}
+
+test("first settlement clears the picker for same-picture retry and preserves proof when picker is canceled", async () => {
+  const f = sheetFixture(() => Response.json({ data: { amount: 88 } }), { first: true });
+  const file = pngFile();
+  assert.equal(f.upload(file).value, "");
+  await nextTurn();
+  assert.equal(f.upload(file).value, "");
+  await nextTurn();
+  assert.equal(f.requests.length, 2);
+  f.upload(null);
+  await nextTurn();
+  assert.equal(f.requests.length, 2);
+  f.render().save.props.onClick();
+  assert.equal(f.saved[0][2], file);
+});
+
+for (const first of [true, false]) {
+  test(`${first ? "first settlement" : "proof replacement"} can retry recognition after failure`, async () => {
+    const f = sheetFixture(attempt => attempt === 1 ? Response.json({ error: "服务超时" }, { status: 502 }) : Response.json({ data: { amount: 120.5 } }), { first });
+    f.upload();
+    await nextTurn();
+    assert.equal(f.requests.length, 1);
+    assert.match(f.render().text, /服务超时/);
+    assert.ok(f.render().retry, "an explicit retry action must be available");
+    assert.equal(Boolean(f.render().retry.props.disabled), false);
+    f.render().retry.props.onClick();
+    await nextTurn();
+    assert.equal(f.requests.length, 2);
+    assert.equal(f.render().amount.props.value, "120.50");
+  });
+}
+
+test("invalid first settlement proof never calls recognition or retains an invalid attachment", async () => {
+  const f = sheetFixture(Response.json({ data: { amount: 1 } }), { first: true });
+  f.upload(new File(["not an image"], "fake.png"));
+  await nextTurn();
+  assert.equal(f.requests.length, 0);
+  assert.equal(f.render().amount.props.value, "");
+  f.render().save.props.onClick();
+  assert.equal(f.saved[0][2], undefined);
+});
+
+for (const action of ["remove", "close"]) {
+  test(`first settlement ignores late recognition after ${action}`, async () => {
+    const result = deferred();
+    const f = sheetFixture(result.promise, { first: true });
+    f.upload();
+    await nextTurn();
+    assert.equal(f.requests.length, 1);
+    if (action === "remove") f.render().remove.props.onClick();
+    else f.render().tree.props.onClose();
+    result.resolve(Response.json({ data: { amount: 999 } }));
+    await nextTurn();
+    assert.equal(f.render().amount.props.value, "");
+    assert.equal(f.saved.length, 0);
+  });
+}
+
+test("first settlement keeps both amount and screenshot optional and rejects invalid recognition values", async () => {
+  const empty = sheetFixture(undefined, { first: true });
+  empty.render().save.props.onClick();
+  assert.deepEqual(empty.saved[0], ["test-order", undefined, undefined]);
+  for (const amount of [0, -1, "88.00", null]) {
+    const f = sheetFixture(Response.json({ data: { amount } }), { first: true });
+    f.upload();
+    await nextTurn();
+    assert.equal(f.render().amount.props.value, "", String(amount));
+    assert.equal(f.render().save.props.disabled, false);
+    f.render().save.props.onClick();
+    assert.equal(f.saved[0][1], undefined);
+    assert.ok(f.saved[0][2] instanceof File);
+  }
 });

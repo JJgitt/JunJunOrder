@@ -4315,6 +4315,24 @@ button:active {
     line-height: 1.45
 }
 
+.settlement-recognize-retry {
+    min-height: 40px;
+    margin: 6px 0;
+    padding: 8px 12px;
+    border: 1px solid #d8b567;
+    border-radius: 10px;
+    background: #fff8e8;
+    color: #825916;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer
+}
+
+.settlement-recognize-retry:disabled {
+    opacity: .55;
+    cursor: wait
+}
+
 .settlement-recognition.success {
     background: #edf9f1;
     color: #237846

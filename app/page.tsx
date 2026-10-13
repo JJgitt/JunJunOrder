@@ -11,6 +11,7 @@ import {paginateOrders} from "@/lib/order-pagination";
 import {postReceiptTimelineEvents} from "@/lib/order-timeline";
 import {canSettleOrder, isSettlementStage} from "@/lib/order-settlement";
 import {orderImageUploadError} from "@/lib/order-image-upload";
+import {prepareSettlementProof} from "@/lib/settlement-proof-upload";
 import {dateKey, dayRange, timestamp, waitingLabel, type ServerClock} from "@/lib/time";
 import type {KnowledgeMatch} from "@/lib/product-knowledge-match";
 import {fillProductIdentity} from "@/lib/product-knowledge-fill";
@@ -2220,20 +2221,21 @@ function SettlementSheet({
     const parsedAmount = amount.trim() ? Number(amount) : undefined;
     const amountInvalid = parsedAmount != null && (!Number.isFinite(parsedAmount) || parsedAmount <= 0);
 
+    useEffect(() => () => { recognitionRequest.current += 1; }, []);
+
     async function recognizeProof(file: File) {
         const requestId = ++recognitionRequest.current;
         setRecognitionMessage("");
-        if (!file.type.startsWith("image/") || file.size > 5 * 1024 * 1024) {
-            setRecognitionMessage("请选择 5MB 以内的结款截图");
-            return;
-        }
         setRecognizing(true);
         try {
+            const prepared = await prepareSettlementProof(file);
+            if (recognitionRequest.current !== requestId) return;
+            setProof(prepared);
             const form = new FormData();
-            form.set("image", file);
+            form.set("image", prepared);
             const response = await fetch("/api/settlements/recognize", {method: "POST", body: form});
             const json = await response.json() as { data?: { amount: number }; error?: string };
-            if (!response.ok || !json.data) throw new Error(json.error || "结款金额识别失败");
+            if (!response.ok || !json.data || !Number.isFinite(json.data.amount) || json.data.amount <= 0) throw new Error(json.error || "未识别出金额，请手动输入或重新识别");
             if (recognitionRequest.current !== requestId) return;
             setAmount(json.data.amount.toFixed(2));
             setRecognitionMessage(`已识别 ${money(json.data.amount)}，请核对后确认`);
@@ -2260,21 +2262,23 @@ function SettlementSheet({
         <div className="settlement-summary"><span>采购员</span><b>{order.purchaser}</b><span>当前发货状态</span>
             <b>{order.status === "已发货" ? "已全部发货" : order.items.some(item => item.shipped) ? "部分已发货" : "未发货"}</b></div>
         <label className="settlement-amount-field"><span>实际结款金额 <em>选填</em></span>
-            <div><i>¥</i><input value={amount} inputMode="decimal" placeholder="请输入结款金额（选填）"
+            <div><i>¥</i><input value={amount} inputMode="decimal" disabled={busy || recognizing} placeholder="请输入结款金额（选填）"
                                onChange={event => {setAmount(event.target.value.replace(/[^\d.]/g, "")); setRecognitionMessage("");}}/></div>
             <small>{amountInvalid ? "请输入有效的正数金额，或留空后直接确认" : "上传截图后会自动识别并回填，也可以留空后直接确认"}</small>
         </label>
         <div className="settlement-proof-field">
             <label className={`receipt-upload settlement-proof-upload ${proof ? "selected" : ""}`}>
                 <input ref={proofInput} type="file" accept="image/*" disabled={busy || recognizing}
-                       onChange={event => {const file = event.target.files?.[0] ?? null; setProof(file); if (file) void recognizeProof(file);}}/>
+                       onChange={event => {const file = event.target.files?.[0]; event.target.value = ""; if (file) {setProof(null); void recognizeProof(file);}}}/>
                 <i>{recognizing ? "…" : proof ? "✓" : "＋"}</i><span><b>{proof ? proof.name : "上传结款截图（选填）"}</b>
                 <small>{recognizing ? "正在识别结款金额…" : proof ? "已选择，点击可更换图片" : "最多 1 张、图片不超过 5MB"}</small></span>
             </label>
             {proof && <button type="button" className="settlement-proof-clear" disabled={busy}
                               onClick={() => {recognitionRequest.current += 1; setRecognizing(false); setProof(null); setRecognitionMessage(""); if (proofInput.current) proofInput.current.value = "";}}>移除截图</button>}
         </div>
-        {recognitionMessage && <p className={`settlement-recognition ${recognitionMessage.startsWith("已识别") ? "success" : "failed"}`}>{recognitionMessage}</p>}
+        {proof && <button type="button" className="settlement-recognize-retry" disabled={busy || recognizing}
+                          onClick={() => void recognizeProof(proof)}>{recognizing ? "正在识别金额…" : "重新识别金额"}</button>}
+        {recognitionMessage && <p role="status" className={`settlement-recognition ${recognitionMessage.startsWith("已识别") ? "success" : "failed"}`}>{recognitionMessage}</p>}
         <div className="dual-actions settlement-confirm-actions">
             <button className="secondary-button" disabled={busy} onClick={onClose}>取消</button>
             <button className="primary-button settlement-confirm-button" disabled={busy || recognizing || amountInvalid}
@@ -2333,20 +2337,16 @@ function SettlementProofSheet({
     useEffect(() => () => { recognitionRequest.current += 1; }, []);
 
     async function chooseProof(file: File | null) {
+        if (!file) return;
         const requestId = ++recognitionRequest.current;
         setRecognitionMessage("");
-        setRecognizing(false);
-        if (!file) { setProof(null); return; }
-        if (!file.type.startsWith("image/") || file.size === 0 || file.size > 5 * 1024 * 1024) {
-            setProof(null);
-            setRecognitionMessage("请选择 5MB 以内的结款截图");
-            return;
-        }
-        setProof(file);
         setRecognizing(true);
         try {
+            const prepared = await prepareSettlementProof(file);
+            if (recognitionRequest.current !== requestId) return;
+            setProof(prepared);
             const form = new FormData();
-            form.set("image", file);
+            form.set("image", prepared);
             const response = await fetch("/api/settlements/recognize", {method: "POST", body: form});
             const json = await response.json() as { data?: { amount: number }; error?: string };
             if (!response.ok || !json.data || !Number.isFinite(json.data.amount) || json.data.amount <= 0) throw new Error(json.error || "未识别出金额，请手动输入");
@@ -2382,10 +2382,12 @@ function SettlementProofSheet({
         </label>
         <label className={`receipt-upload settlement-proof-upload ${proof ? "selected" : ""}`}>
             <input type="file" accept="image/*" disabled={busy || recognizing}
-                   onChange={event => {void chooseProof(event.target.files?.[0] ?? null); event.target.value = "";}}/>
+                   onChange={event => {const file = event.target.files?.[0]; event.target.value = ""; if (file) {setProof(null); void chooseProof(file);}}}/>
             <i>{proof ? "✓" : "＋"}</i><span><b>{proof ? proof.name : order.settlementProofs.length ? "选择新的结款截图" : "选择要补传的结款截图"}</b>
             <small>{recognizing ? "正在识别结款金额…" : "最多 1 张、图片不超过 5MB"}</small></span>
         </label>
+        {proof && <button type="button" className="settlement-recognize-retry" disabled={busy || recognizing}
+                          onClick={() => void chooseProof(proof)}>{recognizing ? "正在识别金额…" : "重新识别金额"}</button>}
         {recognitionMessage && <p role="status" className={`settlement-recognition ${recognitionMessage.startsWith("已识别") ? "success" : "failed"}`}>{recognitionMessage}</p>}
         <div className="dual-actions settlement-confirm-actions">
             <button className="secondary-button" disabled={busy} onClick={onClose}>取消</button>
