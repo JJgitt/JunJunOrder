@@ -69,3 +69,30 @@ test("editing a shipped item's logistics does not add or retime a shipment event
   assert.equal(afterEdit.length, 1);
   assert.deepEqual(summarize(afterEdit), summarize(initial));
 });
+
+test("settlement before receipt keeps chronological progress for both roles", () => {
+  const order = {
+    items: [{ id: "one", shippedAt: at("04") }],
+    settled: true, settledAt: at("02"), receivedAt: at("03"),
+  };
+  assert.deepEqual(summarize(postReceiptTimelineEvents(order, true, timestamp)), [
+    { kind: "settled", at: at("02") },
+    { kind: "received", at: at("03") },
+    { kind: "shipped", at: at("04"), itemId: "one" },
+  ]);
+  assert.deepEqual(summarize(postReceiptTimelineEvents(order, false, timestamp)), [
+    { kind: "settled", at: at("02") },
+    { kind: "received", at: at("03") },
+  ]);
+});
+
+test("in-transit settlement has no receipt; later settlement follows receipt once", () => {
+  const order = { items: [], settled: true, settledAt: at("03") };
+  assert.deepEqual(summarize(postReceiptTimelineEvents(order, true, timestamp)), [
+    { kind: "settled", at: at("03") },
+  ]);
+  assert.deepEqual(summarize(postReceiptTimelineEvents({ ...order, receivedAt: at("02") }, true, timestamp)), [
+    { kind: "received", at: at("02") },
+    { kind: "settled", at: at("03") },
+  ]);
+});

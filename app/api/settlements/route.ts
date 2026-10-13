@@ -5,6 +5,7 @@ import { getDb } from "@/db";
 import { auditLogs, orderImages, purchaseOrders } from "@/db/schema";
 import { assertSameOrigin, requireAdmin, requireAppUser, routeError } from "@/lib/auth";
 import { imageExtension, uploadPath } from "@/lib/file-storage";
+import { isSettlementStage } from "@/lib/order-settlement";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
     await db.transaction(async tx => {
       const [order] = await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id, orderId)).for("update").limit(1);
       if (!order) throw new Response(JSON.stringify({ error: "订单不存在" }), { status: 404, headers: { "content-type": "application/json" } });
-      if (!order.receivedAt) throw conflict("采购单尚未入库，不能结款");
+      if (!isSettlementStage(order.status)) throw conflict("采购单需审核通过进入在途或入库后，才能结款");
       if (order.settled) throw conflict("采购单已经完成结款，请勿重复操作");
 
       if (image) {

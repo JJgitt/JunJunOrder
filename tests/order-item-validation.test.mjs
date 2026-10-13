@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import test from "node:test";
 import ts from "typescript";
+import * as settlement from "../lib/order-settlement.ts";
 
 const require = createRequire(import.meta.url);
 const source = await readFile(new URL("../app/api/app/route.ts", import.meta.url), "utf8");
@@ -15,6 +16,7 @@ const modules = {
   "@/lib/file-storage": {},
   "@/lib/server-time": {},
   "@/lib/time": {},
+  "@/lib/order-settlement": settlement,
 };
 const route = {};
 new Function("require", "exports", code)(id => modules[id] ?? require(id), route);

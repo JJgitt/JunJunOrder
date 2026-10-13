@@ -5,6 +5,7 @@ import { getDb } from "@/db";
 import { auditLogs, dashboardNotices, inventory, inventoryLots, inventoryMovements, orderImages, orderItems, productKnowledge, purchaseOrders, users } from "@/db/schema";
 import { assertSameOrigin, requireAdmin, requireAppUser, routeError } from "@/lib/auth";
 import { uploadPath } from "@/lib/file-storage";
+import { isSettlementStage } from "@/lib/order-settlement";
 import { serverClock } from "@/lib/server-time";
 import { dateKey, timestamp } from "@/lib/time";
 
@@ -376,7 +377,7 @@ export async function POST(request:Request){
       await db.transaction(async tx=>{
         const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,id)).for("update").limit(1);
         if(!order)throw notFound("订单不存在");
-        if(!order.receivedAt)throw conflict("采购单尚未入库，不能结款");
+        if(!isSettlementStage(order.status))throw conflict("采购单需审核通过进入在途或入库后，才能结款");
         if(order.settled)throw conflict("采购单已经完成结款，请勿重复操作");
         const timestamp=now();
         await tx.update(purchaseOrders).set({settled:true,settledAt:timestamp,settledBy:user.id,settledAmountCents,updatedAt:timestamp}).where(eq(purchaseOrders.id,id));
@@ -392,8 +393,8 @@ export async function POST(request:Request){
       await db.transaction(async tx=>{
         const orders=await tx.select().from(purchaseOrders).where(inArray(purchaseOrders.id,ids)).for("update");
         if(orders.length!==ids.length)throw notFound("部分订单不存在，请刷新后重试");
-        const notReceived=orders.find(order=>!order.receivedAt);
-        if(notReceived)throw conflict(`订单 ${notReceived.id} 尚未入库，不能结款`);
+        const notEligible=orders.find(order=>!isSettlementStage(order.status));
+        if(notEligible)throw conflict(`订单 ${notEligible.id} 需审核通过进入在途或入库后，才能结款`);
         const settled=orders.find(order=>order.settled);
         if(settled)throw conflict(`订单 ${settled.id} 已经完成结款，请勿重复操作`);
         const timestamp=now();

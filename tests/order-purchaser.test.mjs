@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import test from "node:test";
 import ts from "typescript";
+import * as settlement from "../lib/order-settlement.ts";
 
 const require = createRequire(import.meta.url);
 const compile = source => ts.transpileModule(source, {
@@ -83,6 +84,7 @@ function fixture({ actor = admin, people = [admin, buyer, otherAdmin] } = {}) {
     "@/lib/time": { dateKey: () => "2026-10-08", timestamp: value => Date.parse(value) },
     "@/lib/file-storage": { imageExtension: type => type === "image/png" ? ".png" : null, uploadPath: key => `/uploads/${key}` },
     "@/lib/order-image-upload": imageUpload,
+    "@/lib/order-settlement": settlement,
     "node:fs/promises": {
       mkdir: async () => {}, writeFile: async path => { files.add(path); }, unlink: async path => { files.delete(path); },
       open: async (path, flag) => {

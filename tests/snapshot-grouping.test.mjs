@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import test from "node:test";
 import ts from "typescript";
+import * as settlement from "../lib/order-settlement.ts";
 
 const require = createRequire(import.meta.url);
 const source = await readFile(new URL("../app/api/app/route.ts", import.meta.url), "utf8");
@@ -69,6 +70,7 @@ function handler(user, orderRows = orders) {
     "@/lib/file-storage": {},
     "@/lib/server-time": { serverClock: () => ({ now: "2026-09-24T00:00:00.000Z", timeZone: "Asia/Shanghai" }) },
     "@/lib/time": { timestamp: value => Date.parse(value) },
+    "@/lib/order-settlement": settlement,
   };
   const exports = {};
   new Function("require", "exports", code)(id => modules[id] ?? require(id), exports);

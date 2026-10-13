@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import test from "node:test";
 import ts from "typescript";
+import * as settlement from "../lib/order-settlement.ts";
 
 const require = createRequire(import.meta.url);
 const source = await readFile(new URL("../app/api/app/route.ts", import.meta.url), "utf8");
@@ -62,6 +63,7 @@ async function updateOrder(items) {
     "@/lib/auth": { assertSameOrigin: () => {}, requireAdmin: () => {}, requireAppUser: async () => admin, routeError: error => { throw error; } },
     "@/lib/file-storage": {}, "@/lib/server-time": { serverClock: () => ({ now: "2026-09-24T00:00:00.000Z", timeZone: "Asia/Shanghai" }) },
     "@/lib/time": { timestamp: value => Date.parse(value) },
+    "@/lib/order-settlement": settlement,
   };
   const route = {};
   new Function("require", "exports", code)(id => modules[id] ?? require(id), route);

@@ -9,6 +9,7 @@ import {buildOrderCopyText} from "@/lib/order-copy";
 import {financeMonthOptions, monthlyFinance} from "@/lib/dashboard-finance";
 import {paginateOrders} from "@/lib/order-pagination";
 import {postReceiptTimelineEvents} from "@/lib/order-timeline";
+import {canSettleOrder, isSettlementStage} from "@/lib/order-settlement";
 import {orderImageUploadError} from "@/lib/order-image-upload";
 import {dateKey, dayRange, timestamp, waitingLabel, type ServerClock} from "@/lib/time";
 import type {KnowledgeMatch} from "@/lib/product-knowledge-match";
@@ -987,7 +988,7 @@ function AdminOrders({
     const selectedPageIds = selectedIds.filter(id => pageOrderIds.has(id));
     const selectedSet = new Set(selectedPageIds), selectedOrders = pageOrders.filter(order => selectedSet.has(order.id)),
         selectedReady = selectedOrders.filter(order => readyToShip(order.status)),
-        selectedSettleReady = selectedOrders.filter(order => order.receivedAt && !order.settled),
+        selectedSettleReady = selectedOrders.filter(canSettleOrder),
         selectedItemQuantity = selectedOrders.reduce((sum, order) => sum + order.items.reduce((qty, item) => qty + item.qty, 0), 0),
         allVisibleSelected = pageOrders.length > 0 && pageOrders.every(order => selectedSet.has(order.id));
     const exportOrders = selectedPageIds.length ? selectedOrders : pageOrders;
@@ -1187,7 +1188,7 @@ function AdminOrders({
                                                                      onOpen={() => onOpen(order.id)}
                                                                      showPurchaserContact showLocation actions={<>
             <button className="edit-ghost" onClick={() => onEdit(order.id)}>编辑</button>
-            {order.receivedAt && !order.settled && <button className="settlement-action"
+            {canSettleOrder(order) && <button className="settlement-action"
                                                            onClick={() => onSettle(order.id)}>确认结款</button>}
             {canRejectOrder(order) && <button className="danger-ghost"
                                               onClick={() => onReject(order.id)}>驳回</button>}{order.status === "待审核" ? <>
@@ -1265,7 +1266,7 @@ function SettlementStatus({order}: { order: PurchaseOrder }) {
     const {dateTime} = useServerClock();
     return <div className={`order-settlement ${order.settled ? "settled" : "pending"}`}>
         <span>采购结款</span><b>{order.settled ? <><em>已结款{order.settledAmount != null ? ` · ${money(order.settledAmount)}` : " · 金额未记录"}</em><time>{dateTime(order.settledAt)}</time></> :
-        <em>{order.receivedAt ? "待结款" : "入库后可结款"}</em>}</b>
+        <em>{isSettlementStage(order.status) ? "待结款" : "审核通过后可结款"}</em>}</b>
     </div>;
 }
 
@@ -2100,7 +2101,7 @@ function OrderDetail({
                                                      showItem={order.items.length > 1}/>}/>{order.items.some(item => item.purchaseCourierNo) &&
             <KeyValue label="物流轨迹" value={<TrackingPanel items={order.items}/>}/>}{showLocation && order.location &&
             <KeyValue label="库位" value={order.location}/>}<KeyValue label="采购结款"
-            value={order.settled ? `已结款 · ${order.settledAmount != null ? money(order.settledAmount) : "金额未记录"} · ${dateTime(order.settledAt)}` : order.receivedAt ? "待结款" : "入库后可结款"}
+            value={order.settled ? `已结款 · ${order.settledAmount != null ? money(order.settledAmount) : "金额未记录"} · ${dateTime(order.settledAt)}` : isSettlementStage(order.status) ? "待结款" : "审核通过后可结款"}
             highlight={order.settled}/></div>
         <div className="detail-card items-card">
             <div className="items-card-head"><h3>商品清单</h3><span>{orderQuantity(order)} 件 · {money(order.amount)}</span></div>
@@ -2139,10 +2140,10 @@ function OrderDetail({
             <ol>
                 <li><b>{dateTime(order.createdAt)}</b><span>{order.purchaser}上传订单</span></li>
                 {order.status !== "待审核" && order.status !== "已驳回" &&
-                    <li><b>{dateTime(order.approvedAt)}</b><span>管理员审核通过</span></li>}{order.receivedAt &&
-                <li><b>{dateTime(order.receivedAt)}</b><span>收货入库{showLocation && order.location ? ` · ${order.location}` : ""}</span></li>}{canManage && order.items.some(item => item.resaleNo) &&
+                    <li><b>{dateTime(order.approvedAt)}</b><span>管理员审核通过</span></li>}{canManage && order.items.some(item => item.resaleNo) &&
                 <li><b>未记录</b><span>二级平台成交时间未单独记录</span></li>}
-                {postReceiptEvents.map(event => event.kind === "shipped" ?
+                {postReceiptEvents.map(event => event.kind === "received" ?
+                    <li key="received"><b>{dateTime(event.at)}</b><span>收货入库{showLocation && order.location ? ` · ${order.location}` : ""}</span></li> : event.kind === "shipped" ?
                     <li key={`shipped-${event.item.id}`}><b>{dateTime(event.at)}</b><span>{event.item.title} · {event.item.size}码 ×{event.item.qty} 已发货</span></li> :
                     <li key="settled"><b>{dateTime(event.at)}</b><span>{order.settledByName || "管理员"}完成采购结款{order.settledAmount != null ? ` · ${money(order.settledAmount)}` : ""}</span></li>)}</ol>
         </div>
@@ -2153,7 +2154,7 @@ function OrderDetail({
         <button className="primary-button" onClick={onApprove}>审核通过</button>
     </div>}{canManage && order.status === "在途" &&
         <button className="primary-button receive-confirm-button" onClick={onReceive}>📦
-            手动确认入库</button>}{canManage && order.receivedAt && !order.settled &&
+            手动确认入库</button>}{canManage && canSettleOrder(order) &&
         <button className="primary-button settlement-confirm-button" onClick={onSettle}>¥ 确认采购结款</button>}{canManage && !order.settled && readyToShip(order.status) && !order.items.some(item => item.shipped) &&
         <button className="revert-receive-button" onClick={onRevertReceive}>↩ 退回在途（撤销入库）</button>}</Modal>;
 }
@@ -2255,7 +2256,7 @@ function SettlementSheet({
 
     return <Modal title="确认采购结款" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
         <div className="settlement-confirm-card"><i>¥</i><div><b>确认已向采购员完成结款？</b>
-            <p>本单采购金额为 {money(order.amount)}。结款状态独立记录，不会发货、扣减库存或改变当前发货状态。</p></div></div>
+            <p>本单采购金额为 {money(order.amount)}。在途或入库后均可结款。结款状态独立记录，不会发货、扣减库存或改变当前发货状态。</p></div></div>
         <div className="settlement-summary"><span>采购员</span><b>{order.purchaser}</b><span>当前发货状态</span>
             <b>{order.status === "已发货" ? "已全部发货" : order.items.some(item => item.shipped) ? "部分已发货" : "未发货"}</b></div>
         <label className="settlement-amount-field"><span>实际结款金额 <em>选填</em></span>
@@ -2497,7 +2498,7 @@ function BatchSettlementSheet({
 
     return <Modal title="批量确认结款" subtitle={`${orders.length} 笔可结款订单`} onClose={onClose}>
         <div className="settlement-confirm-card batch-settlement-card"><i>¥</i><div><b>确认批量完成采购结款？</b>
-            <p>将把选中的 {orders.length} 笔已入库订单标记为已结款，不会改变订单发货状态。</p></div></div>
+            <p>将把选中的 {orders.length} 笔在途或已入库订单标记为已结款，不会改变订单入库、发货状态。</p></div></div>
         <div className="settlement-summary"><span>结款订单</span><b>{orders.length} 笔</b><span>采购总金额</span><b>{money(purchaseAmount)}</b></div>
         <p className="batch-settlement-note">批量结款不记录每笔实际结款金额和结款截图；订单详情将显示“金额未记录”。</p>
         <div className="dual-actions settlement-confirm-actions">

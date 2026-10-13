@@ -453,7 +453,8 @@ test("buyer snapshots stop at receipt and hide all shipment state and logistics"
   assertJsMatch(page,/showLocation=\{role === "admin"\}/);
   assertJsMatch(page,/canManage=\{role === "admin"\}/);
   assertJsMatch(page,/showLocation && order\.location && <KeyValue label="库位"/);
-  assertJsMatch(page,/order\.receivedAt&&<li><b>\{dateTime\(order\.receivedAt\)\}<\/b><span>收货入库\{showLocation&&order\.location\?` · \$\{order\.location\}`:""\}<\/span><\/li>/);
+  assertJsMatch(page,/key="received"><b>\{dateTime\(event\.at\)\}<\/b><span>收货入库\{showLocation&&order\.location\?` · \$\{order\.location\}`:""\}<\/span><\/li>/);
+  assertJsNotMatch(page,/order\.receivedAt&&<li>/);
   assertJsMatch(page,/normalizeStatus\?statusLabel\(order\.status\):order\.status/);
   assertJsMatch(page,/canManage\?statusLabel\(order\.status\):order\.status/);
   assertJsMatch(page,/canManage&&item\.shipped&&<div className="item-ship-block">/);
@@ -479,7 +480,9 @@ test("order detail timeline gates per-item shipment events to administrators",as
     readFile(new URL("../app/api/app/route.ts",import.meta.url),"utf8"),
   ]);
   assertJsMatch(page,/postReceiptTimelineEvents\(order,canManage,timestamp\)/);
-  assertJsMatch(page,/postReceiptEvents\.map\(event=>event\.kind==="shipped"\?/);
+  assertJsMatch(page,/postReceiptEvents\.map\(event=>event\.kind==="received"\?/);
+  assertJsMatch(page,/key="received"><b>\{dateTime\(event\.at\)\}<\/b><span>收货入库/);
+  assertJsMatch(page,/:event\.kind==="shipped"\?/);
   assertJsMatch(page,/key=\{`shipped-\$\{event\.item\.id\}`\}/);
   assertJsMatch(page,/<b>\{dateTime\(event\.at\)\}<\/b><span>\{event\.item\.title\} · \{event\.item\.size\}码 ×\{event\.item\.qty\} 已发货<\/span>/);
   assert.match(appRoute,/\.\.\.\(isAdmin\?\{\s*shipped:Boolean\(item\.shippedAt\)/);
@@ -1238,7 +1241,7 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assert.match(amountMigration,/CHECK \("settled_amount_cents" IS NULL OR "settled_amount_cents" > 0\)/);
   assert.match(appRoute,/settled:row\.settled,settledAt:row\.settledAt\?\?undefined,settledAmount:row\.settledAmountCents==null\?undefined:row\.settledAmountCents\/100,receivedAt:row\.receivedAt\?\?undefined/);
   assert.match(appRoute,/if\(action==="settle-order"\)/);
-  assert.match(appRoute,/if\(!order\.receivedAt\)throw conflict\("采购单尚未入库，不能结款"\)/);
+  assert.match(appRoute,/if\(!isSettlementStage\(order\.status\)\)throw conflict\("采购单需审核通过进入在途或入库后，才能结款"\)/);
   assert.match(appRoute,/set\(\{settled:true,settledAt:timestamp,settledBy:user\.id,settledAmountCents,updatedAt:timestamp\}\)/);
   assert.match(appRoute,/action:"settle"/);
   assert.match(appRoute,/if\(order\.settled\)throw conflict\("订单已结款，不能再驳回"\)/);
@@ -1258,14 +1261,17 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assertJsMatch(page,/form\.set\("proofSelected","true"\)/);
   assertJsMatch(page,/form\.append\("proof",proof,proof\.name\)/);
   assertJsMatch(page,/function SettlementStatus/);
-  assertJsMatch(page,/order\.receivedAt&&!order\.settled&&<button className="settlement-action"/);
+  assertJsMatch(page,/canSettleOrder\(order\)&&<button className="settlement-action"/);
   assertJsMatch(page,/onBatchSettle=\{batchSettle\}/);
-  assertJsMatch(page,/selectedSettleReady=selectedOrders\.filter\(order=>order\.receivedAt&&!order\.settled\)/);
+  assertJsMatch(page,/selectedSettleReady=selectedOrders\.filter\(canSettleOrder\)/);
+  assertJsMatch(page,/isSettlementStage\(order\.status\)\?"待结款":"审核通过后可结款"/);
+  assertJsNotMatch(page,/入库后可结款/);
   assertJsMatch(page,/className="batch-settle-button" disabled=\{!selectedSettleReady\.length\}/);
   assertJsMatch(page,/function BatchSettlementSheet/);
+  assertJsMatch(page,/笔在途或已入库订单标记为已结款，不会改变订单入库、发货状态/);
   assertJsMatch(page,/批量结款不记录每笔实际结款金额和结款截图/);
   assert.match(appRoute,/if\(action==="batch-settle"\)/);
-  assert.match(appRoute,/const notReceived=orders\.find\(order=>!order\.receivedAt\)/);
+  assert.match(appRoute,/const notEligible=orders\.find\(order=>!isSettlementStage\(order\.status\)\)/);
   assert.match(appRoute,/const settled=orders\.find\(order=>order\.settled\)/);
   assert.match(appRoute,/settled:true,settledAt:timestamp,settledBy:user\.id,settledAmountCents:null/);
   assert.match(appRoute,/action:"batch_settle"/);
@@ -1280,7 +1286,7 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assertJsMatch(page,/正在识别结款金额/);
   assertJsMatch(page,/order\.settled&&<OrderImages images=\{order\.settlementProofs\} title="结款截图" variant="settlement"/);
   assertJsMatch(page,/emptyText="本次结款未上传截图"/);
-  assertJsMatch(page,/canManage&&order\.receivedAt&&!order\.settled&&<button className="primary-button settlement-confirm-button"/);
+  assertJsMatch(page,/canManage&&canSettleOrder\(order\)&&<button className="primary-button settlement-confirm-button"/);
   assert.match(settlementRoute,/requireAdmin\(user\)/);
   assert.match(settlementRoute,/form\.get\("proof"\)/);
   assert.match(settlementRoute,/form\.get\("proofSelected"\) === "true" && !proof/);
@@ -1290,7 +1296,7 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assert.match(settlementRoute,/settledAmountCents: amountCents/);
   assert.match(settlementRoute,/proof\.size > 5 \* 1024 \* 1024/);
   assert.match(settlementRoute,/kind: "settlement"/);
-  assert.match(settlementRoute,/if \(!order\.receivedAt\) throw conflict\("采购单尚未入库，不能结款"\)/);
+  assert.match(settlementRoute,/if \(!isSettlementStage\(order\.status\)\) throw conflict\("采购单需审核通过进入在途或入库后，才能结款"\)/);
   assert.match(settlementRoute,/proofImageId: image\?\.id \?\? null/);
   assert.match(appRoute,/const optionalPositiveCents=/);
   assert.match(appRoute,/settledAmountCents=optionalPositiveCents\(body\.amount\)/);
