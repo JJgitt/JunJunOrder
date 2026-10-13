@@ -1,9 +1,17 @@
 const supportedTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"]);
+const extensions: Record<string, string> = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/heic": "heic", "image/heif": "heif"};
+
+function normalizedProof(file: File, type: string): File {
+    // An empty filename is parsed as a text field by multipart parsers.
+    const name = file.name.trim() ? file.name : `settlement-proof.${extensions[type]}`;
+    return type === file.type && name === file.name ? file : new File([file], name, {type, lastModified: file.lastModified});
+}
 
 /** Some mobile pickers omit MIME metadata; detect the image rather than trusting its filename. */
 export async function prepareSettlementProof(file: File): Promise<File> {
-    if (!file.size || file.size > 5 * 1024 * 1024) throw new Error("请选择非空且不超过 5MB 的结款截图");
-    if (supportedTypes.has(file.type)) return file;
+    if (!file.size) throw new Error("结款截图是空文件，请重新选择");
+    if (file.size > 5 * 1024 * 1024) throw new Error(`结款截图超过 5MB（当前约 ${(file.size / 1024 / 1024).toFixed(2)}MB），请压缩后再上传`);
+    if (supportedTypes.has(file.type)) return normalizedProof(file, file.type);
 
     const bytes = new Uint8Array(await file.slice(0, 32).arrayBuffer());
     const startsWith = (signature: number[]) => signature.every((value, index) => bytes[index] === value);
@@ -19,5 +27,5 @@ export async function prepareSettlementProof(file: File): Promise<File> {
         else if (["mif1", "msf1"].includes(brand)) type = "image/heif";
     }
     if (!type) throw new Error("未能确认图片格式，请选择 JPG、PNG、WebP、GIF 或 HEIC/HEIF 截图");
-    return new File([file], file.name, {type, lastModified: file.lastModified});
+    return normalizedProof(file, type);
 }

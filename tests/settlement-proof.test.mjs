@@ -229,6 +229,26 @@ test("settlement proof preparation rejects empty, oversized and unknown data", a
   }
 });
 
+test("first settlement recognizes and saves a proof with a repaired blank filename", async () => {
+  for (const name of ["", "   "]) {
+    const f = sheetFixture(Response.json({ data: { amount: 123.45 } }), { first: true });
+    const file = new File([pngBytes], name, { type: "image/png" });
+    f.upload(file);
+    await nextTurn();
+    assert.equal(f.requests.length, 1);
+    const body = f.requests[0].options.body;
+    const request = new Request("http://localhost/api/settlements/recognize", { method: "POST", body });
+    const parsed = (await request.formData()).get("image");
+    assert.ok(parsed instanceof File);
+    assert.equal(parsed.name, "settlement-proof.png");
+    assert.equal(f.render().amount.props.value, "123.45");
+    f.render().save.props.onClick();
+    assert.equal(f.saved[0][1], 123.45);
+    assert.equal(f.saved[0][2].name, "settlement-proof.png");
+    assert.equal(f.saved[0][2].type, "image/png");
+  }
+});
+
 for (const type of ["image/png", ""]) {
   test(`first settlement recognizes ${type || "missing MIME"} image and saves the normalized proof`, async () => {
     const result = deferred();

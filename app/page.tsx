@@ -2232,7 +2232,7 @@ function SettlementSheet({
             if (recognitionRequest.current !== requestId) return;
             setProof(prepared);
             const form = new FormData();
-            form.set("image", prepared);
+            form.set("image", prepared, prepared.name);
             const response = await fetch("/api/settlements/recognize", {method: "POST", body: form});
             const json = await response.json() as { data?: { amount: number }; error?: string };
             if (!response.ok || !json.data || !Number.isFinite(json.data.amount) || json.data.amount <= 0) throw new Error(json.error || "未识别出金额，请手动输入或重新识别");
@@ -2346,7 +2346,7 @@ function SettlementProofSheet({
             if (recognitionRequest.current !== requestId) return;
             setProof(prepared);
             const form = new FormData();
-            form.set("image", prepared);
+            form.set("image", prepared, prepared.name);
             const response = await fetch("/api/settlements/recognize", {method: "POST", body: form});
             const json = await response.json() as { data?: { amount: number }; error?: string };
             if (!response.ok || !json.data || !Number.isFinite(json.data.amount) || json.data.amount <= 0) throw new Error(json.error || "未识别出金额，请手动输入");
