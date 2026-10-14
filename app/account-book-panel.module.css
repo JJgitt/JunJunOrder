@@ -1,0 +1,121 @@
+.panel {
+    overflow: hidden;
+    margin: 20px 0;
+    border: 1px solid #e5dcc6;
+    border-radius: 22px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgb(83 65 25 / 4%);
+    color: #263047;
+}
+
+.entry {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    width: 100%;
+    min-height: 86px;
+    padding: 18px 20px;
+    border: 0;
+    background: linear-gradient(120deg, #fff9e9, #fffdf7 55%, #fff);
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.icon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    border: 1px solid #eeddaa;
+    border-radius: 15px;
+    background: #fff1c9;
+    color: #94701d;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.entryTitle {display: grid; min-width: 0; gap: 4px;}
+.entryTitle strong {font-size: 17px;}
+.entryTitle small {color: #8c805e; font-size: 12px;}
+.entryAction {display: flex; align-items: center; gap: 7px; margin-left: auto; color: #957124; font-size: 13px; white-space: nowrap;}
+.entryAction span {font-size: 20px;}
+.body {padding: 0 20px 20px; border-top: 1px solid #f1e9d4;}
+.body[hidden] {display: none;}
+.description {margin: 17px 0; color: #7d806e; font-size: 13px; line-height: 1.7;}
+.loading {padding: 10px 0; color: #69778b; font-size: 14px;}
+.form {display: grid; gap: 16px;}
+.field {display: grid; min-width: 0; gap: 8px;}
+.field > span:first-child, .field > label {font-size: 14px; font-weight: 650;}
+.field > small {color: #8b91a0; font-size: 12px;}
+.field input, .field textarea {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 46px;
+    padding: 11px 12px;
+    border: 1px solid #dce1ea;
+    border-radius: 12px;
+    background: #fafbfe;
+    color: #263047;
+    font-family: inherit;
+    font-size: 16px;
+    line-height: 1.4;
+    text-align: left;
+}
+.field textarea {resize: vertical; min-height: 86px;}
+.field input:focus, .field textarea:focus {outline: 2px solid #e9d195; outline-offset: 2px; border-color: #c3a150;}
+.field input:disabled, .field textarea:disabled {opacity: .65;}
+.field input::placeholder, .field textarea::placeholder {color: #9a9fac;}
+.field input[type="month"] {appearance: none; -webkit-appearance: none;}
+.amountField {display: flex; min-width: 0; gap: 8px;}
+.signButton {
+    flex-shrink: 0;
+    width: 46px;
+    min-height: 46px;
+    border: 1px solid #e6d6ad;
+    border-radius: 12px;
+    background: #fffaf0;
+    color: #8d6517;
+    font-size: 22px;
+    cursor: pointer;
+}
+.summary {display: flex; flex-wrap: wrap; align-items: center; gap: 7px 12px; padding: 12px 14px; border-radius: 12px; background: #f9f5e8; color: #827041; font-size: 13px;}
+.summary b {margin-left: auto; color: #906715; font-size: 17px; font-variant-numeric: tabular-nums;}
+.summary small {width: 100%; color: #998e70; font-size: 11px;}
+.field > .validation {color: #b25345;}
+.error {display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; padding: 12px; border-radius: 10px; background: #fff1ed; color: #ad5540; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere;}
+.success {margin: 0; padding: 11px 12px; border-radius: 10px; background: #edf7ef; color: #3c7550; font-size: 13px;}
+.actions {display: flex; flex-wrap: wrap; gap: 10px;}
+.primary, .secondary {box-sizing: border-box; min-height: 44px; padding: 10px 15px; border-radius: 11px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;}
+.primary {flex: 1; border: 1px solid #a67d20; background: linear-gradient(120deg, #b18a2a, #96701e); color: #fff;}
+.secondary {border: 1px solid #d8dce5; background: #fff; color: #697488;}
+.entry:focus-visible, .primary:focus-visible, .secondary:focus-visible, .record:focus-visible, .signButton:focus-visible {outline: 2px solid #bea451; outline-offset: -3px;}
+.primary:disabled, .secondary:disabled, .record:disabled, .signButton:disabled {opacity: .5; cursor: default;}
+.history {margin-top: 24px; padding-top: 19px; border-top: 1px solid #edf0f5;}
+.historyHead {display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;}
+.historyHead h3 {margin: 0; font-size: 15px;}
+.historyHead > span {color: #9a9eaa; font-size: 12px;}
+.history ul {display: grid; gap: 9px; margin: 0; padding: 0; list-style: none;}
+.record {display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; width: 100%; min-height: 76px; padding: 13px; border: 1px solid #e7eaf0; border-radius: 13px; background: #fff; color: inherit; text-align: left; cursor: pointer;}
+.record.selected {border-color: #dfcb98; background: #fffaf0;}
+.recordInfo {display: grid; gap: 5px; min-width: 0;}
+.recordInfo strong {font-size: 14px;}
+.recordInfo > small {color: #969baa; font-size: 11px; line-height: 1.5;}
+.note {color: #7b8393; font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere;}
+.recordAmount {display: grid; flex-shrink: 0; gap: 8px; max-width: 52%; text-align: right;}
+.recordAmount b {color: #956e20; font-size: 16px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;}
+.recordAmount b.negative {color: #b05c52;}
+.recordAmount small {color: #9b8b66; font-size: 12px;}
+.empty {margin: 0; padding: 16px; border-radius: 12px; background: #f7f8fb; color: #8b93a3; font-size: 13px; line-height: 1.7;}
+
+@media (max-width: 380px) {
+    .entry {gap: 10px; padding: 16px 13px;}
+    .body {padding-right: 13px; padding-left: 13px;}
+    .icon {width: 40px; height: 40px;}
+    .record {gap: 8px; padding: 11px 10px;}
+    .recordAmount b {font-size: 14px;}
+}

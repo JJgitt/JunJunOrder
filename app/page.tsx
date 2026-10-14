@@ -16,6 +16,7 @@ import {dateKey, dayRange, timestamp, waitingLabel, type ServerClock} from "@/li
 import type {KnowledgeMatch} from "@/lib/product-knowledge-match";
 import {fillProductIdentity} from "@/lib/product-knowledge-fill";
 import ProductKnowledgePanel from "./product-knowledge-panel";
+import AccountBookPanel from "./account-book-panel";
 import {ServerClockProvider, useServerClock} from "./server-clock";
 
 type Role = "admin" | "buyer";
@@ -1699,6 +1700,7 @@ function AdminProfile({
             <div className="avatar">{user.name.slice(0, 1)}</div>
             <div><h2>{user.name}</h2><span>微信号：{user.wechatId}</span></div>
             <Badge tone="purple">管理员</Badge></div>
+        <AccountBookPanel onNotify={onNotify}/>
         <SectionHead title="采购员申请" note={pendingCount ? `${pendingCount} 个待审批` : "暂无待审批"}/>
         {applications.length ? <div className="application-list">{applications.map(person => <article key={person.id}
                                                                                                       className={person.approvalStatus === "rejected" ? "application-rejected" : ""}>

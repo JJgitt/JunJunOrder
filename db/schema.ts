@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, date, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, check, date, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow();
@@ -150,3 +150,17 @@ export const dashboardNotices = pgTable("dashboard_notices", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (table) => [index("idx_dashboard_notices_created").on(table.createdAt)]);
+
+export const monthlyGrossProfits = pgTable("monthly_gross_profits", {
+  month: text("month").primaryKey(),
+  grossProfitCents: integer("gross_profit_cents").notNull(),
+  note: text("note").notNull().default(""),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  check("monthly_gross_profits_month_check", sql`char_length(${table.month}) = 7 AND ${table.month} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$' AND substring(${table.month}, 1, 4) <> '0000'`),
+  check("monthly_gross_profits_amount_check", sql`${table.grossProfitCents} BETWEEN -2147483648 AND 2147483647`),
+  check("monthly_gross_profits_note_check", sql`char_length(${table.note}) <= 500`),
+]);
