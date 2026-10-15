@@ -15,6 +15,7 @@
 | 任务 | 先读 | 再定位 |
 | --- | --- | --- |
 | 订单、库存、结款、商品知识库业务 | [业务与不变量](业务与不变量.md) | `app/api/app/route.ts`、`db/schema.ts` |
+| 已发货订单回滚 | [已发货订单回滚](已发货订单回滚.md) | `rollback-shipped-order`、`app/page.tsx`、`drizzle/0017_archive_settlement_proofs.sql` |
 | 页面或 API 改动 | [架构与定位](架构与定位.md) | `app/page.tsx`、对应 `app/api/**/route.ts` |
 | 管理员月度毛利记账 | [记账本](记账本.md) | `app/account-book-panel.tsx`、`app/api/account-book/route.ts` |
 | 数据库字段/迁移 | [迭代手册](迭代手册.md) | `db/schema.ts`、`drizzle/`、[数据库设计](../数据库设计.md) |

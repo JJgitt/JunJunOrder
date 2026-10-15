@@ -51,6 +51,8 @@ jobs:
       - run: node tests/order-uniqueness.integration.mjs
       - run: node --experimental-strip-types tests/product-knowledge.integration.mjs
       - run: node --experimental-strip-types tests/account-book.integration.mjs
+      - run: node --experimental-strip-types --test tests/shipment-rollback.test.mjs tests/shipment-rollback-ui.test.mjs
+      - run: node --experimental-strip-types tests/shipment-rollback.integration.mjs
       - run: bash -n deploy/ci/deploy.sh deploy/ci/ssh-entry.sh deploy/ci/install-server-deploy.sh
 
   deploy:

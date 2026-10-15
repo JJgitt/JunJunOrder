@@ -442,6 +442,48 @@ export async function POST(request:Request){
       return Response.json({data:await snapshot(user)});
     }
 
+    if(action==="rollback-shipped-order"){
+      requireAdmin(user);
+      const id=string(body.orderId);
+      if(!id)return Response.json({error:"缺少订单 ID"},{status:400});
+      if(body.reason!==undefined&&(typeof body.reason!=="string"||body.reason.length>500))return Response.json({error:"回滚原因最多填写 500 个字"},{status:400});
+      const reason=string(body.reason);
+      await db.transaction(async tx=>{
+        // All shipment/settlement writes take this same parent lock before child rows.
+        const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,id)).for("update").limit(1);
+        if(!order)throw notFound("订单不存在");
+        if(!["已入库","已发货"].includes(order.status))throw conflict("只有全部商品已发货的订单可以回滚，请刷新后重试");
+        const items=await tx.select().from(orderItems).where(eq(orderItems.orderId,id)).for("update");
+        if(!items.length||items.some(item=>!item.shippedAt))throw conflict("只有全部商品已发货的订单可以回滚，请刷新后重试");
+        const lots=await tx.select().from(inventoryLots).where(eq(inventoryLots.orderId,id)).for("update");
+        const lotByItem=new Map(lots.map(lot=>[lot.itemId,lot]));
+        if(lots.length!==items.length||lotByItem.size!==items.length||items.some(item=>{
+          const lot=lotByItem.get(item.id);
+          return !lot||!lot.shippedAt||lot.sku!==item.sku||lot.size!==item.size||lot.qty!==item.qty||!Number.isInteger(item.qty)||item.qty<1||item.qty>maxDbInt;
+        }))throw conflict("订单库存批次与已发货商品不一致，无法安全回滚，请联系管理员检查");
+        const settlementProofs=await tx.select().from(orderImages).where(and(eq(orderImages.orderId,id),eq(orderImages.kind,"settlement"))).for("update");
+        const timestamp=now();
+        const reversals=lots.map(lot=>({itemId:lot.itemId,sku:lot.sku,size:lot.size,qty:lot.qty,location:lot.location,shipmentReversalMovementId:uid("move"),receiptReversalMovementId:uid("move")}));
+        // A fully shipped lot has zero on-hand stock. Compensate shipment and receipt
+        // in the ledger without transiently increasing shared SKU stock (or overflowing it).
+        await tx.insert(inventoryMovements).values(reversals.flatMap(reversal=>[
+          {id:reversal.shipmentReversalMovementId,orderId:id,sku:reversal.sku,size:reversal.size,changeQty:reversal.qty,type:"adjust" as const,location:reversal.location,actorId:user.id,createdAt:timestamp},
+          {id:reversal.receiptReversalMovementId,orderId:id,sku:reversal.sku,size:reversal.size,changeQty:-reversal.qty,type:"adjust" as const,location:reversal.location,actorId:user.id,createdAt:timestamp},
+        ]));
+        await tx.delete(inventoryLots).where(eq(inventoryLots.orderId,id));
+        const itemReset={shippedAt:null,outboundCompany:null,outboundCourierNo:null,resalePlatform:null,resaleOrderNo:null,salePriceCents:null,updatedAt:timestamp};
+        await tx.update(orderItems).set(itemReset).where(eq(orderItems.orderId,id));
+        const orderReset={status:"在途" as const,receivedAt:null,location:null,settled:false,settledAt:null,settledBy:null,settledAmountCents:null,updatedAt:timestamp};
+        await tx.update(purchaseOrders).set(orderReset).where(eq(purchaseOrders.id,id));
+        if(settlementProofs.length)await tx.update(orderImages).set({kind:"settlement_archived"}).where(inArray(orderImages.id,settlementProofs.map(image=>image.id)));
+        await tx.insert(auditLogs).values({
+          id:uid("audit"),actorId:user.id,action:"rollback_shipped_order",entityType:"purchase_order",entityId:id,
+          detailJson:JSON.stringify({reason,before:{order,items,lots,settlementProofs},after:{order:{...order,...orderReset},items:items.map(item=>({...item,...itemReset})),lots:[],settlementProofs:settlementProofs.map(image=>({...image,kind:"settlement_archived"}))},reversals,inventoryNetChange:0}),createdAt:timestamp,
+        });
+      });
+      return Response.json({data:await snapshot(user)});
+    }
+
     if(action==="ship"){
       requireAdmin(user);const itemId=string(body.itemId),resaleNo=string(body.resaleNo),courier=string(body.courier),company=string(body.company),sale=cents(body.salePrice);
       if(!itemId||!courier||!company)return Response.json({error:"请完整填写发货物流公司和运单号"},{status:400});
@@ -467,6 +509,10 @@ export async function POST(request:Request){
       requireAdmin(user);const itemId=string(body.itemId),courier=string(body.courier),company=string(body.company),sale=cents(body.salePrice);
       if(!itemId||!courier||!company)return Response.json({error:"请完整填写发货物流公司和运单号"},{status:400});
       await db.transaction(async tx=>{
+        const [target]=await tx.select({orderId:orderItems.orderId}).from(orderItems).where(eq(orderItems.id,itemId)).limit(1);
+        if(!target)throw notFound("商品不存在");
+        const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,target.orderId)).for("update").limit(1);
+        if(!order||!["已入库","已发货"].includes(order.status))throw conflict("只有已发货商品可以修改发货物流");
         const [item]=await tx.select().from(orderItems).where(eq(orderItems.id,itemId)).for("update").limit(1);
         if(!item)throw notFound("商品不存在");
         if(!item.shippedAt)throw conflict("只有已发货商品可以修改发货物流");

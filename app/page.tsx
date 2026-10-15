@@ -32,7 +32,7 @@ type AdminOrderListState = {
 type BuyerOrderListState = {
     query: string; statuses: string[]; platform: string; settlement: string; page: number; moreFiltersOpen: boolean;
 };
-type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "detail" | "order-images" | "reject" | "ship" | "settle" | "settlement-amount" | "settlement-proof" | null;
+type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "rollback-shipped" | "detail" | "order-images" | "reject" | "ship" | "settle" | "settlement-amount" | "settlement-proof" | null;
 type OrderImage = { id: string; url: string; fileName: string; uploadedBy: string; createdAt: string };
 
 type OrderItem = {
@@ -474,6 +474,12 @@ export default function Home() {
         }
     }
 
+    async function rollbackShippedOrder(id: string, reason: string) {
+        await mutate("rollback-shipped-order", {orderId: id, reason});
+        setOverlay(null);
+        notify("订单已回滚到在途、未结款，操作记录已保留");
+    }
+
     async function resetPassword(userId: string, password: string) {
         try {
             await mutate("reset-user-password", {userId, password});
@@ -645,6 +651,7 @@ export default function Home() {
                          onClose={() => setOverlay(null)} onApprove={() => approve(selected.id)}
                          onReceive={() => setOverlay("manual-receive")}
                          onRevertReceive={() => setOverlay("revert-receive")} onReject={() => setOverlay("reject")}
+                         onRollbackShipped={() => setOverlay("rollback-shipped")}
                          onSettle={() => setOverlay("settle")}
                          onSettlementAmount={() => setOverlay("settlement-amount")}
                          onSettlementProof={() => setOverlay("settlement-proof")}
@@ -657,6 +664,8 @@ export default function Home() {
             <OrderImageUploadSheet key={selected.id} order={selected} onClose={() => setOverlay("detail")} onSubmit={appendOrderImages}/>}
         {role === "admin" && overlay === "revert-receive" && selected &&
             <RevertReceiveSheet order={selected} onClose={() => setOverlay(null)} onSubmit={revertReceive}/>}
+        {role === "admin" && overlay === "rollback-shipped" && selected && selected.status === "已发货" &&
+            <RollbackShipmentSheet key={selected.id} order={selected} onClose={() => setOverlay("detail")} onSubmit={rollbackShippedOrder}/>}
         {role === "admin" && overlay === "reject" && selected &&
             <RejectSheet order={selected} onClose={() => setOverlay(null)} onSubmit={reject}/>}
         {role === "admin" && overlay === "settle" && selected &&
@@ -2078,13 +2087,14 @@ function OrderDetail({
                          onApprove,
                          onReceive,
                          onRevertReceive,
+                         onRollbackShipped,
                          onReject,
                          onSettle,
                          onSettlementAmount,
                          onSettlementProof,
                          onOrderImages,
                          onShipItem
-                     }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onReject: () => void; onSettle: () => void; onSettlementAmount: () => void; onSettlementProof: () => void; onOrderImages: () => void; onShipItem: (itemId: string) => void }) {
+                     }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onRollbackShipped: () => void; onReject: () => void; onSettle: () => void; onSettlementAmount: () => void; onSettlementProof: () => void; onOrderImages: () => void; onShipItem: (itemId: string) => void }) {
     const {dateTime} = useServerClock();
     const postReceiptEvents = postReceiptTimelineEvents(order, canManage, timestamp);
     return <Modal title="订单详情" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
@@ -2159,7 +2169,9 @@ function OrderDetail({
         <button className="primary-button receive-confirm-button" onClick={onReceive}>📦
             手动确认入库</button>}{canManage && canSettleOrder(order) &&
         <button className="primary-button settlement-confirm-button" onClick={onSettle}>¥ 确认采购结款</button>}{canManage && !order.settled && readyToShip(order.status) && !order.items.some(item => item.shipped) &&
-        <button className="revert-receive-button" onClick={onRevertReceive}>↩ 退回在途（撤销入库）</button>}</Modal>;
+        <button className="revert-receive-button" onClick={onRevertReceive}>↩ 退回在途（撤销入库）</button>}
+        {canManage && order.status === "已发货" &&
+            <button className="rollback-shipped-entry" onClick={onRollbackShipped}>↩ 回滚到在途（未结款）</button>}</Modal>;
 }
 
 function OrderImageUploadSheet({order, onClose, onSubmit}: {
@@ -2441,6 +2453,50 @@ function RevertReceiveSheet({
             <button className="secondary-button revert-cancel" disabled={busy} onClick={onClose}>取消</button>
             <button className="primary-button revert-confirm" disabled={busy}
                     onClick={() => void confirm()}>{busy ? "正在退回…" : "确认退回在途"}</button>
+        </div>
+    </Modal>;
+}
+
+function RollbackShipmentSheet({order, onClose, onSubmit}: {
+    order: PurchaseOrder; onClose: () => void; onSubmit: (id: string, reason: string) => Promise<void>
+}) {
+    const [reason, setReason] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+    const saving = useRef(false);
+    const close = () => {if (!saving.current) onClose();};
+    async function confirm() {
+        if (saving.current) return;
+        if (reason.length > 500) {setError("回滚原因不能超过 500 字"); return;}
+        saving.current = true;
+        setBusy(true);
+        setError("");
+        try {
+            await onSubmit(order.id, reason.trim());
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "回滚失败，请稍后重试");
+        } finally {
+            saving.current = false;
+            setBusy(false);
+        }
+    }
+    return <Modal title="确认回滚已发货订单" subtitle={order.id} subtitleCopyValue={order.id} onClose={close} closeDisabled={busy}>
+        <div className="modal-product"><b>{orderTitleWithQuantity(order)}</b><span>{order.platform} · {money(order.amount)}</span></div>
+        <div className="rollback-shipped-warning">
+            <b>整笔订单将回到“在途 · 未结款”</b>
+            <p>请确认这不是只需修改物流信息的订单。回滚会清空：</p>
+            <ul><li>入库时间与库位，所有商品的发货物流、运单及发货时间</li>
+                <li>二级平台信息与预估售价</li><li>结款金额、结款时间和结款人</li></ul>
+            <p>原始采购信息和订单图片保留，结款截图归档留痕。库存历史与回滚审计保留，之后需重新入库、发货。</p>
+            <p><strong>此操作不会实际退款，也不会取消快递运单。</strong></p>
+        </div>
+        <label className="modal-field rollback-shipped-reason"><span>回滚原因（选填）</span>
+            <textarea value={reason} maxLength={500} disabled={busy} placeholder="记录回滚原因，方便后续核对"
+                      onChange={event => {if (!saving.current) setReason(event.target.value);}}/>
+            <small>{reason.length}/500</small></label>
+        {error && <p className="inline-warning" role="alert">{error}</p>}
+        <div className="dual-actions rollback-shipped-actions">
+            <button type="button" className="secondary-button" disabled={busy} onClick={close}>取消</button>
+            <button type="button" className="primary-button danger-button" disabled={busy} onClick={() => void confirm()}>
+                {busy ? "正在回滚…" : "确认回滚到在途、未结款"}</button>
         </div>
     </Modal>;
 }
@@ -2772,8 +2828,9 @@ function Modal({
                    subtitle,
                    subtitleCopyValue,
                    onClose,
+                   closeDisabled = false,
                    children
-               }: { title: string; subtitle: string; subtitleCopyValue?: string; onClose: () => void; children: React.ReactNode }) {
+               }: { title: string; subtitle: string; subtitleCopyValue?: string; onClose: () => void; closeDisabled?: boolean; children: React.ReactNode }) {
     useEffect(() => {
         const previous = document.body.style.overflow;
         document.body.style.overflow = "hidden";
@@ -2786,7 +2843,7 @@ function Modal({
             <header>
                 <div>{subtitleCopyValue ? <CopyNumber value={subtitleCopyValue} label="采购订单号"/> :
                     <span>{subtitle}</span>}<h2>{title}</h2></div>
-                <button type="button" aria-label="关闭" onClick={onClose}>×</button>
+                <button type="button" aria-label="关闭" disabled={closeDisabled} onClick={onClose}>×</button>
             </header>
             <div className="modal-body">{children}</div></section>
     </div>, document.body);

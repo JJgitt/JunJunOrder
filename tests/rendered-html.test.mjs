@@ -1246,9 +1246,13 @@ test("purchase settlement records a manual or recognized amount, supports an opt
   assert.match(appRoute,/action:"settle"/);
   assert.match(appRoute,/if\(order\.settled\)throw conflict\("订单已结款，不能再驳回"\)/);
   assert.match(appRoute,/if\(order\.settled\)throw conflict\("订单已结款，不能撤销入库"\)/);
-  assert.match(schema,/kind: text\("kind", \{ enum: \["order", "settlement"\] \}\)\.notNull\(\)\.default\("order"\)/);
+  assert.match(schema,/kind: text\("kind", \{ enum: \["order", "settlement", "settlement_archived"\] \}\)\.notNull\(\)\.default\("order"\)/);
   assert.match(proofMigration,/ADD COLUMN "kind" text DEFAULT 'order' NOT NULL/);
   assert.match(proofMigration,/CHECK \("kind" IN \('order', 'settlement'\)\)/);
+  const archiveMigration=await readFile(new URL("../drizzle/0017_archive_settlement_proofs.sql",import.meta.url),"utf8");
+  assert.match(archiveMigration,/DROP CONSTRAINT "order_images_kind_check"/);
+  assert.match(archiveMigration,/CHECK \("kind" IN \('order', 'settlement', 'settlement_archived'\)\)/);
+  assert.doesNotMatch(archiveMigration,/DELETE FROM|UPDATE "order_images"/);
   assert.match(appRoute,/const settlementImagesByOrder=new Map<string,typeof imageRows>\(\)/);
   assert.match(appRoute,/settlementProofs:\(settlementImagesByOrder\.get\(row\.id\)\?\?\[\]\)\.map/);
   const settleBlock=appRoute.slice(appRoute.indexOf('if(action==="settle-order")'),appRoute.indexOf('if(action==="revert-receive")'));

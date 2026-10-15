@@ -15,8 +15,9 @@ export async function GET(request:Request,{params}:{params:Promise<{id:string}>}
     if(!image)return new Response("Not found",{status:404});
     const [order]=await db.select().from(purchaseOrders).where(eq(purchaseOrders.id,image.orderId)).limit(1);
     if(!order||(user.role!=="admin"&&order.purchaserId!==user.id))return new Response("Forbidden",{status:403});
+    if(image.kind==="settlement_archived"&&user.role!=="admin")return new Response("Forbidden",{status:403});
     const bytes=await readFile(uploadPath(image.objectKey)).catch(()=>null);
     if(!bytes)return new Response("Not found",{status:404});
-    return new Response(bytes,{headers:{"content-type":image.contentType,"content-length":String(bytes.byteLength),"cache-control":"private, max-age=3600","x-content-type-options":"nosniff","content-disposition":`inline; filename*=UTF-8''${encodeURIComponent(image.fileName)}`}});
+    return new Response(bytes,{headers:{"content-type":image.contentType,"content-length":String(bytes.byteLength),"cache-control":image.kind==="order"?"private, max-age=3600":"private, no-store","x-content-type-options":"nosniff","content-disposition":`inline; filename*=UTF-8''${encodeURIComponent(image.fileName)}`}});
   }catch(error){return routeError(error);}
 }

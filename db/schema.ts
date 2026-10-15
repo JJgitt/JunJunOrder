@@ -121,14 +121,17 @@ export const inventoryMovements = pgTable("inventory_movements", {
 export const orderImages = pgTable("order_images", {
   id: text("id").primaryKey(),
   orderId: text("order_id").notNull().references(() => purchaseOrders.id),
-  kind: text("kind", { enum: ["order", "settlement"] }).notNull().default("order"),
+  kind: text("kind", { enum: ["order", "settlement", "settlement_archived"] }).notNull().default("order"),
   objectKey: text("object_key").notNull(),
   fileName: text("file_name").notNull(),
   contentType: text("content_type").notNull(),
   sizeBytes: integer("size_bytes").notNull(),
   uploadedBy: text("uploaded_by").notNull().references(() => users.id),
   createdAt: createdAt(),
-}, (table) => [index("idx_order_images_order_id").on(table.orderId)]);
+}, (table) => [
+  index("idx_order_images_order_id").on(table.orderId),
+  check("order_images_kind_check", sql`${table.kind} IN ('order', 'settlement', 'settlement_archived')`),
+]);
 
 export const auditLogs = pgTable("audit_logs", {
   id: text("id").primaryKey(),

@@ -384,3 +384,14 @@ button:disabled { cursor: not-allowed; }
 .knowledge-hint.suggestion > div { display: grid; gap: 6px; }
 .knowledge-hint.suggestion button { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 42px; padding: 7px 10px; border: 1px solid #d3dff2; border-radius: 8px; background: #fff; color: #254575; text-align: left; font-size: 12px; overflow-wrap: anywhere; }
 .knowledge-hint.suggestion button strong { flex: none; color: #245dc4; font-size: 11px; }
+
+/* Shipped-order rollback is deliberately separated from normal fulfilment actions. */
+.rollback-shipped-entry { width: 100%; min-height: 44px; margin-top: 16px; padding: 11px 14px; border: 1px solid #efc7c4; border-radius: 12px; background: #fff8f7; color: #a9362e; font-size: 14px; font-weight: 600; }
+.rollback-shipped-warning { margin-bottom: 18px; padding: 16px; border: 1px solid #efc7c4; border-radius: 14px; background: #fff8f7; color: #873830; line-height: 1.7; overflow-wrap: anywhere; }
+.rollback-shipped-warning > b { font-size: 15px; }
+.rollback-shipped-warning p, .rollback-shipped-warning ul { margin: 8px 0 0; font-size: 13px; }
+.rollback-shipped-warning ul { padding-left: 20px; }
+.rollback-shipped-reason textarea { width: 100%; min-width: 0; font-size: 16px; }
+.rollback-shipped-reason small { color: #718096; text-align: right; font-size: 12px; }
+.rollback-shipped-actions { align-items: stretch; }
+.rollback-shipped-actions > button { min-width: 0; min-height: 48px; white-space: normal; }
