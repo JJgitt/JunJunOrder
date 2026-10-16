@@ -46,6 +46,7 @@ type PurchaseOrder = {
     id: string; platform: string; platformNo: string; courierCompany: string; courierNo: string; status: OrderStatus;
     purchaser: string; purchaserId?: string; purchaserPhone?: string; purchaserWechatId?: string; createdAt: string; approvedAt?: string; location?: string; receivedAt?: string; rejectReason?: string;
     settled: boolean; settledAt?: string; settledByName?: string; settledAmount?: number;
+    isReturned?: boolean;
     title: string; itemCount: number; amount: number; items: OrderItem[];
     images: OrderImage[]; settlementProofs: OrderImage[];
 };
@@ -1197,7 +1198,7 @@ function AdminOrders({
                                                                      selected={selectedSet.has(order.id)}
                                                                      onSelect={() => toggle(order.id)}
                                                                      onOpen={() => onOpen(order.id)}
-                                                                     showPurchaserContact showLocation actions={<>
+                                                                     showPurchaserContact showLocation showReturnFlag actions={<>
             <button className="edit-ghost" onClick={() => onEdit(order.id)}>编辑</button>
             {canSettleOrder(order) && <button className="settlement-action"
                                                            onClick={() => onSettle(order.id)}>确认结款</button>}
@@ -1227,8 +1228,9 @@ function OrderCard({
                        showOutbound = true,
                        normalizeStatus = true,
                        showPurchaserContact = false,
-                       showLocation = false
-                   }: { order: PurchaseOrder; onOpen: () => void; actions?: React.ReactNode; selectable?: boolean; selected?: boolean; onSelect?: () => void; showOutbound?: boolean; normalizeStatus?: boolean; showPurchaserContact?: boolean; showLocation?: boolean }) {
+                       showLocation = false,
+                       showReturnFlag = false
+                   }: { order: PurchaseOrder; onOpen: () => void; actions?: React.ReactNode; selectable?: boolean; selected?: boolean; onSelect?: () => void; showOutbound?: boolean; normalizeStatus?: boolean; showPurchaserContact?: boolean; showLocation?: boolean; showReturnFlag?: boolean }) {
     const {dateTime} = useServerClock();
     const listTitle = orderTitleWithQuantity(order);
     return <article className={`order-card edge-${statusTone[order.status]} ${selected ? "selected" : ""}`}>
@@ -1241,8 +1243,9 @@ function OrderCard({
                 onOpen();
             }
         }}>
-            <div className="order-top"><h4 title={listTitle}>{listTitle}</h4><Badge
+            <div className="order-top"><h4 title={listTitle}>{listTitle}</h4><div className="order-state-labels"><Badge
                 tone={statusTone[order.status]}>{normalizeStatus ? statusLabel(order.status) : order.status}</Badge>
+                {showReturnFlag && order.isReturned && <span className="order-returned-badge" title="此订单曾由已发货回滚到在途">回流</span>}</div>
             </div>
             <div className="order-meta"><span>{order.platform} · 采购人：{order.purchaser}</span><b>{money(order.amount)}</b>
             </div>
@@ -2101,7 +2104,8 @@ function OrderDetail({
         <div className={`detail-card edge-${statusTone[order.status]}`}>
             <div className="detail-title">
                 <h3>{orderTitleWithQuantity(order)}</h3>
-                <Badge tone={statusTone[order.status]}>{canManage ? statusLabel(order.status) : order.status}</Badge>
+                <div className="order-state-labels"><Badge tone={statusTone[order.status]}>{canManage ? statusLabel(order.status) : order.status}</Badge>
+                    {canManage && order.isReturned && <span className="order-returned-badge" title="此订单曾由已发货回滚到在途">回流</span>}</div>
             </div>
             <KeyValue label="采购渠道" value={order.platform}/><KeyValue label="平台单号" value={order.platformNo || "未填写"}
                                                                      copyValue={order.platformNo || undefined}/><KeyValue

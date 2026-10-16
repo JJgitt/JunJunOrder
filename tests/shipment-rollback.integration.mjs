@@ -78,7 +78,7 @@ async function cleanup(f) {
 }
 async function verifyReset(sql, f) {
   const [order] = await sql`SELECT * FROM purchase_orders WHERE id=${f.id}`;
-  assert.equal(order.status, "在途"); assert.equal(order.settled, false);
+  assert.equal(order.status, "在途"); assert.equal(order.settled, false); assert.equal(order.is_returned, true);
   for (const key of ["received_at", "location", "settled_at", "settled_by", "settled_amount_cents"]) assert.equal(order[key], null, key);
   assert.equal(order.purchaser_id, f.actor); assert.equal(order.courier_no, "JD-purchase"); assert.equal(order.auditor_id, f.actor);
   const items = await sql`SELECT * FROM order_items WHERE order_id=${f.id} ORDER BY id`;
@@ -97,7 +97,7 @@ async function verifyReset(sql, f) {
   const audits = await sql`SELECT detail_json FROM audit_logs WHERE entity_id=${f.id} AND action='rollback_shipped_order'`;
   assert.equal(audits.length, 1); const detail = JSON.parse(audits[0].detail_json);
   assert.equal(detail.before.order.settledAmountCents, 73400); assert.equal(detail.before.items.length, 2);
-  assert.equal(detail.after.order.status, "在途"); assert.equal(detail.inventoryNetChange, 0);
+  assert.equal(detail.after.order.status, "在途"); assert.equal(detail.after.order.isReturned, true); assert.equal(detail.inventoryNetChange, 0);
   assert.equal(detail.before.settlementProofs[0].kind, "settlement");
   return detail;
 }
@@ -117,6 +117,7 @@ try {
       }) };
       const post = loadRoute(db, f.actor), payload = { action: "rollback-shipped-order", orderId: f.id, reason: "已线下核对" };
       const before = await tx`SELECT row_to_json(p) AS row FROM purchase_orders p WHERE id=${f.id}`;
+      assert.equal(before[0].row.is_returned, false, "new orders are not returned by default");
       failAudit = true; assert.equal((await post(payload)).status, 500);
       assert.deepEqual(await tx`SELECT row_to_json(p) AS row FROM purchase_orders p WHERE id=${f.id}`, before);
       assert.equal((await tx`SELECT * FROM inventory_lots WHERE order_id=${f.id}`).length, 2);
@@ -129,20 +130,33 @@ try {
         VALUES (${f.ids[0]},${f.id},${f.sku},'M',2,'A1',${stamp},${stamp})`;
       const response = await post(payload); assert.equal(response.status, 200);
       const visible = (await response.json()).data.orders.find(row => row.id === f.id);
-      assert.equal(visible.images.length, 1); assert.deepEqual(visible.settlementProofs, []);
+      assert.equal(visible.images.length, 1); assert.deepEqual(visible.settlementProofs, []); assert.equal(visible.isReturned, true);
       await verifyReset(tx, f);
       assert.equal((await post(payload)).status, 409);
       assert.equal((await post({ action: "update-shipping", itemId: f.ids[0], company: "顺丰", courier: "SF-stale" })).status, 409);
       // Re-enter every normal lifecycle path against real constraints and aggregate stock.
-      assert.equal((await post({ action: "settle-order", orderId: f.id, amount: "500" })).status, 200);
-      assert.equal((await post({ action: "receive", orderId: f.id, location: "C3" })).status, 200);
+      const assertReturned = async (response, label) => {
+        assert.equal(response.status, 200, label);
+        const returned = (await response.json()).data.orders.find(row => row.id === f.id);
+        assert.equal(returned.isReturned, true, `${label}: snapshot retains returned history`);
+        assert.equal((await tx`SELECT is_returned FROM purchase_orders WHERE id=${f.id}`)[0].is_returned, true, `${label}: persistence retains returned history`);
+      };
+      const editableItems = await tx`SELECT * FROM order_items WHERE order_id=${f.id} ORDER BY id`;
+      await assertReturned(await post({ action: "update-order", orderId: f.id, platform: "淘宝", platformNo: f.id, isReturned: false,
+        items: editableItems.map(item => ({ id: item.id, title: item.title, sku: item.sku, size: item.size, qty: item.qty,
+          amount: item.amount_cents / 100, purchaseCourierCompany: item.purchase_courier_company, purchaseCourierNo: item.purchase_courier_no })) }), "edit, including an attempted client flag reset");
+      await assertReturned(await post({ action: "settle-order", orderId: f.id, amount: "500", isReturned: false }), "settle");
+      await assertReturned(await post({ action: "receive", orderId: f.id, location: "C3", isReturned: false }), "receive");
       assert.equal((await tx`SELECT quantity FROM inventory WHERE sku=${f.sku}`)[0].quantity, 12);
       assert.equal((await tx`SELECT * FROM inventory_lots WHERE order_id=${f.id}`).length, 2);
-      for (const itemId of f.ids.slice(0, 2)) assert.equal((await post({ action: "ship", itemId, company: "顺丰", courier: "SF-new", salePrice: "20" })).status, 200);
+      for (const itemId of f.ids.slice(0, 2)) await assertReturned(await post({ action: "ship", itemId, company: "顺丰", courier: "SF-new", salePrice: "20", isReturned: false }), "ship");
+      await assertReturned(await post({ action: "update-shipping", itemId: f.ids[0], company: "京东", courier: "JD-edited", isReturned: false }), "shipping edit");
       assert.equal((await tx`SELECT quantity FROM inventory WHERE sku=${f.sku}`)[0].quantity, 7);
       const [net] = await tx`SELECT sum(change_qty)::int AS n FROM inventory_movements WHERE order_id=${f.id}`; assert.equal(net.n, 0);
       const [settledOrder] = await tx`SELECT settled,settled_amount_cents FROM purchase_orders WHERE id=${f.id}`;
       assert.equal(settledOrder.settled, true); assert.equal(settledOrder.settled_amount_cents, 50000);
+      assert.equal((await post({ action: "revert-receive", orderId: f.other, isReturned: true })).status, 200);
+      assert.equal((await tx`SELECT is_returned FROM purchase_orders WHERE id=${f.other}`)[0].is_returned, false, "ordinary receipt reversal is not shipment return history, even with a forged flag");
       throw rollback;
     });
   } catch (error) { if (error !== rollback) throw error; }
@@ -196,5 +210,5 @@ try {
       release(); await Promise.allSettled(pending); await cleanup(f);
     }
   }
-  console.log("Shipment rollback real PG migration, audit rollback, same-SKU isolation, proof archival, lifecycle re-entry, simultaneous rollback and stale-shipping lock behavior verified; fixtures removed.");
+  console.log("Shipment rollback real PG returned-flag persistence and lifecycle retention, audit rollback, same-SKU isolation, proof archival, simultaneous rollback and stale-shipping lock behavior verified; fixtures removed.");
 } finally { await client.end(); }

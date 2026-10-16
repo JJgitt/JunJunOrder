@@ -21,7 +21,7 @@ function fixture({ actor = admin, settled = true, status = "已入库", failAudi
     get: (target, key) => key === "name" ? target.name : { table: name, key },
   })]));
   const order = { id: "order-1", platform: "淘宝", platformOrderNo: "T123", purchaserId: buyer.id, auditorId: admin.id,
-    courierCompany: "顺丰", courierNo: "SF-purchase", status, rejectReason: null, receivedAt: stamp, location: "A1",
+    courierCompany: "顺丰", courierNo: "SF-purchase", status, isReturned: false, rejectReason: null, receivedAt: stamp, location: "A1",
     settled, settledAt: settled ? stamp : null, settledBy: settled ? admin.id : null, settledAmountCents: settled ? 73400 : null,
     createdAt: stamp, updatedAt: stamp };
   const items = [2, 3].map((qty, index) => ({ id: `item-${index}`, orderId: order.id, title: `同款${index}`, sku: "SKU-SHARED", size: "M", qty,
@@ -151,7 +151,7 @@ test("settled and unsettled full shipments reset lifecycle but preserve purchase
     const f = fixture(options), before = structuredClone(f.state);
     const response = await f.rollback({ reason: "  线下已核对  " }); assert.equal(response.status, 200);
     const order = f.state.purchaseOrders[0];
-    assert.equal(order.status, "在途"); assert.equal(order.settled, false);
+    assert.equal(order.status, "在途"); assert.equal(order.settled, false); assert.equal(order.isReturned, true);
     for (const key of ["receivedAt", "location", "settledAt", "settledBy", "settledAmountCents"]) assert.equal(order[key], null, key);
     for (const key of ["platform", "platformOrderNo", "purchaserId", "auditorId", "courierCompany", "courierNo", "createdAt"]) assert.equal(order[key], before.purchaseOrders[0][key], key);
     for (const [index, item] of f.state.orderItems.entries()) {
@@ -172,14 +172,16 @@ test("settled and unsettled full shipments reset lifecycle but preserve purchase
     assert.equal(detail.reason, "线下已核对"); assert.equal(detail.inventoryNetChange, 0);
     assert.deepEqual(detail.before.order, before.purchaseOrders[0]); assert.deepEqual(detail.before.items, before.orderItems);
     assert.deepEqual(detail.before.settlementProofs, [before.orderImages[1]]); assert.equal(detail.after.order.status, "在途");
-    const data = (await response.json()).data.orders[0]; assert.equal(data.status, "在途"); assert.equal(data.images.length, 1); assert.deepEqual(data.settlementProofs, []);
+    assert.equal(detail.before.order.isReturned, false); assert.equal(detail.after.order.isReturned, true);
+    const data = (await response.json()).data.orders[0]; assert.equal(data.status, "在途"); assert.equal(data.isReturned, true); assert.equal(data.images.length, 1); assert.deepEqual(data.settlementProofs, []);
     assert.equal(detail.reversals.length, 2);
   }
 });
 
-test("audit failure atomically rolls back fields, compensations, lots and settlement proof archival", async () => {
+test("audit failure atomically rolls back returned flag, fields, compensations, lots and settlement proof archival", async () => {
   const f = fixture({ failAudit: true }), before = structuredClone(f.state);
   assert.equal((await f.rollback()).status, 500); assert.deepEqual(f.state, before); assert.equal(f.filesRemoved.length, 0);
+  assert.equal(f.state.purchaseOrders[0].isReturned, false);
 });
 
 test("retrying a successful rollback returns conflict without double compensation", async () => {
@@ -196,6 +198,7 @@ test("archived proofs remain admin-readable but cannot be fetched by their ownin
   assert.equal((await f.file("image-1")).status, 403); assert.equal(f.filesRead.length, 1, "denial must precede disk read");
   assert.equal((await f.file("image-0")).status, 200, "ordinary purchase screenshots remain available");
   const data = await (await f.read()).json(); assert.deepEqual(data.orders[0].settlementProofs, []); assert.equal(data.orders[0].status, "在途");
+  assert.equal("isReturned" in data.orders[0], false, "returned history must not reveal a prior shipment to buyers");
 });
 
 test("shipping edits lock the order before its item and reject stale requests after rollback", async () => {

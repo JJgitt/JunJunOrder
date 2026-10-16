@@ -30,6 +30,7 @@ export const purchaseOrders = pgTable("purchase_orders", {
   courierCompany: text("courier_company").notNull().default(""),
   courierNo: text("courier_no").notNull().default(""),
   status: text("status", { enum: ["待审核", "在途", "已入库", "待发货", "已发货", "已驳回"] }).notNull().default("待审核"),
+  isReturned: boolean("is_returned").notNull().default(false),
   rejectReason: text("reject_reason"),
   purchaserId: text("purchaser_id").notNull().references(() => users.id),
   auditorId: text("auditor_id").references(() => users.id),

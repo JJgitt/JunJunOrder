@@ -16,8 +16,8 @@ const buyer = { id: "buyer", name: "采购员甲", role: "buyer", phone: "111", 
 const otherBuyer = { id: "other", name: "采购员乙", role: "buyer", phone: "222", wechatId: "other-wx", active: true, approvalStatus: "approved" };
 const admin = { id: "admin", name: "管理员甲", role: "admin", phone: "333", wechatId: "admin-wx", active: true, approvalStatus: "approved" };
 const orders = [
-  { id: "o2", purchaserId: "buyer", status: "已入库", platform: "淘宝", platformOrderNo: "p2", courierCompany: "快递", courierNo: "c2", settled: false, createdAt: "2026-09-22", location: "仓库B" },
-  { id: "o1", purchaserId: "buyer", status: "已入库", platform: "淘宝", platformOrderNo: "p1", courierCompany: "快递", courierNo: "c1", settled: true, settledBy: "admin", createdAt: "2026-09-21" },
+  { id: "o2", purchaserId: "buyer", status: "已入库", isReturned: true, platform: "淘宝", platformOrderNo: "p2", courierCompany: "快递", courierNo: "c2", settled: false, createdAt: "2026-09-22", location: "仓库B" },
+  { id: "o1", purchaserId: "buyer", status: "已入库", isReturned: false, platform: "淘宝", platformOrderNo: "p1", courierCompany: "快递", courierNo: "c1", settled: true, settledBy: "admin", createdAt: "2026-09-21" },
   { id: "o3", purchaserId: "other", status: "在途", platform: "淘宝", platformOrderNo: "p3", courierCompany: "快递", courierNo: "c3", settled: false, createdAt: "2026-09-20" },
 ];
 const items = [
@@ -115,9 +115,21 @@ test("buyer snapshot keeps role-specific fields and excludes other buyers", asyn
   }
   assert.equal("purchaserPhone" in data.orders[0], false);
   assert.equal("location" in data.orders[0], false);
+  for (const order of data.orders) assert.equal("isReturned" in order, false, "buyers must not infer previous shipment from returned history");
   assert.deepEqual(data.stock, []);
   assert.deepEqual(data.notices, []);
   assert.deepEqual(data.users.map(person => person.id), ["buyer"]);
+});
+
+test("returned history is an admin-only boolean independent of the current lifecycle status", async () => {
+  const data = await (await handler(admin)).json();
+  assert.deepEqual(data.orders.map(order => [order.id, order.isReturned]), [["o2", true], ["o1", false], ["o3", false]]);
+  assert.deepEqual(data.orders.map(order => order.status), ["待发货", "已发货", "在途"], "the history flag must not replace lifecycle status");
+  const rows = orders.map(order => ({ ...order, isReturned: true }));
+  const returned = await (await handler(admin, rows)).json();
+  assert.deepEqual(returned.orders.map(order => order.isReturned), [true, true, true]);
+  const buyerData = await (await handler(buyer, rows)).json();
+  assert.ok(buyerData.orders.every(order => !("isReturned" in order)));
 });
 
 test("snapshot keeps older admin and buyer orders beyond the former 500/300 limits", async () => {

@@ -95,7 +95,7 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
       purchaserId:row.purchaserId,purchaser:names.get(row.purchaserId)??"采购员",createdAt:row.createdAt,
       approvedAt:approvedAt.get(row.id),
       settled:row.settled,settledAt:row.settledAt??undefined,settledAmount:row.settledAmountCents==null?undefined:row.settledAmountCents/100,receivedAt:row.receivedAt??undefined,
-      ...(isAdmin?{purchaserPhone:phones.get(row.purchaserId)??"",purchaserWechatId:wechatIds.get(row.purchaserId)??""}:{}),
+      ...(isAdmin?{purchaserPhone:phones.get(row.purchaserId)??"",purchaserWechatId:wechatIds.get(row.purchaserId)??"",isReturned:Boolean(row.isReturned)}:{}),
       title:items[0]?.title??"",itemCount:items.length,amount:items.reduce((sum,item)=>sum+item.amount,0),items,
       images:(orderImagesByOrder.get(row.id)??[]).map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
       settlementProofs:(settlementImagesByOrder.get(row.id)??[]).map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
@@ -473,7 +473,7 @@ export async function POST(request:Request){
         await tx.delete(inventoryLots).where(eq(inventoryLots.orderId,id));
         const itemReset={shippedAt:null,outboundCompany:null,outboundCourierNo:null,resalePlatform:null,resaleOrderNo:null,salePriceCents:null,updatedAt:timestamp};
         await tx.update(orderItems).set(itemReset).where(eq(orderItems.orderId,id));
-        const orderReset={status:"在途" as const,receivedAt:null,location:null,settled:false,settledAt:null,settledBy:null,settledAmountCents:null,updatedAt:timestamp};
+        const orderReset={status:"在途" as const,isReturned:true,receivedAt:null,location:null,settled:false,settledAt:null,settledBy:null,settledAmountCents:null,updatedAt:timestamp};
         await tx.update(purchaseOrders).set(orderReset).where(eq(purchaseOrders.id,id));
         if(settlementProofs.length)await tx.update(orderImages).set({kind:"settlement_archived"}).where(inArray(orderImages.id,settlementProofs.map(image=>image.id)));
         await tx.insert(auditLogs).values({
