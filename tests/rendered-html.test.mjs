@@ -609,7 +609,9 @@ test("platform order number is optional while purchase courier number is require
   assertJsMatch(page,/平台订单号选填；每个商品需分别填写采购快递公司与快递单号/);
   assertJsMatch(page,/order\.platformNo\|\|"未填写"/);
   assert.match(appRoute,/if\(!platform\)return Response\.json\(\{error:"请填写采购渠道"\}/);
-  assert.doesNotMatch(appRoute,/!platformNo/);
+  // Ordinary entry/edit keeps an optional platform number; return-created orders require a new one.
+  const ordinaryOrderActions=appRoute.slice(appRoute.indexOf('if(action==="create-order")'),appRoute.indexOf('if(action==="delete-orders")'));
+  assert.doesNotMatch(ordinaryOrderActions,/!platformNo/);
   assert.match(appRoute,/if\(platformNo\)\{/);
   assert.match(schema,/uniqueIndex\("idx_orders_platform_order_no"\)\.on\(table\.platform, table\.platformOrderNo\)\.where/);
   assert.match(migration,/CREATE UNIQUE INDEX "idx_orders_platform_order_no"[\s\S]*WHERE "platform_order_no" <> ''/);

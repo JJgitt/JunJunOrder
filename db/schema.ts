@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, date, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, boolean, check, date, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow();
@@ -31,6 +31,9 @@ export const purchaseOrders = pgTable("purchase_orders", {
   courierNo: text("courier_no").notNull().default(""),
   status: text("status", { enum: ["待审核", "在途", "已入库", "待发货", "已发货", "已驳回"] }).notNull().default("待审核"),
   isReturned: boolean("is_returned").notNull().default(false),
+  returnSourceOrderId: text("return_source_order_id").references((): AnyPgColumn => purchaseOrders.id),
+  returnSourceItemId: text("return_source_item_id").references((): AnyPgColumn => orderItems.id),
+  returnQuantity: integer("return_quantity"),
   rejectReason: text("reject_reason"),
   purchaserId: text("purchaser_id").notNull().references(() => users.id),
   auditorId: text("auditor_id").references(() => users.id),
@@ -48,6 +51,8 @@ export const purchaseOrders = pgTable("purchase_orders", {
   index("idx_orders_purchaser_created").on(table.purchaserId, table.createdAt),
   index("idx_orders_courier_no").on(table.courierNo),
   index("idx_orders_settled_received").on(table.settled, table.receivedAt),
+  index("idx_orders_return_source_item").on(table.returnSourceItemId),
+  check("orders_return_source_check", sql`(${table.returnSourceOrderId} IS NULL AND ${table.returnSourceItemId} IS NULL AND ${table.returnQuantity} IS NULL) OR (${table.returnSourceOrderId} IS NOT NULL AND ${table.returnSourceItemId} IS NOT NULL AND ${table.returnQuantity} IS NOT NULL AND ${table.returnQuantity} > 0 AND ${table.returnSourceOrderId} <> ${table.id})`),
 ]);
 
 export const orderItems = pgTable("order_items", {
@@ -57,6 +62,7 @@ export const orderItems = pgTable("order_items", {
   sku: text("sku").notNull(),
   size: text("size").notNull(),
   qty: integer("qty").notNull().default(1),
+  returnedQty: integer("returned_qty").notNull().default(0),
   amountCents: integer("amount_cents").notNull(),
   purchaseCourierCompany: text("purchase_courier_company").notNull().default(""),
   purchaseCourierNo: text("purchase_courier_no").notNull().default(""),
@@ -72,6 +78,7 @@ export const orderItems = pgTable("order_items", {
   index("idx_order_items_order_id").on(table.orderId),
   index("idx_order_items_sku_size").on(table.sku, table.size),
   index("idx_order_items_purchase_courier_no").on(table.purchaseCourierNo),
+  check("order_items_returned_qty_check", sql`${table.returnedQty} >= 0 AND ${table.returnedQty} <= ${table.qty}`),
 ]);
 
 export const productKnowledge = pgTable("product_knowledge", {

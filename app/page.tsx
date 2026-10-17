@@ -32,12 +32,13 @@ type AdminOrderListState = {
 type BuyerOrderListState = {
     query: string; statuses: string[]; platform: string; settlement: string; page: number; moreFiltersOpen: boolean;
 };
-type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "rollback-shipped" | "detail" | "order-images" | "reject" | "ship" | "settle" | "settlement-amount" | "settlement-proof" | null;
+type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "rollback-shipped" | "return-item" | "detail" | "order-images" | "reject" | "ship" | "settle" | "settlement-amount" | "settlement-proof" | null;
 type OrderImage = { id: string; url: string; fileName: string; uploadedBy: string; createdAt: string };
 
 type OrderItem = {
     id: string; title: string; sku: string; size: string; qty: number; amount: number;
     purchaseCourierCompany: string; purchaseCourierNo: string;
+    returnedQty?: number; returnOrders?: Array<{orderId: string; platformNo: string; qty: number; createdAt: string}>;
     shipped?: boolean; shippedAt?: string; resalePlatform?: string; resaleNo?: string; salePrice?: number; outboundCompany?: string; outboundCourier?: string;
 };
 type OrderItemDraft = { id: string; title: string; sku: string; size: string; qty: number | ""; amount: string; purchaseCourierCompany: string; customPurchaseCourierCompany: string; purchaseCourierNo: string; knowledgeHint?: KnowledgeMatch };
@@ -47,6 +48,7 @@ type PurchaseOrder = {
     purchaser: string; purchaserId?: string; purchaserPhone?: string; purchaserWechatId?: string; createdAt: string; approvedAt?: string; location?: string; receivedAt?: string; rejectReason?: string;
     settled: boolean; settledAt?: string; settledByName?: string; settledAmount?: number;
     isReturned?: boolean;
+    returnSourceOrderId?: string; returnSourceItemId?: string; returnQuantity?: number;
     title: string; itemCount: number; amount: number; items: OrderItem[];
     images: OrderImage[]; settlementProofs: OrderImage[];
 };
@@ -83,6 +85,11 @@ const orderTitleWithQuantity = (order: PurchaseOrder) => {
 };
 /** 金额使用订单实付总额，不能再乘数量，否则会重复计算。 */
 const orderListSummary = (list: PurchaseOrder[]) => `${list.length} 笔 · ${list.reduce((sum, order) => sum + orderQuantity(order), 0)} 件 · 金额 ${money(list.reduce((sum, order) => sum + order.amount, 0))}`;
+const returnedBySku = (order: PurchaseOrder) => {
+    const quantities = new Map<string, number>();
+    for (const item of order.items) if (item.returnedQty) quantities.set(item.sku, (quantities.get(item.sku) ?? 0) + item.returnedQty);
+    return Array.from(quantities, ([sku, qty]) => ({sku, qty}));
+};
 const orderSortOptions: Array<{ key: OrderSortKey; label: string }> = [
     {key: "createdAt", label: "上传时间"},
     {key: "receivedAt", label: "入库时间"},
@@ -481,6 +488,13 @@ export default function Home() {
         notify("订单已回滚到在途、未结款，操作记录已保留");
     }
 
+    async function returnOrderItem(payload: {orderId: string; itemId: string; qty: number; platformNo: string; company: string; courier: string}) {
+        const result = await mutate("return-order-item", payload);
+        if (result.createdOrderId) setSelectedId(result.createdOrderId);
+        setOverlay("detail");
+        notify("已生成在途、未结款的回流新单，原商品已标记回流");
+    }
+
     async function resetPassword(userId: string, password: string) {
         try {
             await mutate("reset-user-password", {userId, password});
@@ -653,6 +667,8 @@ export default function Home() {
                          onReceive={() => setOverlay("manual-receive")}
                          onRevertReceive={() => setOverlay("revert-receive")} onReject={() => setOverlay("reject")}
                          onRollbackShipped={() => setOverlay("rollback-shipped")}
+                         onReturnItem={itemId => {setSelectedItemId(itemId); setOverlay("return-item");}}
+                         onOpenRelated={openOrder}
                          onSettle={() => setOverlay("settle")}
                          onSettlementAmount={() => setOverlay("settlement-amount")}
                          onSettlementProof={() => setOverlay("settlement-proof")}
@@ -667,6 +683,9 @@ export default function Home() {
             <RevertReceiveSheet order={selected} onClose={() => setOverlay(null)} onSubmit={revertReceive}/>}
         {role === "admin" && overlay === "rollback-shipped" && selected && selected.status === "已发货" &&
             <RollbackShipmentSheet key={selected.id} order={selected} onClose={() => setOverlay("detail")} onSubmit={rollbackShippedOrder}/>}
+        {role === "admin" && overlay === "return-item" && selected && selected.items.some(item => item.id === selectedItemId) &&
+            <ReturnItemSheet key={`${selected.id}-${selectedItemId}`} order={selected} item={selected.items.find(item => item.id === selectedItemId)!}
+                             onClose={() => setOverlay("detail")} onSubmit={returnOrderItem}/>}
         {role === "admin" && overlay === "reject" && selected &&
             <RejectSheet order={selected} onClose={() => setOverlay(null)} onSubmit={reject}/>}
         {role === "admin" && overlay === "settle" && selected &&
@@ -731,7 +750,7 @@ function AdminDashboard({
     const transit = orders.filter(o => o.status === "在途").length;
     const shipping = orders.filter(o => readyToShip(o.status)).length;
     const inToday = orders.filter(o => o.receivedAt && dateKey(o.receivedAt, timeZone) === today).length;
-    const purchase = orders.reduce((sum, o) => sum + o.amount, 0);
+    const purchase = orders.reduce((sum, o) => sum + (o.returnSourceOrderId ? 0 : o.amount), 0);
     const sales = orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + (i.salePrice ?? 0), 0), 0);
     const currentMonth = today.slice(0, 7);
     const monthOptions = financeMonthOptions(orders, now, timeZone, {timestamp, dateKey}, selectedMonth ?? undefined);
@@ -1245,7 +1264,7 @@ function OrderCard({
         }}>
             <div className="order-top"><h4 title={listTitle}>{listTitle}</h4><div className="order-state-labels"><Badge
                 tone={statusTone[order.status]}>{normalizeStatus ? statusLabel(order.status) : order.status}</Badge>
-                {showReturnFlag && order.isReturned && <span className="order-returned-badge" title="此订单曾由已发货回滚到在途">回流</span>}</div>
+                {showReturnFlag && order.isReturned && <span className="order-returned-badge" title="此订单有回流历史">回流</span>}</div>
             </div>
             <div className="order-meta"><span>{order.platform} · 采购人：{order.purchaser}</span><b>{money(order.amount)}</b>
             </div>
@@ -1265,6 +1284,9 @@ function OrderCard({
                                                                                               showItem={order.items.length > 1}/>
             </div>
             <SettlementStatus order={order}/>
+            {showReturnFlag && order.items.some(item => item.returnedQty) && <div className="item-return-summary" aria-label="商品回流记录">
+                {returnedBySku(order).map(({sku, qty}) => <div key={sku}><span>货号 <CopyNumber value={sku} label="回流商品货号"/></span><b>回流 ×{qty}</b></div>)}
+            </div>}
             {showOutbound && (readyToShip(order.status) || order.status === "已发货") &&
                 <OutboundOrderInfo order={order}/>}
             {showLocation && readyToShip(order.status) && <div className="order-courier order-location">
@@ -2091,13 +2113,15 @@ function OrderDetail({
                          onReceive,
                          onRevertReceive,
                          onRollbackShipped,
+                         onReturnItem,
+                         onOpenRelated,
                          onReject,
                          onSettle,
                          onSettlementAmount,
                          onSettlementProof,
                          onOrderImages,
                          onShipItem
-                     }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onRollbackShipped: () => void; onReject: () => void; onSettle: () => void; onSettlementAmount: () => void; onSettlementProof: () => void; onOrderImages: () => void; onShipItem: (itemId: string) => void }) {
+                     }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onRollbackShipped: () => void; onReturnItem: (itemId: string) => void; onOpenRelated: (orderId: string) => void; onReject: () => void; onSettle: () => void; onSettlementAmount: () => void; onSettlementProof: () => void; onOrderImages: () => void; onShipItem: (itemId: string) => void }) {
     const {dateTime} = useServerClock();
     const postReceiptEvents = postReceiptTimelineEvents(order, canManage, timestamp);
     return <Modal title="订单详情" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
@@ -2105,7 +2129,7 @@ function OrderDetail({
             <div className="detail-title">
                 <h3>{orderTitleWithQuantity(order)}</h3>
                 <div className="order-state-labels"><Badge tone={statusTone[order.status]}>{canManage ? statusLabel(order.status) : order.status}</Badge>
-                    {canManage && order.isReturned && <span className="order-returned-badge" title="此订单曾由已发货回滚到在途">回流</span>}</div>
+                    {canManage && order.isReturned && <span className="order-returned-badge" title="此订单有回流历史">回流</span>}</div>
             </div>
             <KeyValue label="采购渠道" value={order.platform}/><KeyValue label="平台单号" value={order.platformNo || "未填写"}
                                                                      copyValue={order.platformNo || undefined}/><KeyValue
@@ -2120,6 +2144,12 @@ function OrderDetail({
             <KeyValue label="库位" value={order.location}/>}<KeyValue label="采购结款"
             value={order.settled ? `已结款 · ${order.settledAmount != null ? money(order.settledAmount) : "金额未记录"} · ${dateTime(order.settledAt)}` : isSettlementStage(order.status) ? "待结款" : "审核通过后可结款"}
             highlight={order.settled}/></div>
+        {canManage && order.returnSourceOrderId && <div className="detail-card item-return-summary">
+            <b>回流来源 · {order.returnQuantity} 件</b>
+            <CopyNumber value={order.returnSourceOrderId} label="原采购单号"/>
+            <button type="button" onClick={() => onOpenRelated(order.returnSourceOrderId!)}>查看原订单与图片</button>
+            <small>本单采购金额从原单按件数带入，不重复计入看板采购额；结款独立处理。</small>
+        </div>}
         <div className="detail-card items-card">
             <div className="items-card-head"><h3>商品清单</h3><span>{orderQuantity(order)} 件 · {money(order.amount)}</span></div>
             {order.items.map((item, index) => <div className={`item-row ${canManage && item.shipped ? "shipped" : ""}`}
@@ -2145,6 +2175,16 @@ function OrderDetail({
                         <span>{item.resalePlatform || "二级平台"}</span><b>{item.resaleNo || "未填单号"}{item.salePrice ?
                         <em>{money(item.salePrice)}</em> : null}</b></div>}
                 </div>}
+                {canManage && (item.returnedQty ?? 0) > 0 && <div className="item-return-summary">
+                    <b>{item.returnedQty === item.qty ? "已回流" : "部分已回流"} · 货号 {item.sku} 回流 ×{item.returnedQty}</b>
+                    {item.returnOrders?.map(record => <div key={record.orderId} className="item-return-link">
+                        <span>{record.qty} 件 · {dateTime(record.createdAt)}</span>
+                        <CopyNumber value={record.platformNo} label="回流新单订单号"/>
+                        <button type="button" onClick={() => onOpenRelated(record.orderId)}>查看新单</button>
+                    </div>)}
+                </div>}
+                {canManage && order.status === "已发货" && item.shipped && (item.returnedQty ?? 0) < item.qty &&
+                    <button type="button" className="item-return-entry" onClick={() => onReturnItem(item.id)}>↩ 商品回流建单 · 可回流 {item.qty - (item.returnedQty ?? 0)} 件</button>}
             </div>)}
         </div>
         <OrderImages images={order.images} emptyText="暂无订单图片，可继续补充" actionLabel="补充图片" onAction={onOrderImages}/>
@@ -2174,7 +2214,7 @@ function OrderDetail({
             手动确认入库</button>}{canManage && canSettleOrder(order) &&
         <button className="primary-button settlement-confirm-button" onClick={onSettle}>¥ 确认采购结款</button>}{canManage && !order.settled && readyToShip(order.status) && !order.items.some(item => item.shipped) &&
         <button className="revert-receive-button" onClick={onRevertReceive}>↩ 退回在途（撤销入库）</button>}
-        {canManage && order.status === "已发货" &&
+        {canManage && order.status === "已发货" && !order.items.some(item => item.returnedQty) &&
             <button className="rollback-shipped-entry" onClick={onRollbackShipped}>↩ 回滚到在途（未结款）</button>}</Modal>;
 }
 
@@ -2458,6 +2498,60 @@ function RevertReceiveSheet({
             <button className="primary-button revert-confirm" disabled={busy}
                     onClick={() => void confirm()}>{busy ? "正在退回…" : "确认退回在途"}</button>
         </div>
+    </Modal>;
+}
+
+function ReturnItemSheet({order, item, onClose, onSubmit}: {
+    order: PurchaseOrder; item: OrderItem; onClose: () => void;
+    onSubmit: (payload: {orderId: string; itemId: string; qty: number; platformNo: string; company: string; courier: string}) => Promise<void>;
+}) {
+    const remaining = item.qty - (item.returnedQty ?? 0);
+    const [qty, setQty] = useState("1"), [platformNo, setPlatformNo] = useState("");
+    const [company, setCompany] = useState(""), [customCompany, setCustomCompany] = useState(""), [courier, setCourier] = useState("");
+    const [busy, setBusy] = useState(false), [error, setError] = useState("");
+    const saving = useRef(false);
+    const count = Number(qty), validCount = Number.isInteger(count) && count >= 1 && count <= remaining;
+    const resolvedCompany = (company === "其他" ? customCompany : company).trim();
+    const allocated = (quantity: number) => Number((BigInt(Math.round(item.amount * 100)) * BigInt(quantity) * BigInt(2) + BigInt(item.qty)) / (BigInt(item.qty) * BigInt(2)));
+    const amount = validCount ? (allocated((item.returnedQty ?? 0) + count) - allocated(item.returnedQty ?? 0)) / 100 : 0;
+    const close = () => {if (!saving.current) onClose();};
+    async function confirm(event: FormEvent) {
+        event.preventDefault();
+        if (saving.current) return;
+        if (!validCount) {setError(`回流数量需为 1～${remaining} 的整数`); return;}
+        if (!platformNo.trim() || !resolvedCompany || !courier.trim()) {setError("请填写新订单号、快递公司和快递单号"); return;}
+        saving.current = true;
+        setBusy(true); setError("");
+        try {
+            await onSubmit({orderId: order.id, itemId: item.id, qty: count, platformNo: platformNo.trim(), company: resolvedCompany, courier: courier.trim()});
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "回流建单失败，请重试");
+        } finally {saving.current = false; setBusy(false);}
+    }
+    return <Modal title="商品回流 · 生成新单" subtitle={order.id} subtitleCopyValue={order.id} onClose={close} closeDisabled={busy}>
+        <form className="item-return-form" onSubmit={event => void confirm(event)}>
+            <div className="modal-product"><b>{item.title} · {item.size}码</b><CopyNumber value={item.sku} label="商品货号"/>
+                <span>原有 {item.qty} 件 · 已回流 {item.returnedQty ?? 0} 件 · 可回流 {remaining} 件</span></div>
+            <p className="item-return-explanation">新单进入“在途 · 未结款”，采购人仍为 {order.purchaser}。原单保留发货、结款及图片记录，实际收货后再给新单入库。</p>
+            <fieldset disabled={busy}>
+                <label className="modal-field"><span>回流件数</span><input type="number" inputMode="numeric" min={1} max={remaining} step={1} required
+                    value={qty} onChange={event => setQty(event.target.value)}/></label>
+                <div className="item-return-cost"><span>带入采购金额</span><b>{validCount ? money(amount) : "—"}</b>
+                    <small>按原采购金额分摊，不重复计入看板采购额</small></div>
+                <label className="modal-field"><span>新订单号（{order.platform}）</span><input required maxLength={100} value={platformNo}
+                    placeholder="手动填写新的订单号" onChange={event => setPlatformNo(event.target.value)}/></label>
+                <label className="modal-field"><span>回流快递公司</span><select required value={company} onChange={event => setCompany(event.target.value)}>
+                    <option value="">请选择快递公司</option>{courierCompanies.map(value => <option key={value}>{value}</option>)}<option>其他</option></select></label>
+                {company === "其他" && <label className="modal-field"><span>其他快递公司名称</span><input required maxLength={100} value={customCompany}
+                    onChange={event => setCustomCompany(event.target.value)} placeholder="填写快递公司名称"/></label>}
+                <label className="modal-field"><span>回流快递单号</span><input required maxLength={100} value={courier}
+                    placeholder="手动填写回流包裹的快递单号" onChange={event => setCourier(event.target.value)}/></label>
+            </fieldset>
+            {error && <p className="inline-warning" role="alert">{error}</p>}
+            <div className="dual-actions"><button type="button" className="secondary-button" disabled={busy} onClick={close}>取消</button>
+                <button type="submit" className="primary-button" disabled={busy || !validCount || !platformNo.trim() || !resolvedCompany || !courier.trim()}>
+                    {busy ? "正在生成…" : "确认回流并生成新单"}</button></div>
+        </form>
     </Modal>;
 }
 

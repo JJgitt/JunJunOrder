@@ -1,5 +1,5 @@
 type FinanceItem = {qty: number; amount: number; salePrice?: number; shippedAt?: string};
-type FinanceOrder = {createdAt: string; status: string; amount: number; items: FinanceItem[]};
+type FinanceOrder = {createdAt: string; status: string; amount: number; items: FinanceItem[]; returnSourceOrderId?: string};
 type Calendar = {
     timestamp: (value: string | number) => number;
     dateKey: (value: string | number, timeZone: string) => string;
@@ -44,7 +44,7 @@ export function monthlyFinance(orders: FinanceOrder[], now: number, timeZone: st
     const cents = (value: number) => Number.isFinite(value) ? Math.round(value * 100) : 0;
     let purchaseCents = 0, salesCents = 0, soldCostCents = 0, unpricedShippedQuantity = 0;
     for (const order of orders) {
-        if (order.status !== "已驳回" && inMonth(order.createdAt)) purchaseCents += cents(order.amount);
+        if (!order.returnSourceOrderId && order.status !== "已驳回" && inMonth(order.createdAt)) purchaseCents += cents(order.amount);
         for (const item of order.items) {
             if (!inMonth(item.shippedAt)) continue;
             if (item.salePrice == null || !Number.isFinite(item.salePrice) || item.salePrice <= 0) {

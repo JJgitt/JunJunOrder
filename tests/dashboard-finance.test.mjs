@@ -7,6 +7,14 @@ const calendar = {dateKey, timestamp};
 const item = (amount, salePrice, shippedAt, qty = 1) => ({amount, salePrice, shippedAt, qty});
 const order = (createdAt, status, amount, items = []) => ({createdAt, status, amount, items});
 
+test("item-return child orders retain settlement costs without purchasing the same goods twice", () => {
+    const original = order("2026-10-01T00:00:00Z", "已发货", 100);
+    const returned = {...order("2026-10-18T00:00:00Z", "在途", 40), returnSourceOrderId: "original"};
+    const nextReturn = {...order("2026-10-19T00:00:00Z", "在途", 20), returnSourceOrderId: "returned"};
+    assert.equal(monthlyFinance([original, returned, nextReturn], Date.parse("2026-10-20"), "Asia/Shanghai", calendar).purchase, 100);
+    assert.equal(monthlyFinance([returned], Date.parse("2026-10-20"), "Asia/Shanghai", calendar).purchase, 0);
+});
+
 test("monthly finance uses the server calendar month across midnight and year boundaries", () => {
     const orders = [
         order("2026-12-31T15:59:59Z", "已入库", 20, [item(20, 30, "2026-12-31T15:59:59Z")]),

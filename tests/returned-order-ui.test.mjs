@@ -89,6 +89,31 @@ test("actual buyer card wrapper hides the admin mark even if a fixture includes 
     }
 });
 
+test("same SKU return counts sum quantities across item rows, and buyer views expose neither counts nor links", () => {
+    const items = [
+        {...order.items[0], id: "first", qty: 3, returnedQty: 2, shipped: true, returnOrders: [{orderId: "child", platformNo: "child-no", qty: 2}]},
+        {...order.items[0], id: "second", qty: 2, returnedQty: 2, shipped: true},
+    ];
+    const values = {status: "已发货", items, itemCount: 2};
+    const card = renderCard(values, {showReturnFlag: true});
+    assert.match(card, /回流 ×4/);
+    assert.equal((card.match(/回流 ×/g) ?? []).length, 1);
+    const detail = renderDetail(values, true);
+    assert.match(detail, /部分已回流/); assert.match(detail, /已回流 · 货号/); assert.match(detail, /查看新单/);
+    assert.equal((detail.match(/商品回流建单/g) ?? []).length, 1, "only the item with remaining quantity is actionable");
+    assert.doesNotMatch(detail, /回滚到在途（未结款）/, "partial returns disable whole-order rollback");
+    assert.doesNotMatch(renderCard(values), /回流 ×/);
+    assert.doesNotMatch(renderDetail(values, false), /回流|查看新单/);
+    assert.doesNotMatch(renderDetail({...values, status: "待发货"}, true), /商品回流建单/);
+});
+
+test("only admins can navigate from a return child to the source order and its original images", () => {
+    const values = {returnSourceOrderId: "source", returnQuantity: 2};
+    assert.match(renderDetail(values, true), /查看原订单与图片/);
+    assert.match(renderDetail(values, true), /不重复计入看板采购额/);
+    assert.doesNotMatch(renderDetail(values, false), /回流来源|查看原订单/);
+});
+
 test("administrator list explicitly opts in without changing the shared card's safe default", () => {
     const ast = ts.createSourceFile("page.tsx", page, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     const admin = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "AdminOrders");

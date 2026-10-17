@@ -75,6 +75,13 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
   }
   const approvedAt=new Map<string,string>();
   for(const event of approvals)if(!approvedAt.has(event.orderId))approvedAt.set(event.orderId,event.createdAt);
+  const returnsByItem=new Map<string,Array<{orderId:string;platformNo:string;qty:number;createdAt:string}>>();
+  if(isAdmin)for(const row of rows){
+    if(!row.returnSourceItemId)continue;
+    const group=returnsByItem.get(row.returnSourceItemId)??[];
+    group.push({orderId:row.id,platformNo:row.platformOrderNo,qty:row.returnQuantity??0,createdAt:row.createdAt});
+    returnsByItem.set(row.returnSourceItemId,group);
+  }
   const orders=rows.map(row=>{
     const rawItems=itemsByOrder.get(row.id)??[];
     const allShipped=rawItems.length>0&&rawItems.every(item=>item.shippedAt);
@@ -85,6 +92,7 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
       purchaseCourierCompany:item.purchaseCourierCompany||row.courierCompany,purchaseCourierNo:item.purchaseCourierNo||row.courierNo,
       ...(isAdmin?{
         shipped:Boolean(item.shippedAt),
+        returnedQty:item.returnedQty??0,returnOrders:returnsByItem.get(item.id)??[],
         resalePlatform:item.resalePlatform??undefined,resaleNo:item.resaleOrderNo??undefined,
         salePrice:item.salePriceCents==null?undefined:item.salePriceCents/100,
         outboundCompany:item.outboundCompany??undefined,outboundCourier:item.outboundCourierNo??undefined,shippedAt:item.shippedAt??undefined,
@@ -95,7 +103,7 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
       purchaserId:row.purchaserId,purchaser:names.get(row.purchaserId)??"采购员",createdAt:row.createdAt,
       approvedAt:approvedAt.get(row.id),
       settled:row.settled,settledAt:row.settledAt??undefined,settledAmount:row.settledAmountCents==null?undefined:row.settledAmountCents/100,receivedAt:row.receivedAt??undefined,
-      ...(isAdmin?{purchaserPhone:phones.get(row.purchaserId)??"",purchaserWechatId:wechatIds.get(row.purchaserId)??"",isReturned:Boolean(row.isReturned)}:{}),
+      ...(isAdmin?{purchaserPhone:phones.get(row.purchaserId)??"",purchaserWechatId:wechatIds.get(row.purchaserId)??"",isReturned:Boolean(row.isReturned),returnSourceOrderId:row.returnSourceOrderId??undefined,returnSourceItemId:row.returnSourceItemId??undefined,returnQuantity:row.returnQuantity??undefined}:{}),
       title:items[0]?.title??"",itemCount:items.length,amount:items.reduce((sum,item)=>sum+item.amount,0),items,
       images:(orderImagesByOrder.get(row.id)??[]).map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
       settlementProofs:(settlementImagesByOrder.get(row.id)??[]).map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
@@ -246,6 +254,7 @@ export async function POST(request:Request){
         for(const item of items){
           const old=item.id?existingItems.find(row=>row.id===item.id):undefined;
           if(old){
+            if(old.returnedQty>0&&old.amountCents!==item.amountCents)throw conflict("该商品已有回流新单，不能修改原采购金额，以免回流成本不一致");
             if(old.shippedAt){
               if(old.sku!==item.sku||old.size!==item.size||old.qty!==item.qty)throw conflict("已发货的商品只能修改金额");
               await tx.update(orderItems).set({title:item.title,amountCents:item.amountCents,purchaseCourierCompany:item.purchaseCourierCompany,purchaseCourierNo:item.purchaseCourierNo,updatedAt:timestamp}).where(eq(orderItems.id,old.id));
@@ -288,6 +297,9 @@ export async function POST(request:Request){
       const deleted=await db.transaction(async tx=>{
         const orders=await tx.select().from(purchaseOrders).where(inArray(purchaseOrders.id,ids)).for("update");
         if(!orders.length)throw notFound("所选订单不存在或已删除");
+        if(orders.some(order=>order.returnSourceOrderId))throw conflict("回流新单需保留关联记录，不能删除");
+        const [returnedItem]=await tx.select({id:orderItems.id}).from(orderItems).where(and(inArray(orderItems.orderId,ids),sql`${orderItems.returnedQty} > 0`)).limit(1);
+        if(returnedItem)throw conflict("所选订单已有商品回流，需保留原订单及关联记录，不能删除");
         const orderIds=orders.map(order=>order.id),timestamp=now();
         const [lots,images]=await Promise.all([
           tx.select().from(inventoryLots).where(inArray(inventoryLots.orderId,orderIds)),
@@ -442,6 +454,44 @@ export async function POST(request:Request){
       return Response.json({data:await snapshot(user)});
     }
 
+    if(action==="return-order-item"){
+      requireAdmin(user);
+      const id=string(body.orderId),itemId=string(body.itemId),platformNo=string(body.platformNo),company=string(body.company),courier=string(body.courier);
+      const qty=body.qty;
+      if(!id||!itemId||typeof qty!=="number"||!Number.isInteger(qty)||qty<1||qty>maxDbInt)return Response.json({error:"请选择回流商品，并填写有效的整数件数"},{status:400});
+      if(!platformNo||platformNo.length>100||!company||company.length>100||!courier||courier.length>100)return Response.json({error:"请填写新订单号、快递公司和快递单号（各不超过 100 字）"},{status:400});
+      const newId=orderId();
+      await db.transaction(async tx=>{
+        const [order]=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,id)).for("update").limit(1);
+        if(!order)throw notFound("原订单不存在");
+        const items=await tx.select().from(orderItems).where(eq(orderItems.orderId,id)).for("update");
+        if(!["已入库","已发货"].includes(order.status)||!items.length||items.some(item=>!item.shippedAt))throw conflict("只有全部商品已发货的订单可以按商品回流，请刷新后重试");
+        const item=items.find(item=>item.id===itemId);
+        if(!item)throw notFound("回流商品不属于该订单");
+        const returnedQty=item.returnedQty;
+        if(!Number.isInteger(item.qty)||!Number.isInteger(returnedQty)||returnedQty<0||qty>item.qty-returnedQty)throw conflict("回流件数超过剩余可回流数量，请刷新订单后重试");
+        const [lot]=await tx.select().from(inventoryLots).where(eq(inventoryLots.itemId,itemId)).for("update").limit(1);
+        if(!lot||lot.orderId!==id||!lot.shippedAt||lot.sku!==item.sku||lot.size!==item.size||lot.qty!==item.qty)throw conflict("原商品库存批次与发货记录不一致，无法安全回流");
+        if(!Number.isInteger(item.amountCents)||item.amountCents<=0)throw conflict("原商品采购金额无效，请先核对");
+        // Cumulative integer allocation preserves every cent across repeated partial returns.
+        const allocated=(count:number)=>Number((BigInt(item.amountCents)*BigInt(count)*BigInt(2)+BigInt(item.qty))/(BigInt(item.qty)*BigInt(2)));
+        const amountCents=allocated(returnedQty+qty)-allocated(returnedQty);
+        if(amountCents<=0)throw conflict("本次件数分摊的采购金额不足 0.01 元，请调整回流件数");
+        const timestamp=now(),newItemId=uid("item");
+        await tx.insert(purchaseOrders).values({id:newId,platform:order.platform,platformOrderNo:platformNo,courierCompany:company,courierNo:courier,status:"在途",isReturned:true,returnSourceOrderId:id,returnSourceItemId:itemId,returnQuantity:qty,purchaserId:order.purchaserId,auditorId:user.id,createdAt:timestamp,updatedAt:timestamp});
+        await tx.insert(orderItems).values({id:newItemId,orderId:newId,title:item.title,sku:item.sku,size:item.size,qty,amountCents,purchaseCourierCompany:company,purchaseCourierNo:courier,createdAt:timestamp,updatedAt:timestamp});
+        await tx.update(orderItems).set({returnedQty:returnedQty+qty,updatedAt:timestamp}).where(eq(orderItems.id,itemId));
+        await tx.update(purchaseOrders).set({updatedAt:timestamp}).where(eq(purchaseOrders.id,id));
+        // Original shipment, settlement, photos and ledger remain historical facts.
+        // New stock is recorded only when the returned goods are actually received.
+        await tx.insert(auditLogs).values([
+          {id:uid("audit"),actorId:user.id,action:"return_order_item",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({sourceItem:item,newOrderId:newId,newItemId,qty,amountCents,returnedQty:returnedQty+qty,platformNo,company,courier,inventoryNetChange:0}),createdAt:timestamp},
+          {id:uid("audit"),actorId:user.id,action:"approve",entityType:"purchase_order",entityId:newId,detailJson:JSON.stringify({sourceOrderId:id,sourceItemId:itemId,qty,amountCents,reason:"管理员商品回流建单"}),createdAt:timestamp},
+        ]);
+      });
+      return Response.json({data:await snapshot(user),createdOrderId:newId},{status:201});
+    }
+
     if(action==="rollback-shipped-order"){
       requireAdmin(user);
       const id=string(body.orderId);
@@ -455,6 +505,7 @@ export async function POST(request:Request){
         if(!["已入库","已发货"].includes(order.status))throw conflict("只有全部商品已发货的订单可以回滚，请刷新后重试");
         const items=await tx.select().from(orderItems).where(eq(orderItems.orderId,id)).for("update");
         if(!items.length||items.some(item=>!item.shippedAt))throw conflict("只有全部商品已发货的订单可以回滚，请刷新后重试");
+        if(items.some(item=>item.returnedQty>0))throw conflict("已有商品生成回流新单，不能再整单回滚；请对剩余商品按件回流");
         const lots=await tx.select().from(inventoryLots).where(eq(inventoryLots.orderId,id)).for("update");
         const lotByItem=new Map(lots.map(lot=>[lot.itemId,lot]));
         if(lots.length!==items.length||lotByItem.size!==items.length||items.some(item=>{
