@@ -91,6 +91,29 @@ test("actual lists combine keyword and row conditions while retaining platform, 
     }
 });
 
+test("both roles can select XOR, exclude overlapping matches and retain it after returning to the list", () => {
+    const orders = [makeOrder("one", "ABC"), makeOrder("two", "DEF"), makeOrder("three", "ABC", {platform: "京东"})];
+    for (const role of ["admin", "buyer"]) {
+        const f = fixture(role, orders, {query: "one", searchConditions: [condition("ABC")], platform: "淘宝"});
+        const option = nodes(f.render().control("搜索条件关系")).find(node => node.type === "option" && node.props.value === "xor");
+        assert.equal(text(option), "互斥（仅满足一项）");
+        assert.deepEqual(f.render().cards.map(node => node.props.order.id), ["one"]);
+        f.render().control("搜索条件关系").props.onChange({target: {value: "xor"}});
+        assert.equal(f.render().cards.length, 0, "the order matching both conditions is excluded");
+        f.render().control("搜索条件 1 的关键词").props.onChange({target: {value: "DEF"}});
+        assert.deepEqual(f.render().cards.map(node => node.props.order.id), ["one", "two"]);
+        assert.match(text(f.render().builder), /2 个有效条件 · 互斥/);
+        assert.match(text(f.render().builder), /仅满足一个有效搜索条件/);
+        f.remount();
+        assert.equal(f.render().control("搜索条件关系").props.value, "xor");
+        assert.deepEqual(f.render().cards.map(node => node.props.order.id), ["one", "two"]);
+        f.render().button("添加搜索条件").props.onClick();
+        assert.deepEqual(f.render().cards.map(node => node.props.order.id), ["one", "two"], "blank row is ignored");
+        f.render().button("清空搜索").props.onClick();
+        assert.equal(f.state.searchMode, "and");
+    }
+});
+
 test("changing any search control resets page and admin selection, even when the same order still matches", () => {
     const orders = Array.from({length: 60}, (_, index) => makeOrder(`order-${index}`, "ABC"));
     for (const role of ["admin", "buyer"]) {
@@ -100,6 +123,7 @@ test("changing any search control resets page and admin selection, even when the
             view => view.control("搜索条件 1 的关键词").props.onChange({target: {value: "ABC"}}),
             view => view.control("搜索条件 1 的字段").props.onChange({target: {value: "all"}}),
             view => view.control("搜索条件关系").props.onChange({target: {value: "or"}}),
+            view => view.control("搜索条件关系").props.onChange({target: {value: "xor"}}),
             view => view.control("删除搜索条件 1").props.onClick(),
             view => view.button("清空搜索").props.onClick()
         ]) {

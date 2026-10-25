@@ -1,4 +1,4 @@
-export type OrderSearchMode = "and" | "or";
+export type OrderSearchMode = "and" | "or" | "xor";
 export type OrderSearchField = "all" | "orderNo" | "title" | "sku" | "size" | "purchaseCourier" | "outboundCourier" | "purchaser";
 export type OrderSearchCondition = {id: string; field: OrderSearchField; value: string};
 export type OrderSearchState = {query: string; searchConditions: OrderSearchCondition[]; searchMode: OrderSearchMode};
@@ -40,7 +40,7 @@ function fieldValues(order: SearchableOrder, field: OrderSearchField, role: "adm
     }
 }
 
-/** Empty rows are drafts, including in OR mode. Conditions match an order, possibly across its items. */
+/** Empty rows are drafts. Conditions match an order, possibly across its items; XOR requires exactly one match. */
 export function matchesOrderSearch(order: SearchableOrder, search: OrderSearchState, role: "admin" | "buyer"): boolean {
     const conditions = [{field: "all" as const, value: search.query}, ...search.searchConditions]
         .map(condition => ({field: condition.field, value: condition.value.trim().toLowerCase()}))
@@ -48,5 +48,6 @@ export function matchesOrderSearch(order: SearchableOrder, search: OrderSearchSt
     if (!conditions.length) return true;
     const matches = (condition: typeof conditions[number]) => fieldValues(order, condition.field, role)
         .some(value => value?.toLowerCase().includes(condition.value));
+    if (search.searchMode === "xor") return conditions.filter(matches).length === 1;
     return search.searchMode === "or" ? conditions.some(matches) : conditions.every(matches);
 }

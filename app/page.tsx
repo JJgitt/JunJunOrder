@@ -2792,6 +2792,12 @@ function writeSearchHistory(key: string, list: string[]) {
 
 function OrderSearch({value, onChange, userRole: role}: {value: OrderSearchState; onChange: (value: OrderSearchState) => void; userRole: Role}) {
     const {query, searchConditions, searchMode} = value;
+    const modeLabel = {and: "并且", or: "或者", xor: "互斥"}[searchMode];
+    const modeHint = {
+        and: "所有关键词均匹配时显示订单。",
+        or: "任一关键词匹配时显示订单。",
+        xor: "仅满足一个有效搜索条件时显示订单，同时满足多个条件的订单不显示。"
+    }[searchMode];
     const fields = orderSearchFields.filter(field => !field.adminOnly || role === "admin");
     const activeCount = Number(Boolean(query.trim())) + searchConditions.filter(condition => condition.value.trim()).length;
     const updateCondition = (id: string, patch: {field?: OrderSearchField; value?: string}) => onChange({
@@ -2804,7 +2810,7 @@ function OrderSearch({value, onChange, userRole: role}: {value: OrderSearchState
         {searchConditions.length > 0 && <div className="order-search-conditions">
             <label className="order-search-mode"><span>条件关系</span>
                 <select aria-label="搜索条件关系" value={searchMode} onChange={event => onChange({...value, searchMode: event.target.value as OrderSearchMode})}>
-                    <option value="and">并且（全部满足）</option><option value="or">或者（任一满足）</option>
+                    <option value="and">并且（全部满足）</option><option value="or">或者（任一满足）</option><option value="xor">互斥（仅满足一项）</option>
                 </select>
             </label>
             {searchConditions.map((condition, index) => <div className="order-search-condition" key={condition.id}>
@@ -2817,14 +2823,14 @@ function OrderSearch({value, onChange, userRole: role}: {value: OrderSearchState
                 <button type="button" className="order-search-remove" aria-label={`删除搜索条件 ${index + 1}`}
                         onClick={() => onChange({...value, searchConditions: searchConditions.filter(item => item.id !== condition.id)})}>×</button>
             </div>)}
-            <p className="order-search-hint">上方搜索框也参与组合；空白条件不参与。{searchMode === "and" ? "所有关键词均匹配时显示订单。" : "任一关键词匹配时显示订单。"}日期、状态等筛选仍同时生效。</p>
+            <p className="order-search-hint">上方搜索框也参与组合；空白条件不参与。{modeHint}日期、状态等筛选仍同时生效。</p>
         </div>}
         <div className="order-search-actions">
             <button type="button" className="order-search-add" onClick={() => onChange({...value,
                 searchConditions: [...searchConditions, {id: String(searchConditions.reduce((max, condition) => Math.max(max, Number(condition.id)), 0) + 1), field: "all", value: ""}]
             })}>＋ 添加搜索条件</button>
             {(query || searchConditions.length > 0) && <button type="button" className="order-search-clear" onClick={() => onChange({...initialOrderSearchState})}>清空搜索</button>}
-            {searchConditions.length > 0 && <span role="status">{activeCount} 个有效条件 · {searchMode === "and" ? "并且" : "或者"}</span>}
+            {searchConditions.length > 0 && <span role="status">{activeCount} 个有效条件 · {modeLabel}</span>}
         </div>
     </div>;
 }
