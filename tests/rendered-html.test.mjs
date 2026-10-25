@@ -301,7 +301,7 @@ test("order lists show purchase logistics while outbound logistics stay administ
   assertJsMatch(page,/<span>采购快递信息<\/span>/);
   assertJsMatch(page,/item\.purchaseCourierCompany/);
   assertJsMatch(page,/value=\{item\.purchaseCourierNo\} label="采购快递单号"/);
-  assertJsMatch(page,/\$\{item\.purchaseCourierCompany\}\$\{item\.purchaseCourierNo\}/);
+  assertJsMatch(page,/matchesOrderSearch\(order,\{query,searchConditions,searchMode\},"admin"\)/);
   assertJsMatch(page,/showOutbound&&\(readyToShip\(order\.status\)\|\|order\.status==="已发货"\)&&<OutboundOrderInfo order=\{order\}\/>/);
   assertJsMatch(page,/order\.status!=="已发货"\)return <div className=\{`order-courier outbound/);
   assertJsMatch(page,/<span>发货进度<\/span>/);
@@ -309,7 +309,7 @@ test("order lists show purchase logistics while outbound logistics stay administ
   assertJsMatch(page,/function BuyerOrderCard/);
   assertJsMatch(page,/<OrderCard order=\{order\} onOpen=\{onOpen\} showOutbound=\{false\} normalizeStatus=\{false\} actions=/);
   assertJsMatch(page,/<b>\{count\("已入库"\)\}<\/b><span>已入库<\/span>/);
-  assertJsMatch(page,/\$\{item\.outboundCourier\?\?""\}/);
+  assertJsMatch(page,/matchesOrderSearch\(o,\{query,searchConditions,searchMode\},"buyer"\)/);
   assertJsNotMatch(page,/\$\{o\.outboundCourier\?\?""\}/);
   assertCssMatch(styles,/\.order-courier\{/);
   assertCssMatch(styles,/\.order-courier\.outbound\{/);
@@ -658,7 +658,7 @@ test("search boxes remember up to ten recent keywords per list in local storage"
   ]);
   assertJsMatch(page,/const searchHistoryLimit=10;/);
   assertJsMatch(page,/window\.localStorage\.getItem\(`junjun\.search\.\$\{key\}`\)/);
-  assertJsMatch(page,/function Search\(\{ value,onChange,placeholder,historyKey \}/);
+  assertJsMatch(page,/function Search\(\{ value,onChange,placeholder,historyKey,ariaLabel \}/);
   assertJsMatch(page,/\[trimmed,\.\.\.current\.filter\(item=>item!==trimmed\)\]\.slice\(0,searchHistoryLimit\)/);
   assertJsMatch(page,/onBlur=\{\(\)=>\{remember\(value\);window\.setTimeout\(\(\)=>setFocused\(false\),120\);\}\}/);
   assertJsMatch(page,/if\(e\.key==="Enter"\)\{e\.preventDefault\(\);remember\(value\);e\.currentTarget\.blur\(\);\}/);
@@ -666,7 +666,8 @@ test("search boxes remember up to ten recent keywords per list in local storage"
   assertJsMatch(page,/>清空记录<\/button>/);
   assertJsMatch(page,/className="search-history-pick" onMouseDown=\{keepFocus\} onClick=\{\(\)=>\{onChange\(term\);remember\(term\);setFocused\(false\);\}\}/);
   assertJsMatch(page,/aria-label=\{`删除记录 \$\{term\}`\}/);
-  for(const key of ["admin-orders","buyer-orders","stock"])assertJsMatch(page,new RegExp(`historyKey="${key}"`));
+  assertJsMatch(page,/historyKey=\{role === "admin" \? "admin-orders" : "buyer-orders"\}/);
+  assertJsMatch(page,/historyKey="stock"/);
   assertCssMatch(styles,/\.search-history\{position:absolute/);
   assertCssMatch(styles,/\.search-history-remove\{/);
 });
@@ -935,7 +936,7 @@ test("admin and buyer order lists filter by settlement status",async()=>{
   assertJsMatch(page,/settlement:"全部结款状态"/);
   assertJsMatch(page,/const setSettlement = fieldSetter\(setViewState,"settlement"\)/);
   assertJsMatch(page,/\(settlement === "全部结款状态" \|\| order\.settled === \(settlement === "已结款"\)\)/);
-  assertJsMatch(page,/\[orders,query,statuses,platform,settlement,buyers,dateDays,dateStart,dateEnd,timeZone,sort\]/);
+  assertJsMatch(page,/\[orders,query,searchConditions,searchMode,statuses,platform,settlement,buyers,dateDays,dateStart,dateEnd,timeZone,sort\]/);
   assertJsMatch(page,/<select aria-label="结款状态" value=\{settlement\}/);
   assertJsMatch(page,/<option>全部结款状态<\/option><option>已结款<\/option><option>未结款<\/option>/);
   assertJsMatch(page,/setSettlement\("全部结款状态"\)/);
@@ -969,12 +970,12 @@ test("administrator can clear every order filter and sorting state at once",asyn
     readFile(new URL("../app/workspace-ui.css",import.meta.url),"utf8"),
   ]);
   for(const reset of [
-    /setQuery\(""\)/, /setStatuses\(\[\]\)/, /setPlatform\("全部渠道"\)/,
+    /clearSearch\(\)/, /setStatuses\(\[\]\)/, /setPlatform\("全部渠道"\)/,
     /setBuyers\(\[\]\)/, /setBuyerOpen\(false\)/, /setDateDays\(30\)/,
     /setSettlement\("全部结款状态"\)/, /setSort\(null\)/,
   ]) assertJsMatch(page,reset);
   assertJsMatch(page,/const activeFilterCount=/);
-  assertJsMatch(page,/disabled=\{!activeFilterCount\} onClick=\{clearAllFilters\}/);
+  assertJsMatch(page,/disabled=\{!activeFilterCount && !searchConditions.length && searchMode === "and"\} onClick=\{clearAllFilters\}/);
   assert.match(page,/清除全部筛选/);
   assertCssMatch(styles,/\.order-filter-actions\{/);
   assertCssMatch(styles,/\.order-filter-actions button:disabled\{/);
@@ -1056,8 +1057,8 @@ test("editing an order keeps admin and buyer list filters in the surviving Home 
   assertJsMatch(buyerTag, /setViewState=\{setBuyerOrderListState\}/);
 
   for (const [section, fields] of [
-    [admin, ["query", "statuses", "platform", "settlement", "buyers", "dateDays", "sort", "page", "moreFiltersOpen"]],
-    [buyer, ["query", "statuses", "platform", "settlement", "page", "moreFiltersOpen"]],
+    [admin, ["query", "searchConditions", "searchMode", "statuses", "platform", "settlement", "buyers", "dateDays", "sort", "page", "moreFiltersOpen"]],
+    [buyer, ["query", "searchConditions", "searchMode", "statuses", "platform", "settlement", "page", "moreFiltersOpen"]],
   ]) {
     assertJsMatch(section, /viewState/);
     for (const field of fields) {

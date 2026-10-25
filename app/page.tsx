@@ -8,6 +8,7 @@ import {courierTrackingUrl, findOrdersByCourierNo, findTransitCandidatesByCourie
 import {buildOrderCopyText} from "@/lib/order-copy";
 import {financeMonthOptions, monthlyFinance} from "@/lib/dashboard-finance";
 import {paginateOrders} from "@/lib/order-pagination";
+import {initialOrderSearchState, matchesOrderSearch, orderSearchFields, type OrderSearchField, type OrderSearchMode, type OrderSearchState} from "@/lib/order-search";
 import {postReceiptTimelineEvents} from "@/lib/order-timeline";
 import {canSettleOrder, isSettlementStage} from "@/lib/order-settlement";
 import {orderImageUploadError} from "@/lib/order-image-upload";
@@ -25,12 +26,12 @@ type BuyerTab = "home" | "upload" | "mine";
 type OrderStatus = "待审核" | "在途" | "已入库" | "待发货" | "已发货" | "已驳回";
 type OrderSortKey = "createdAt" | "receivedAt" | "shippedAt";
 type OrderSort = { key: OrderSortKey; direction: "asc" | "desc" } | null;
-type AdminOrderListState = {
-    query: string; statuses: string[]; platform: string; settlement: string; buyers: string[];
+type AdminOrderListState = OrderSearchState & {
+    statuses: string[]; platform: string; settlement: string; buyers: string[];
     dateDays: number; sort: OrderSort; page: number; moreFiltersOpen: boolean;
 };
-type BuyerOrderListState = {
-    query: string; statuses: string[]; platform: string; settlement: string; page: number; moreFiltersOpen: boolean;
+type BuyerOrderListState = OrderSearchState & {
+    statuses: string[]; platform: string; settlement: string; page: number; moreFiltersOpen: boolean;
 };
 type Overlay = "receipt" | "scan" | "manual-receive" | "revert-receive" | "rollback-shipped" | "return-item" | "detail" | "order-images" | "reject" | "ship" | "settle" | "settlement-amount" | "settlement-proof" | null;
 type OrderImage = { id: string; url: string; fileName: string; uploadedBy: string; createdAt: string };
@@ -96,11 +97,11 @@ const orderSortOptions: Array<{ key: OrderSortKey; label: string }> = [
     {key: "shippedAt", label: "发货时间"}
 ];
 const initialAdminOrderListState: AdminOrderListState = {
-    query: "", statuses: [], platform: "全部渠道", settlement: "全部结款状态", buyers: [],
+    ...initialOrderSearchState, statuses: [], platform: "全部渠道", settlement: "全部结款状态", buyers: [],
     dateDays: 30, sort: null, page: 1, moreFiltersOpen: false
 };
 const initialBuyerOrderListState: BuyerOrderListState = {
-    query: "", statuses: [], platform: "全部渠道", settlement: "全部结款状态", page: 1, moreFiltersOpen: false
+    ...initialOrderSearchState, statuses: [], platform: "全部渠道", settlement: "全部结款状态", page: 1, moreFiltersOpen: false
 };
 /** The order list unmounts while editing; keep its view state in Home across tab changes and data refreshes. */
 function fieldSetter<State, Key extends keyof State>(setState: Dispatch<SetStateAction<State>>, key: Key): Dispatch<SetStateAction<State[Key]>> {
@@ -972,8 +973,8 @@ function AdminOrders({
                          onSettle,
                          onNotify
                       }: { orders: PurchaseOrder[]; viewState: AdminOrderListState; setViewState: Dispatch<SetStateAction<AdminOrderListState>>; onCreate: () => void; onRefresh: () => Promise<boolean>; onEdit: (id: string) => void; onDelete: (ids: string[]) => Promise<boolean>; onBatchShip: (shipments: Array<{ orderId: string; courier: string; company: string }>) => Promise<boolean>; onBatchSettle: (ids: string[]) => Promise<boolean>; onOpen: (id: string) => void; onApprove: (id: string) => void; onReceive: (id: string) => void; onReject: (id: string) => void; onShip: (id: string) => void; onSettle: (id: string) => void; onNotify: (text: string) => void }) {
-    const {query, statuses, platform, settlement, buyers, dateDays, sort, page, moreFiltersOpen} = viewState;
-    const setQuery = fieldSetter(setViewState, "query");
+    const {query, searchConditions, searchMode, statuses, platform, settlement, buyers, dateDays, sort, page, moreFiltersOpen} = viewState;
+    const clearSearch = () => setViewState(current => ({...current, ...initialOrderSearchState}));
     const setStatuses = fieldSetter(setViewState, "statuses");
     const setPlatform = fieldSetter(setViewState, "platform");
     const setSettlement = fieldSetter(setViewState, "settlement");
@@ -997,13 +998,13 @@ function AdminOrders({
     const resetPageSelection = () => { setPage(1); setSelectedIds([]); };
     const toggleBuyer = (name: string) => { resetPageSelection(); setBuyers(current => current.includes(name) ? current.filter(item => item !== name) : [...current, name]); };
     const cycleSort = (key: OrderSortKey) => { resetPageSelection(); setSort(current => current?.key !== key ? {key, direction: "desc"} : current.direction === "desc" ? {key, direction: "asc"} : null); };
-    const activeFilterCount = Number(Boolean(query.trim())) + Number(statuses.length > 0) + Number(platform !== "全部渠道") +
+    const activeFilterCount = Number(Boolean(query.trim())) + searchConditions.filter(condition => condition.value.trim()).length + Number(statuses.length > 0) + Number(platform !== "全部渠道") +
         Number(buyers.length > 0) + Number(dateDays !== 30) + Number(settlement !== "全部结款状态") + Number(sort !== null);
     const advancedFilterCount = Number(dateDays !== 30) + Number(settlement !== "全部结款状态") + Number(sort !== null);
     const advancedFilterSummary = `${dateDays === 0 ? "全部时间" : dateDays === 1 ? "今天" : `近${dateDays}天`} · ${settlement} · ${sort ? `${orderSortOptions.find(option => option.key === sort.key)?.label}${sort.direction === "desc" ? "倒序" : "顺序"}` : "默认排序"}`;
     const clearAllFilters = () => {
         resetPageSelection();
-        setQuery("");
+        clearSearch();
         setStatuses([]);
         setPlatform("全部渠道");
         setBuyers([]);
@@ -1012,7 +1013,7 @@ function AdminOrders({
         setSettlement("全部结款状态");
         setSort(null);
     };
-    const visible = useMemo(() => sortPurchaseOrders(orders.filter(order => (dateDays === 0 || (dateKey(order.createdAt, timeZone) >= dateStart && dateKey(order.createdAt, timeZone) <= dateEnd)) && matchesStatusFilter(order, statuses) && (platform === "全部渠道" || order.platform === platform) && (settlement === "全部结款状态" || order.settled === (settlement === "已结款")) && (buyers.length === 0 || buyers.includes(order.purchaser)) && `${order.id}${order.platformNo}${order.items.map(item => `${item.title}${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}${item.outboundCourier ?? ""}`).join("")}`.toLowerCase().includes(query.toLowerCase())), sort), [orders, query, statuses, platform, settlement, buyers, dateDays, dateStart, dateEnd, timeZone, sort]);
+    const visible = useMemo(() => sortPurchaseOrders(orders.filter(order => (dateDays === 0 || (dateKey(order.createdAt, timeZone) >= dateStart && dateKey(order.createdAt, timeZone) <= dateEnd)) && matchesStatusFilter(order, statuses) && (platform === "全部渠道" || order.platform === platform) && (settlement === "全部结款状态" || order.settled === (settlement === "已结款")) && (buyers.length === 0 || buyers.includes(order.purchaser)) && matchesOrderSearch(order, {query, searchConditions, searchMode}, "admin")), sort), [orders, query, searchConditions, searchMode, statuses, platform, settlement, buyers, dateDays, dateStart, dateEnd, timeZone, sort]);
     const pagination = paginateOrders(visible, page);
     const pageOrders = pagination.items;
     const pageOrderIds = new Set(pageOrders.map(order => order.id));
@@ -1115,10 +1116,13 @@ function AdminOrders({
     return <section className="enter">
         <button className="admin-order-create" onClick={onCreate}>
             <span><b>＋ 新增采购订单</b><small>管理员代录订单，保存后进入统一审核流程</small></span><em>去创建 ›</em></button>
-        <Search value={query} onChange={value => { resetPageSelection(); setQuery(value); }} placeholder="搜索单号 / 快递单号 / 货号" historyKey="admin-orders"/>
+        <OrderSearch value={{query, searchConditions, searchMode}} userRole="admin" onChange={search => {
+            resetPageSelection();
+            setViewState(current => ({...current, ...search}));
+        }}/>
         {readyCount > 0 && <button className="shipping-guide" onClick={() => {
             resetPageSelection();
-            setQuery("");
+            clearSearch();
             setStatuses(["待发货"]);
             setPlatform("全部渠道");
             setBuyers([]);
@@ -1188,7 +1192,7 @@ function AdminOrders({
         <div className={`order-filter-actions ${activeFilterCount ? "active" : ""}`}>
             <span>{activeFilterCount ? `当前已应用 ${activeFilterCount} 项筛选或排序` : "当前使用默认筛选条件"}</span>
             <div className="order-filter-buttons">
-                <button type="button" disabled={!activeFilterCount} onClick={clearAllFilters}>
+                <button type="button" disabled={!activeFilterCount && !searchConditions.length && searchMode === "and"} onClick={clearAllFilters}>
                     <i aria-hidden="true">↺</i> 清除全部筛选
                 </button>
                 <button type="button" className={`order-refresh-button ${refreshing ? "busy" : ""}`}
@@ -1647,18 +1651,17 @@ function BuyerOrders({
                          onOpen,
                          onEdit
                      }: { orders: PurchaseOrder[]; viewState: BuyerOrderListState; setViewState: Dispatch<SetStateAction<BuyerOrderListState>>; onOpen: (id: string) => void; onEdit: (id: string) => void }) {
-    const {query, statuses, platform, settlement, page, moreFiltersOpen} = viewState;
-    const setQuery = fieldSetter(setViewState, "query");
+    const {query, searchConditions, searchMode, statuses, platform, settlement, page, moreFiltersOpen} = viewState;
     const setStatuses = fieldSetter(setViewState, "statuses");
     const setPlatform = fieldSetter(setViewState, "platform");
     const setSettlement = fieldSetter(setViewState, "settlement");
     const setPage = fieldSetter(setViewState, "page");
     const setMoreFiltersOpen = fieldSetter(setViewState, "moreFiltersOpen");
     const changePage = (nextPage: number) => setPage(nextPage);
-    const visible = orders.filter(o => matchesStatusFilter(o, statuses) && (platform === "全部渠道" || o.platform === platform) && (settlement === "全部结款状态" || o.settled === (settlement === "已结款")) && `${o.title}${o.items.map(item => `${item.sku}${item.purchaseCourierCompany}${item.purchaseCourierNo}`).join("")}${o.platformNo}`.toLowerCase().includes(query.toLowerCase()));
+    const visible = orders.filter(o => matchesStatusFilter(o, statuses) && (platform === "全部渠道" || o.platform === platform) && (settlement === "全部结款状态" || o.settled === (settlement === "已结款")) && matchesOrderSearch(o, {query, searchConditions, searchMode}, "buyer"));
     const pagination = paginateOrders(visible, page);
-    return <section className="enter"><Search value={query} onChange={value => { setPage(1); setQuery(value); }} placeholder="搜索商品 / 订单号 / 快递单号"
-                                              historyKey="buyer-orders"/><StatusFilter
+    return <section className="enter"><OrderSearch value={{query, searchConditions, searchMode}} userRole="buyer"
+        onChange={search => setViewState(current => ({...current, ...search, page: 1}))}/><StatusFilter
         options={["全部", "待审核", "在途", "已入库", "已驳回"]} value={statuses} onChange={value => { setPage(1); setStatuses(value); }}/>
         <div className="chip-row scroll">{["全部渠道", ...purchaseChannels].map(v => <button key={v}
                                                                                          className={platform === v ? "active" : ""}
@@ -2787,12 +2790,52 @@ function writeSearchHistory(key: string, list: string[]) {
     }
 }
 
+function OrderSearch({value, onChange, userRole: role}: {value: OrderSearchState; onChange: (value: OrderSearchState) => void; userRole: Role}) {
+    const {query, searchConditions, searchMode} = value;
+    const fields = orderSearchFields.filter(field => !field.adminOnly || role === "admin");
+    const activeCount = Number(Boolean(query.trim())) + searchConditions.filter(condition => condition.value.trim()).length;
+    const updateCondition = (id: string, patch: {field?: OrderSearchField; value?: string}) => onChange({
+        ...value, searchConditions: searchConditions.map(condition => condition.id === id ? {...condition, ...patch} : condition)
+    });
+    return <div className="order-search" role="group" aria-label="订单搜索">
+        <Search value={query} onChange={query => onChange({...value, query})} ariaLabel="订单搜索关键词"
+                placeholder={role === "admin" ? "搜索单号 / 快递单号 / 货号" : "搜索商品 / 订单号 / 快递单号"}
+                historyKey={role === "admin" ? "admin-orders" : "buyer-orders"}/>
+        {searchConditions.length > 0 && <div className="order-search-conditions">
+            <label className="order-search-mode"><span>条件关系</span>
+                <select aria-label="搜索条件关系" value={searchMode} onChange={event => onChange({...value, searchMode: event.target.value as OrderSearchMode})}>
+                    <option value="and">并且（全部满足）</option><option value="or">或者（任一满足）</option>
+                </select>
+            </label>
+            {searchConditions.map((condition, index) => <div className="order-search-condition" key={condition.id}>
+                <select aria-label={`搜索条件 ${index + 1} 的字段`} value={condition.field}
+                        onChange={event => updateCondition(condition.id, {field: event.target.value as OrderSearchField})}>
+                    {fields.map(field => <option key={field.value} value={field.value}>{field.label}</option>)}
+                </select>
+                <input aria-label={`搜索条件 ${index + 1} 的关键词`} placeholder="输入关键词" value={condition.value}
+                       onChange={event => updateCondition(condition.id, {value: event.target.value})}/>
+                <button type="button" className="order-search-remove" aria-label={`删除搜索条件 ${index + 1}`}
+                        onClick={() => onChange({...value, searchConditions: searchConditions.filter(item => item.id !== condition.id)})}>×</button>
+            </div>)}
+            <p className="order-search-hint">上方搜索框也参与组合；空白条件不参与。{searchMode === "and" ? "所有关键词均匹配时显示订单。" : "任一关键词匹配时显示订单。"}日期、状态等筛选仍同时生效。</p>
+        </div>}
+        <div className="order-search-actions">
+            <button type="button" className="order-search-add" onClick={() => onChange({...value,
+                searchConditions: [...searchConditions, {id: String(searchConditions.reduce((max, condition) => Math.max(max, Number(condition.id)), 0) + 1), field: "all", value: ""}]
+            })}>＋ 添加搜索条件</button>
+            {(query || searchConditions.length > 0) && <button type="button" className="order-search-clear" onClick={() => onChange({...initialOrderSearchState})}>清空搜索</button>}
+            {searchConditions.length > 0 && <span role="status">{activeCount} 个有效条件 · {searchMode === "and" ? "并且" : "或者"}</span>}
+        </div>
+    </div>;
+}
+
 function Search({
                     value,
                     onChange,
                     placeholder,
-                    historyKey
-                }: { value: string; onChange: (v: string) => void; placeholder: string; historyKey?: string }) {
+                    historyKey,
+                    ariaLabel
+                }: { value: string; onChange: (v: string) => void; placeholder: string; historyKey?: string; ariaLabel?: string }) {
     const [history, setHistory] = useState<string[]>([]), [focused, setFocused] = useState(false);
     const focus = () => {
         if (historyKey) setHistory(readSearchHistory(historyKey));
@@ -2825,7 +2868,7 @@ function Search({
     const open = Boolean(historyKey) && focused && suggestions.length > 0;
     const keepFocus = (event: React.MouseEvent) => event.preventDefault();
     return <div className="search-wrap">
-        <label className="search-box"><i>⌕</i><input value={value} onChange={e => onChange(e.target.value)}
+        <label className="search-box"><i>⌕</i><input aria-label={ariaLabel} value={value} onChange={e => onChange(e.target.value)}
                                                      onFocus={focus} onBlur={() => {
             remember(value);
             window.setTimeout(() => setFocused(false), 120);

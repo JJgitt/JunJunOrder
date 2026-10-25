@@ -105,6 +105,26 @@ button:disabled { cursor: not-allowed; }
 .search-box { min-height: 48px; border-radius: 14px; box-shadow: var(--surface-shadow); }
 .search-box input { min-width: 0; height: 46px; padding: 0 6px; }
 .search-box > button { min-width: 44px; min-height: 44px; }
+.order-search { margin-bottom: 10px; }
+.order-search .search-box { margin-bottom: 0; }
+.order-search-conditions { display: grid; gap: 10px; margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.order-search-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; color: var(--muted); font-size: 13px; }
+.order-search-mode select { flex: 1; min-width: 0; }
+.order-search select, .order-search-condition input { min-height: 44px; min-width: 0; width: 100%; padding: 0 10px; border: 1px solid #dce4ef; border-radius: 10px; background: #f8faff; color: var(--ink); font-size: 16px; }
+.order-search-condition { display: grid; grid-template-columns: 122px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
+.order-search-remove { min-width: 44px; min-height: 44px; border-radius: 10px; background: #f1f4f8; color: var(--muted); font-size: 22px; }
+.order-search-hint { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.order-search-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; padding-top: 4px; }
+.order-search-actions button { min-height: 44px; padding: 6px 2px; font-size: 13px; }
+.order-search-add { color: var(--primary-dark); font-weight: 600; }
+.order-search-clear, .order-search-actions > span { color: var(--muted); font-size: 12px; }
+.order-search select:focus-visible, .order-search-condition input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+@media (max-width: 420px) {
+    .order-search-condition { grid-template-columns: minmax(0, 1fr) 44px; }
+    .order-search-condition > select { grid-column: 1; }
+    .order-search-condition > input { grid-column: 1; grid-row: 2; }
+    .order-search-remove { grid-column: 2; grid-row: 1 / 3; }
+}
 .chip-row { gap: 8px; padding: 4px 0 10px; }
 .chip-row button { flex: none; min-height: 40px; padding: 8px 14px; font-size: 13px; border-radius: 12px; }
 .select-row { gap: 10px; }
