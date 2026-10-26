@@ -2796,7 +2796,7 @@ function OrderSearch({value, onChange, userRole: role}: {value: OrderSearchState
     const modeHint = {
         and: "所有关键词均匹配时显示订单。",
         or: "任一关键词匹配时显示订单。",
-        xor: "仅满足一个有效搜索条件时显示订单，同时满足多个条件的订单不显示。"
+        xor: "满足任一有效搜索条件的订单都不显示，仅保留全部不匹配的订单。"
     }[searchMode];
     const fields = orderSearchFields.filter(field => !field.adminOnly || role === "admin");
     const activeCount = Number(Boolean(query.trim())) + searchConditions.filter(condition => condition.value.trim()).length;
@@ -2807,10 +2807,10 @@ function OrderSearch({value, onChange, userRole: role}: {value: OrderSearchState
         <Search value={query} onChange={query => onChange({...value, query})} ariaLabel="订单搜索关键词"
                 placeholder={role === "admin" ? "搜索单号 / 快递单号 / 货号" : "搜索商品 / 订单号 / 快递单号"}
                 historyKey={role === "admin" ? "admin-orders" : "buyer-orders"}/>
-        {searchConditions.length > 0 && <div className="order-search-conditions">
+        {(searchConditions.length > 0 || searchMode !== "and") && <div className="order-search-conditions">
             <label className="order-search-mode"><span>条件关系</span>
                 <select aria-label="搜索条件关系" value={searchMode} onChange={event => onChange({...value, searchMode: event.target.value as OrderSearchMode})}>
-                    <option value="and">并且（全部满足）</option><option value="or">或者（任一满足）</option><option value="xor">互斥（仅满足一项）</option>
+                    <option value="and">并且（全部满足）</option><option value="or">或者（任一满足）</option><option value="xor">互斥（排除匹配项）</option>
                 </select>
             </label>
             {searchConditions.map((condition, index) => <div className="order-search-condition" key={condition.id}>
@@ -2829,8 +2829,8 @@ function OrderSearch({value, onChange, userRole: role}: {value: OrderSearchState
             <button type="button" className="order-search-add" onClick={() => onChange({...value,
                 searchConditions: [...searchConditions, {id: String(searchConditions.reduce((max, condition) => Math.max(max, Number(condition.id)), 0) + 1), field: "all", value: ""}]
             })}>＋ 添加搜索条件</button>
-            {(query || searchConditions.length > 0) && <button type="button" className="order-search-clear" onClick={() => onChange({...initialOrderSearchState})}>清空搜索</button>}
-            {searchConditions.length > 0 && <span role="status">{activeCount} 个有效条件 · {modeLabel}</span>}
+            {(query || searchConditions.length > 0 || searchMode !== "and") && <button type="button" className="order-search-clear" onClick={() => onChange({...initialOrderSearchState})}>清空搜索</button>}
+            {(searchConditions.length > 0 || searchMode !== "and") && <span role="status">{activeCount} 个有效条件 · {modeLabel}</span>}
         </div>
     </div>;
 }

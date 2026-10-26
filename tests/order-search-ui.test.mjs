@@ -91,24 +91,31 @@ test("actual lists combine keyword and row conditions while retaining platform, 
     }
 });
 
-test("both roles can select XOR, exclude overlapping matches and retain it after returning to the list", () => {
-    const orders = [makeOrder("one", "ABC"), makeOrder("two", "DEF"), makeOrder("three", "ABC", {platform: "京东"})];
+test("both roles exclude every matching order, retain other filters and preserve exclusion after returning to the list", () => {
+    const orders = [makeOrder("one", "ABC"), makeOrder("two", "DEF"), makeOrder("three", "GHI", {platform: "京东"}),
+        makeOrder("four", "GHI"), makeOrder("five", "GHI", {settled: true}), makeOrder("six", "GHI", {status: "已驳回"})];
     for (const role of ["admin", "buyer"]) {
-        const f = fixture(role, orders, {query: "one", searchConditions: [condition("ABC")], platform: "淘宝"});
+        const f = fixture(role, orders, {query: "one", searchConditions: [condition("ABC")], platform: "淘宝", statuses: ["在途"], settlement: "未结款"});
         const option = nodes(f.render().control("搜索条件关系")).find(node => node.type === "option" && node.props.value === "xor");
-        assert.equal(text(option), "互斥（仅满足一项）");
+        assert.equal(text(option), "互斥（排除匹配项）");
         assert.deepEqual(f.render().cards.map(node => node.props.order.id), ["one"]);
         f.render().control("搜索条件关系").props.onChange({target: {value: "xor"}});
-        assert.equal(f.render().cards.length, 0, "the order matching both conditions is excluded");
+        assert.deepEqual(f.render().cards.map(node => node.props.order.id), ["two", "four"], "unmatched orders remain while overlapping matches are hidden");
         f.render().control("搜索条件 1 的关键词").props.onChange({target: {value: "DEF"}});
-        assert.deepEqual(f.render().cards.map(node => node.props.order.id), ["one", "two"]);
+        assert.deepEqual(f.render().cards.map(node => node.props.order.id), ["four"], "matching either the keyword or the row excludes the order");
         assert.match(text(f.render().builder), /2 个有效条件 · 互斥/);
-        assert.match(text(f.render().builder), /仅满足一个有效搜索条件/);
+        assert.match(text(f.render().builder), /满足任一有效搜索条件的订单都不显示/);
         f.remount();
         assert.equal(f.render().control("搜索条件关系").props.value, "xor");
-        assert.deepEqual(f.render().cards.map(node => node.props.order.id), ["one", "two"]);
+        assert.deepEqual(f.render().cards.map(node => node.props.order.id), ["four"]);
         f.render().button("添加搜索条件").props.onClick();
-        assert.deepEqual(f.render().cards.map(node => node.props.order.id), ["one", "two"], "blank row is ignored");
+        assert.deepEqual(f.render().cards.map(node => node.props.order.id), ["four"], "blank row is ignored");
+        f.render().control("删除搜索条件 2").props.onClick();
+        f.render().control("删除搜索条件 1").props.onClick();
+        assert.equal(f.render().control("搜索条件关系").props.value, "xor", "exclusion remains visible and editable with only the main query");
+        assert.deepEqual(f.render().cards.map(node => node.props.order.id), ["two", "four"]);
+        f.render().keyword.props.onChange("");
+        assert.deepEqual(f.render().cards.map(node => node.props.order.id), ["one", "two", "four"], "no effective exclusion leaves the other filters intact");
         f.render().button("清空搜索").props.onClick();
         assert.equal(f.state.searchMode, "and");
     }

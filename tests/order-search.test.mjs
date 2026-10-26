@@ -24,25 +24,27 @@ test("AND requires every nonempty condition; OR accepts any including the main q
     }
 });
 
-test("XOR accepts exactly one matching condition, including the main query", () => {
+test("exclusive mode hides any matching condition, including a single condition and the main query", () => {
     for (const role of ["admin", "buyer"]) {
-        assert.equal(matchesOrderSearch(order, search("运动鞋", "xor", [["sku", "missing"]]), role), true);
-        assert.equal(matchesOrderSearch(order, search("missing", "xor", [["sku", "NK-001"]]), role), true);
-        assert.equal(matchesOrderSearch(order, search("missing", "xor", [["sku", "other"]]), role), false);
+        assert.equal(matchesOrderSearch(order, search("运动鞋", "xor", [["sku", "missing"]]), role), false);
+        assert.equal(matchesOrderSearch(order, search("missing", "xor", [["sku", "NK-001"]]), role), false);
+        assert.equal(matchesOrderSearch(order, search("missing", "xor", [["sku", "other"]]), role), true);
         assert.equal(matchesOrderSearch(order, search("运动鞋", "xor", [["sku", "NK-001"]]), role), false);
-        assert.equal(matchesOrderSearch(order, search("运动鞋", "xor", [["sku", "NK-001"], ["size", "42"]]), role), false, "three matches must not pass as odd-parity XOR");
-        assert.equal(matchesOrderSearch(order, search("missing", "xor", [["sku", "NK-001"], ["size", "wrong"]]), role), true);
-        assert.equal(matchesOrderSearch(order, search("", "xor", [["title", "运动"]]), role), true, "matching multiple items counts as one condition");
-        assert.equal(matchesOrderSearch(order, search("", "xor", [["sku", "NK-001"], ["sku", "NK-001"]]), role), false, "duplicate rows count separately");
+        assert.equal(matchesOrderSearch(order, search("运动鞋", "xor", [["sku", "NK-001"], ["size", "42"]]), role), false);
+        assert.equal(matchesOrderSearch(order, search("missing", "xor", [["sku", "NK-001"], ["size", "wrong"]]), role), false);
+        assert.equal(matchesOrderSearch(order, search("", "xor", [["title", "运动"]]), role), false, "matching any item excludes the whole order");
+        assert.equal(matchesOrderSearch(order, search("", "xor", [["sku", "NK-001"], ["sku", "NK-001"]]), role), false, "duplicate exclusions do not bring an order back");
+        assert.equal(matchesOrderSearch(order, search("运动鞋", "xor"), role), false);
+        assert.equal(matchesOrderSearch(order, search("missing", "xor"), role), true);
     }
 });
 
 test("empty conditions are ignored in all modes, including an empty main query", () => {
     for (const mode of ["and", "or", "xor"]) {
         assert.equal(matchesOrderSearch(order, search(" \t", mode, [["sku", "\n"]]), "admin"), true);
-        assert.equal(matchesOrderSearch(order, search("", mode, [["sku", "missing"], ["title", " "]]), "admin"), false);
-        assert.equal(matchesOrderSearch(order, search("missing", mode, [["sku", ""]]), "admin"), false);
-        assert.equal(matchesOrderSearch(order, search("", mode, [["sku", " NK-001 \t"]]), "admin"), true);
+        assert.equal(matchesOrderSearch(order, search("", mode, [["sku", "missing"], ["title", " "]]), "admin"), mode === "xor");
+        assert.equal(matchesOrderSearch(order, search("missing", mode, [["sku", ""]]), "admin"), mode === "xor");
+        assert.equal(matchesOrderSearch(order, search("", mode, [["sku", " NK-001 \t"]]), "admin"), mode !== "xor");
     }
     assert.equal(matchesOrderSearch(order, initialOrderSearchState, "buyer"), true);
 });
@@ -71,6 +73,8 @@ test("buyer search never uses administrator-only fields, even if handed an admin
         assert.equal(matchesOrderSearch(order, search(value), "admin"), true);
         assert.equal(matchesOrderSearch(order, search("", "and", [[field, value]]), "buyer"), false);
         assert.equal(matchesOrderSearch(order, search(value), "buyer"), false);
+        assert.equal(matchesOrderSearch(order, search("", "xor", [[field, value]]), "admin"), false);
+        assert.equal(matchesOrderSearch(order, search("", "xor", [[field, value]]), "buyer"), true, "hidden administrator fields cannot exclude a buyer's order");
     }
     assert.equal(matchesOrderSearch({...order, items: []}, search("missing"), "buyer"), false);
 });
@@ -81,4 +85,6 @@ test("combined search filters the complete collection before pagination", () => 
     const result = paginateOrders(filtered, 1);
     assert.equal(result.total, 1);
     assert.equal(result.items[0].id, "119");
+    const excluded = orders.filter(item => matchesOrderSearch(item, search("OTHER", "xor"), "admin"));
+    assert.deepEqual(paginateOrders(excluded, 1).items.map(item => item.id), ["119"], "exclusions apply before pagination as well");
 });

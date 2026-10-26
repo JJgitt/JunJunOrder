@@ -40,7 +40,7 @@ function fieldValues(order: SearchableOrder, field: OrderSearchField, role: "adm
     }
 }
 
-/** Empty rows are drafts. Conditions match an order, possibly across its items; XOR requires exactly one match. */
+/** Empty rows are drafts. Conditions match an order across its items; legacy "xor" now excludes any match. */
 export function matchesOrderSearch(order: SearchableOrder, search: OrderSearchState, role: "admin" | "buyer"): boolean {
     const conditions = [{field: "all" as const, value: search.query}, ...search.searchConditions]
         .map(condition => ({field: condition.field, value: condition.value.trim().toLowerCase()}))
@@ -48,6 +48,6 @@ export function matchesOrderSearch(order: SearchableOrder, search: OrderSearchSt
     if (!conditions.length) return true;
     const matches = (condition: typeof conditions[number]) => fieldValues(order, condition.field, role)
         .some(value => value?.toLowerCase().includes(condition.value));
-    if (search.searchMode === "xor") return conditions.filter(matches).length === 1;
+    if (search.searchMode === "xor") return !conditions.some(matches);
     return search.searchMode === "or" ? conditions.some(matches) : conditions.every(matches);
 }
