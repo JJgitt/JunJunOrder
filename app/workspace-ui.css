@@ -457,3 +457,23 @@ button:disabled { cursor: not-allowed; }
 .item-return-explanation { color: #59677d; font-size: 13px; line-height: 1.7; }
 .item-return-cost { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 12px; border-radius: 12px; background: #f7f2ff; color: #65409b; }
 .item-return-cost small { flex-basis: 100%; }
+
+.order-note-editor { margin: 16px 0; }
+.order-note-editor textarea {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 112px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.6;
+  resize: vertical;
+}
+.order-note-editor > small { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; color: var(--muted); font-size: 12px; }
+.order-note-card { border: 1px solid #dce5f5; background: #f6f9ff; }
+.order-note-card h3 { margin: 0 0 8px; color: #315484; font-size: 14px; }
+.order-note-card p { margin: 0; color: var(--ink); font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }

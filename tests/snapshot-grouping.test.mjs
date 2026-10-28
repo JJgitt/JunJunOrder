@@ -132,6 +132,14 @@ test("returned history is an admin-only boolean independent of the current lifec
   assert.ok(buyerData.orders.every(order => !("isReturned" in order)));
 });
 
+test("internal notes are strings in administrator snapshots and never appear in buyer snapshots", async () => {
+  const rows=orders.map((order,index)=>({...order,...(index===0?{adminNote:"仅管理员可见\n售后核对"}:index===1?{adminNote:""}:{})}));
+  const adminData=await (await handler(admin,rows)).json();
+  assert.deepEqual(adminData.orders.map(order=>order.adminNote),["仅管理员可见\n售后核对","",""]);
+  const buyerData=await (await handler(buyer,rows)).json();
+  assert.ok(buyerData.orders.every(order=>!("adminNote" in order)));
+});
+
 test("snapshot keeps older admin and buyer orders beyond the former 500/300 limits", async () => {
   const manyOrders = Array.from({ length: 501 }, (_, index) => ({
     ...orders[0], id: `old-${index}`, platformOrderNo: `p-${index}`, purchaserId: index < 301 ? buyer.id : otherBuyer.id,

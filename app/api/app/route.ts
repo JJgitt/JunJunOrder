@@ -103,7 +103,7 @@ async function snapshot(user:Awaited<ReturnType<typeof requireAppUser>>){
       purchaserId:row.purchaserId,purchaser:names.get(row.purchaserId)??"采购员",createdAt:row.createdAt,
       approvedAt:approvedAt.get(row.id),
       settled:row.settled,settledAt:row.settledAt??undefined,settledAmount:row.settledAmountCents==null?undefined:row.settledAmountCents/100,receivedAt:row.receivedAt??undefined,
-      ...(isAdmin?{purchaserPhone:phones.get(row.purchaserId)??"",purchaserWechatId:wechatIds.get(row.purchaserId)??"",isReturned:Boolean(row.isReturned),returnSourceOrderId:row.returnSourceOrderId??undefined,returnSourceItemId:row.returnSourceItemId??undefined,returnQuantity:row.returnQuantity??undefined}:{}),
+      ...(isAdmin?{purchaserPhone:phones.get(row.purchaserId)??"",purchaserWechatId:wechatIds.get(row.purchaserId)??"",isReturned:Boolean(row.isReturned),returnSourceOrderId:row.returnSourceOrderId??undefined,returnSourceItemId:row.returnSourceItemId??undefined,returnQuantity:row.returnQuantity??undefined,adminNote:row.adminNote??""}:{}),
       title:items[0]?.title??"",itemCount:items.length,amount:items.reduce((sum,item)=>sum+item.amount,0),items,
       images:(orderImagesByOrder.get(row.id)??[]).map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
       settlementProofs:(settlementImagesByOrder.get(row.id)??[]).map(image=>({id:image.id,url:`/api/files/${image.id}`,fileName:image.fileName,uploadedBy:names.get(image.uploadedBy)??"管理员",createdAt:image.createdAt})),
@@ -215,6 +215,8 @@ export async function POST(request:Request){
 
     if(action==="update-order"){
       requireAdmin(user);
+      if(body.adminNote!==undefined&&(typeof body.adminNote!=="string"||body.adminNote.length>1000))return Response.json({error:"订单备注需为文字，最多填写 1000 个字"},{status:400});
+      const adminNote=body.adminNote===undefined?undefined:string(body.adminNote);
       const id=string(body.orderId),platform=string(body.platform),platformNo=string(body.platformNo);
       const items=parseItems(body.items);
       if(!id||!platform)return Response.json({error:"请填写采购渠道"},{status:400});
@@ -283,9 +285,9 @@ export async function POST(request:Request){
             }
           }
         }
-        await tx.update(purchaseOrders).set({platform,platformOrderNo:platformNo,courierCompany,courierNo,purchaserId,status:order.status==="已驳回"?"待审核":order.status,rejectReason:order.status==="已驳回"?null:order.rejectReason,updatedAt:timestamp}).where(eq(purchaseOrders.id,id));
+        await tx.update(purchaseOrders).set({platform,platformOrderNo:platformNo,courierCompany,courierNo,purchaserId,...(adminNote===undefined?{}:{adminNote}),status:order.status==="已驳回"?"待审核":order.status,rejectReason:order.status==="已驳回"?null:order.rejectReason,updatedAt:timestamp}).where(eq(purchaseOrders.id,id));
         if(purchaserId!==order.purchaserId)await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"change-purchaser",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({before:{purchaserId:order.purchaserId},after:{purchaserId}}),createdAt:timestamp});
-        await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"update",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({before:{platform:order.platform,platformNo:order.platformOrderNo,courierCompany:order.courierCompany,courierNo:order.courierNo,items:existingItems.map(item=>({title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents}))},after:{platform,platformNo,courierCompany,courierNo,items:items.map(item=>({title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents}))}}),createdAt:timestamp});
+        await tx.insert(auditLogs).values({id:uid("audit"),actorId:user.id,action:"update",entityType:"purchase_order",entityId:id,detailJson:JSON.stringify({before:{platform:order.platform,platformNo:order.platformOrderNo,courierCompany:order.courierCompany,courierNo:order.courierNo,adminNote:order.adminNote??"",items:existingItems.map(item=>({title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents}))},after:{platform,platformNo,courierCompany,courierNo,adminNote:adminNote??order.adminNote??"",items:items.map(item=>({title:item.title,sku:item.sku,size:item.size,qty:item.qty,amountCents:item.amountCents}))}}),createdAt:timestamp});
       });
       return Response.json({data:await snapshot(user),createdOrderId:id});
     }

@@ -48,6 +48,7 @@ type PurchaseOrder = {
     id: string; platform: string; platformNo: string; courierCompany: string; courierNo: string; status: OrderStatus;
     purchaser: string; purchaserId?: string; purchaserPhone?: string; purchaserWechatId?: string; createdAt: string; approvedAt?: string; location?: string; receivedAt?: string; rejectReason?: string;
     settled: boolean; settledAt?: string; settledByName?: string; settledAmount?: number;
+    adminNote?: string;
     isReturned?: boolean;
     returnSourceOrderId?: string; returnSourceItemId?: string; returnQuantity?: number;
     title: string; itemCount: number; amount: number; items: OrderItem[];
@@ -527,6 +528,7 @@ export default function Home() {
             const result = await mutate(action, {
                 ...(editing ? {orderId: order.id} : {}),
                 ...(currentUser?.role === "admin" ? {purchaserId: order.purchaserId} : {}),
+                ...(editing && currentUser?.role === "admin" && order.adminNote !== undefined ? {adminNote: order.adminNote} : {}),
                 platform: order.platform,
                 platformNo: order.platformNo,
                 courierCompany: order.courierCompany,
@@ -1400,6 +1402,7 @@ function UploadPage({
     const [purchaserId, setPurchaserId] = useState(editing?.purchaserId ?? currentUserId);
     const purchaserOptions = people.filter(person => person.id === editing?.purchaserId || (person.active && person.approvalStatus === "approved"));
     const [platform, setPlatform] = useState(editing?.platform ?? "京东"), [platformNo, setPlatformNo] = useState(editing?.platformNo ?? ""), [files, setFiles] = useState<File[]>([]), [submitting, setSubmitting] = useState(false);
+    const [adminNote, setAdminNote] = useState(editing?.adminNote ?? "");
     const [items, setItems] = useState<OrderItemDraft[]>(() => editing ? editing.items.map(item => {
         const company = item.purchaseCourierCompany || editing.courierCompany || "";
         const choice = courierCompanyChoice(company);
@@ -1521,6 +1524,7 @@ function UploadPage({
                 status: "待审核",
                 purchaser: "",
                 ...(mode === "admin" ? {purchaserId} : {}),
+                ...(mode === "admin" && editing ? {adminNote} : {}),
                 settled: editing?.settled ?? false,
                 settledAt: editing?.settledAt,
                 settledAmount: editing?.settledAmount,
@@ -1636,6 +1640,11 @@ function UploadPage({
                     <span>合计 {items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0)} 件</span><b>{money(items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0))}</b>
                 </div>
             </div>
+            {mode === "admin" && editing && <label className="order-note-editor"><span>管理员备注（选填）</span>
+                <textarea aria-label="管理员备注" value={adminNote} maxLength={1000} rows={4} disabled={submitting}
+                          onChange={event => setAdminNote(event.target.value)} placeholder="填写订单处理说明或需要留意的事项"/>
+                <small><span>仅管理员可见，支持换行</span><span>{adminNote.length}/1000</span></small>
+            </label>}
             <label className="upload-zone"><input type="file" accept="image/*" multiple
                                                   onChange={e => setFiles(Array.from(e.target.files ?? []).slice(0, 3))}/><i>＋</i><b>{files.length ? `已选择 ${files.length} 张截图` : "上传订单截图"}</b><span>持久化保存，最多 3 张、单张不超过 5MB、合计不超过 8MB</span></label>
             <button className="primary-button" disabled={submitting || !itemsValid || (mode === "admin" && !purchaserId)}
@@ -2147,6 +2156,9 @@ function OrderDetail({
             <KeyValue label="库位" value={order.location}/>}<KeyValue label="采购结款"
             value={order.settled ? `已结款 · ${order.settledAmount != null ? money(order.settledAmount) : "金额未记录"} · ${dateTime(order.settledAt)}` : isSettlementStage(order.status) ? "待结款" : "审核通过后可结款"}
             highlight={order.settled}/></div>
+        {canManage && order.adminNote && <section className="detail-card order-note-card" aria-label="管理员备注">
+            <h3>管理员备注</h3><p>{order.adminNote}</p>
+        </section>}
         {canManage && order.returnSourceOrderId && <div className="detail-card item-return-summary">
             <b>回流来源 · {order.returnQuantity} 件</b>
             <CopyNumber value={order.returnSourceOrderId} label="原采购单号"/>

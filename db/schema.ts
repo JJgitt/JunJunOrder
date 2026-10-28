@@ -27,6 +27,7 @@ export const purchaseOrders = pgTable("purchase_orders", {
   id: text("id").primaryKey(),
   platform: text("platform").notNull(),
   platformOrderNo: text("platform_order_no").notNull(),
+  adminNote: text("admin_note").notNull().default(""),
   courierCompany: text("courier_company").notNull().default(""),
   courierNo: text("courier_no").notNull().default(""),
   status: text("status", { enum: ["待审核", "在途", "已入库", "待发货", "已发货", "已驳回"] }).notNull().default("待审核"),
@@ -52,6 +53,7 @@ export const purchaseOrders = pgTable("purchase_orders", {
   index("idx_orders_courier_no").on(table.courierNo),
   index("idx_orders_settled_received").on(table.settled, table.receivedAt),
   index("idx_orders_return_source_item").on(table.returnSourceItemId),
+  check("purchase_orders_admin_note_check", sql`char_length(${table.adminNote}) <= 1000`),
   check("orders_return_source_check", sql`(${table.returnSourceOrderId} IS NULL AND ${table.returnSourceItemId} IS NULL AND ${table.returnQuantity} IS NULL) OR (${table.returnSourceOrderId} IS NOT NULL AND ${table.returnSourceItemId} IS NOT NULL AND ${table.returnQuantity} IS NOT NULL AND ${table.returnQuantity} > 0 AND ${table.returnSourceOrderId} <> ${table.id})`),
 ]);
 
