@@ -676,6 +676,11 @@ export default function Home() {
                          onSettlementAmount={() => setOverlay("settlement-amount")}
                          onSettlementProof={() => setOverlay("settlement-proof")}
                          onOrderImages={() => setOverlay("order-images")}
+                         onEditNote={() => {
+                             setSelectedId(selected.id);
+                             setOverlay(null);
+                             setAdminTab("upload");
+                         }}
                          onShipItem={(itemId) => {
                              setSelectedItemId(itemId);
                              setOverlay("ship");
@@ -2132,8 +2137,9 @@ function OrderDetail({
                          onSettlementAmount,
                          onSettlementProof,
                          onOrderImages,
+                         onEditNote,
                          onShipItem
-                     }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onRollbackShipped: () => void; onReturnItem: (itemId: string) => void; onOpenRelated: (orderId: string) => void; onReject: () => void; onSettle: () => void; onSettlementAmount: () => void; onSettlementProof: () => void; onOrderImages: () => void; onShipItem: (itemId: string) => void }) {
+                     }: { order: PurchaseOrder; canManage: boolean; showLocation: boolean; onClose: () => void; onApprove: () => void; onReceive: () => void; onRevertReceive: () => void; onRollbackShipped: () => void; onReturnItem: (itemId: string) => void; onOpenRelated: (orderId: string) => void; onReject: () => void; onSettle: () => void; onSettlementAmount: () => void; onSettlementProof: () => void; onOrderImages: () => void; onEditNote?: () => void; onShipItem: (itemId: string) => void }) {
     const {dateTime} = useServerClock();
     const postReceiptEvents = postReceiptTimelineEvents(order, canManage, timestamp);
     return <Modal title="订单详情" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
@@ -2156,8 +2162,13 @@ function OrderDetail({
             <KeyValue label="库位" value={order.location}/>}<KeyValue label="采购结款"
             value={order.settled ? `已结款 · ${order.settledAmount != null ? money(order.settledAmount) : "金额未记录"} · ${dateTime(order.settledAt)}` : isSettlementStage(order.status) ? "待结款" : "审核通过后可结款"}
             highlight={order.settled}/></div>
-        {canManage && order.adminNote && <section className="detail-card order-note-card" aria-label="管理员备注">
-            <h3>管理员备注</h3><p>{order.adminNote}</p>
+        {canManage && (order.adminNote || (order.status === "在途" && onEditNote)) && <section className="detail-card order-note-card" aria-label="管理员备注">
+            <div className="order-note-head"><h3>管理员备注</h3>
+                {order.status === "在途" && onEditNote && <button type="button" className="order-note-edit" onClick={onEditNote}>
+                    {order.adminNote ? "编辑备注" : "添加备注"}
+                </button>}
+            </div>
+            <p className={order.adminNote ? undefined : "order-note-empty"}>{order.adminNote || "暂无备注，可添加订单跟进或需要留意的事项。"}</p>
         </section>}
         {canManage && order.returnSourceOrderId && <div className="detail-card item-return-summary">
             <b>回流来源 · {order.returnQuantity} 件</b>

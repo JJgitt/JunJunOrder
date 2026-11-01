@@ -43,7 +43,7 @@ function fixture({mode = "admin", editing = order, onSubmit = async () => {}} = 
     return {render, changeNote, submit, calls};
 }
 
-test("administrator edit preloads a multiline optional note, updates its counter and sends explicit clearing", async () => {
+test("administrator in-transit edit preloads a multiline optional note, updates its counter and sends explicit clearing", async () => {
     const f = fixture();
     assert.equal(f.render().note.props.value, order.adminNote);
     assert.equal(f.render().note.props.maxLength, 1000);
@@ -102,4 +102,23 @@ test("detail renders escaped multiline note text only for an administrator, and 
     assert.doesNotMatch(admin, /<script>/);
     assert.doesNotMatch(render(false), /管理员备注|私密说明|再核对/);
     assert.doesNotMatch(render(true, ""), /aria-label="管理员备注"/);
+});
+
+test("in-transit detail provides add/edit note actions before receipt, including settled orders", () => {
+    const descendants = node => !node || typeof node !== "object" ? [] : [node, ...React.Children.toArray(node.props?.children).flatMap(descendants)];
+    for (const settled of [false, true]) for (const adminNote of ["", "在途跟进备注"]) {
+        let opened = 0;
+        const props = {order: {...order, settled, adminNote}, canManage: true, showLocation: true, onEditNote: () => opened++};
+        const tree = Detail(props);
+        const button = descendants(tree).find(node => node.type === "button" && node.props.className === "order-note-edit");
+        assert.ok(button);
+        assert.equal(button.props.children, adminNote ? "编辑备注" : "添加备注");
+        button.props.onClick(); assert.equal(opened, 1);
+        const html = renderToStaticMarkup(tree);
+        assert.match(html, /aria-label="管理员备注"/);
+        assert.match(html, adminNote ? /在途跟进备注/ : /暂无备注/);
+        assert.doesNotMatch(renderToStaticMarkup(React.createElement(Detail, {...props, canManage: false})), /管理员备注|添加备注|编辑备注|在途跟进备注/);
+        const received = Detail({...props, order: {...props.order, status: "已入库"}});
+        assert.equal(descendants(received).some(node => node.props?.className === "order-note-edit"), false);
+    }
 });

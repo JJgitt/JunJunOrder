@@ -459,6 +459,10 @@ button:disabled { cursor: not-allowed; }
 .item-return-cost small { flex-basis: 100%; }
 
 .order-note-editor { margin: 16px 0; }
+.order-note-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.order-note-head h3 { margin: 0; }
+.order-note-edit { flex: none; min-height: 44px; padding: 8px 12px; border-radius: 10px; background: var(--primary-light); color: var(--primary-dark); font-size: 13px; font-weight: 600; }
+.order-note-card .order-note-empty { color: var(--muted); }
 .order-note-editor textarea {
   width: 100%;
   min-width: 0;

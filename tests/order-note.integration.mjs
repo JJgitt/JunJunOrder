@@ -117,7 +117,17 @@ try {
             const buyerCreated = await expectStatus(buyerRoute.post({action: "create-order", platform: "淘宝", platformNo: `${marker}_buyer_create`, items: [item], adminNote: content}), 201);
             assert.equal((await tx`SELECT admin_note FROM purchase_orders WHERE id=${buyerCreated.createdOrderId}`)[0].admin_note, "");
             await expectStatus(adminRoute.post({action: "approve", orderId: id}), 200);
-            await expectStatus(adminRoute.post({action: "receive", orderId: id, location: "N1"}), 200); assert.equal(await note(), content);
+            const transitBefore = await tx`SELECT to_jsonb(p) - 'admin_note' - 'updated_at' AS row FROM purchase_orders p WHERE id=${id}`;
+            const transitNote = "在途跟进\n等待包裹送达";
+            await expectStatus(adminRoute.post(await edit({adminNote: transitNote})), 200);
+            assert.equal((await visible()).status, "在途");
+            assert.equal(await note(), transitNote);
+            assert.deepEqual(await tx`SELECT to_jsonb(p) - 'admin_note' - 'updated_at' AS row FROM purchase_orders p WHERE id=${id}`, transitBefore);
+            assert.equal((await tx`SELECT count(*)::int AS n FROM inventory_lots WHERE order_id=${id}`)[0].n, 0);
+            assert.equal((await tx`SELECT count(*)::int AS n FROM inventory_movements WHERE order_id=${id}`)[0].n, 0);
+            await expectStatus(adminRoute.post(await edit({adminNote: ""})), 200); assert.equal(await note(), "");
+            await expectStatus(adminRoute.post(await edit({adminNote: transitNote})), 200);
+            await expectStatus(adminRoute.post({action: "receive", orderId: id, location: "N1"}), 200); assert.equal(await note(), transitNote);
             const stockBefore = await tx`SELECT quantity FROM inventory WHERE sku=${item.sku}`;
             const ledgerBefore = await tx`SELECT count(*)::int AS n FROM inventory_movements WHERE order_id=${id}`;
             await expectStatus(adminRoute.post(await edit({adminNote: "已入库备注"})), 200);
@@ -125,6 +135,9 @@ try {
             assert.deepEqual(await tx`SELECT count(*)::int AS n FROM inventory_movements WHERE order_id=${id}`, ledgerBefore);
             await expectStatus(adminRoute.post({action: "revert-receive", orderId: id}), 200); assert.equal(await note(), "已入库备注");
             await expectStatus(adminRoute.post({action: "settle-order", orderId: id, amount: 100}), 200);
+            await expectStatus(adminRoute.post(await edit({adminNote: "已结款在途备注"})), 200);
+            assert.equal((await visible()).status, "在途"); assert.equal((await visible()).settled, true);
+            assert.equal(await note(), "已结款在途备注");
             await expectStatus(adminRoute.post({action: "receive", orderId: id, location: "N2"}), 200);
             const shipmentItem = (await visible()).items[0].id;
             await expectStatus(adminRoute.post({action: "ship", itemId: shipmentItem, company: "京东", courier: "JD-note"}), 200);
