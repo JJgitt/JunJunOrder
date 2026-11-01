@@ -138,7 +138,7 @@ function sheetFixture(response, { first = false } = {}) {
   const close = () => { effects.forEach(cleanup => cleanup?.()); };
   const React = { createElement: (type, props, ...children) => ({ type, props: { ...props, children } }) };
   const fetch = async (url, options) => { requests.push({ url, options }); return typeof response === "function" ? response(requests.length) : response; };
-  const Sheet = new Function("React", "useState", "useRef", "useEffect", "fetch", "Modal", "OrderImages", "money", "prepareSettlementProof", `${first ? firstSheetCode : sheetCode}; return ${first ? "SettlementSheet" : "SettlementProofSheet"};`)(React, useState, useRef, useEffect, fetch, "Modal", "OrderImages", value => `¥${value}`, prepareSettlementProof);
+  const Sheet = new Function("React", "useState", "useRef", "useEffect", "fetch", "Modal", "OrderImages", "money", "prepareSettlementProof", "KeyValue", `${first ? firstSheetCode : sheetCode}; return ${first ? "SettlementSheet" : "SettlementProofSheet"};`)(React, useState, useRef, useEffect, fetch, "Modal", "OrderImages", value => `¥${value}`, prepareSettlementProof, "KeyValue");
   function nodes(node) {
     if (!node || typeof node !== "object") return [];
     return [node, ...(node.props?.children ?? []).flat(Infinity).flatMap(nodes)];

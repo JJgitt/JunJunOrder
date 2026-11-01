@@ -2349,6 +2349,7 @@ function SettlementSheet({
     return <Modal title="确认采购结款" subtitle={order.id} subtitleCopyValue={order.id} onClose={onClose}>
         <div className="settlement-confirm-card"><i>¥</i><div><b>确认已向采购员完成结款？</b>
             <p>本单采购金额为 {money(order.amount)}。在途或入库后均可结款。结款状态独立记录，不会发货、扣减库存或改变当前发货状态。</p></div></div>
+        <KeyValue label="平台订单号" value={order.platformNo || "未填写"} copyValue={order.platformNo || undefined}/>
         <div className="settlement-summary"><span>采购员</span><b>{order.purchaser}</b><span>当前发货状态</span>
             <b>{order.status === "已发货" ? "已全部发货" : order.items.some(item => item.shipped) ? "部分已发货" : "未发货"}</b></div>
         <label className="settlement-amount-field"><span>实际结款金额 <em>选填</em></span>
