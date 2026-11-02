@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
-import { type AnyPgColumn, boolean, check, date, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, boolean, check, date, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import type { ChecklistItem } from "../lib/shipping-checklist";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow();
@@ -176,4 +177,25 @@ export const monthlyGrossProfits = pgTable("monthly_gross_profits", {
   check("monthly_gross_profits_month_check", sql`char_length(${table.month}) = 7 AND ${table.month} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$' AND substring(${table.month}, 1, 4) <> '0000'`),
   check("monthly_gross_profits_amount_check", sql`${table.grossProfitCents} BETWEEN -2147483648 AND 2147483647`),
   check("monthly_gross_profits_note_check", sql`char_length(${table.note}) <= 500`),
+]);
+
+export const shippingChecklists = pgTable("shipping_checklists", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  sourceText: text("source_text").notNull().default(""),
+  sourceTimeText: text("source_time_text").notNull().default(""),
+  declaredTotal: integer("declared_total"),
+  items: jsonb("items").$type<ChecklistItem[]>().notNull(),
+  version: integer("version").notNull().default(1),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  index("idx_shipping_checklists_created").on(table.createdAt, table.id),
+  check("shipping_checklists_title_check", sql`char_length(btrim(${table.title})) BETWEEN 1 AND 100`),
+  check("shipping_checklists_source_check", sql`char_length(${table.sourceText}) <= 50000 AND char_length(${table.sourceTimeText}) <= 40`),
+  check("shipping_checklists_total_check", sql`${table.declaredTotal} IS NULL OR ${table.declaredTotal} BETWEEN 0 AND 20000000`),
+  check("shipping_checklists_items_check", sql`CASE WHEN jsonb_typeof(${table.items}) = 'array' THEN jsonb_array_length(${table.items}) BETWEEN 1 AND 200 ELSE false END`),
+  check("shipping_checklists_version_check", sql`${table.version} > 0`),
 ]);
