@@ -36,7 +36,9 @@ function checklistRecord(value: unknown): ChecklistRecord {
 export default function ShippingChecklistPanel({onNotify}: {onNotify: (message: string) => void}) {
     const {now, timeZone, dateTime} = useServerClock();
     const bodyId = useId();
+    const detailBodyId = useId();
     const [open, setOpen] = useState(false), [activated, setActivated] = useState(false);
+    const [detailExpanded, setDetailExpanded] = useState(true);
     const [page, setPage] = useState(1), [reload, setReload] = useState(0);
     const [batches, setBatches] = useState<ChecklistSummary[]>([]), [total, setTotal] = useState(0), [totalPages, setTotalPages] = useState(1);
     const [loading, setLoading] = useState(false), [detailLoading, setDetailLoading] = useState(false), [busy, setBusy] = useState(false);
@@ -106,7 +108,10 @@ export default function ShippingChecklistPanel({onNotify}: {onNotify: (message: 
         setDetailLoading(true); setError(""); setMessage("");
         try {
             const data = await checklistRequest(`/api/shipping-checklists?id=${encodeURIComponent(id)}`, {signal: controller.signal});
-            if (!controller.signal.aborted) {setSelected(checklistRecord(data.checklist)); setConflict(false);}
+            if (!controller.signal.aborted) {
+                setSelected(checklistRecord(data.checklist)); setConflict(false);
+                if (selected?.id !== id) setDetailExpanded(true);
+            }
         } catch (cause) {if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "清单读取失败，请重试");}
         finally {if (!controller.signal.aborted) setDetailLoading(false);}
     }
@@ -145,7 +150,7 @@ export default function ShippingChecklistPanel({onNotify}: {onNotify: (message: 
             const body = creating ? {title: title.trim(), sourceText: source, sourceTimeText: parsed!.sourceTimeText, declaredTotal: parsed!.declaredTotal, items: validation.items}
                 : {id: selected!.id, version: selected!.version, action: "update", title: title.trim(), items: validation.items};
             const data = await checklistRequest("/api/shipping-checklists", {method: creating ? "POST" : "PATCH", headers: {"content-type": "application/json"}, body: JSON.stringify(body)});
-            remember(checklistRecord(data.checklist)); setMode("none"); setDraft([]); setParsed(null); setSource(""); setConflict(false); setDiscarding(false);
+            remember(checklistRecord(data.checklist)); setDetailExpanded(true); setMode("none"); setDraft([]); setParsed(null); setSource(""); setConflict(false); setDiscarding(false);
             setPage(1); setReload(value => value + 1); setMessage("清单已保存，可逐项勾选完成。"); onNotify("发货清单已保存");
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : "清单保存失败，草稿已保留");
@@ -225,10 +230,13 @@ export default function ShippingChecklistPanel({onNotify}: {onNotify: (message: 
             </form>}
 
             {mode === "none" && selected && summary && <section className={styles.detail} aria-label="清单详情">
-                <div className={styles.detailHead}><h3>{selected.title}</h3><span className={summary.completedCount === summary.itemCount ? styles.doneBadge : styles.pendingBadge}>{summary.completedCount === summary.itemCount ? "已完成" : "待核对"}</span></div>
-                <p className={styles.metadata}>录入：{dateTime(selected.createdAt)}{selected.sourceTimeText ? ` · 文案时间：${selected.sourceTimeText}` : ""}</p>
+                <div className={styles.detailHead}><div className={styles.detailHeading}><h3>{selected.title}</h3><span className={summary.completedCount === summary.itemCount ? styles.doneBadge : styles.pendingBadge}>{summary.completedCount === summary.itemCount ? "已完成" : "待核对"}</span></div>
+                    <button type="button" className={`${styles.secondary} ${styles.detailToggle}`} aria-expanded={detailExpanded} aria-controls={detailBodyId}
+                            onClick={() => setDetailExpanded(value => !value)}>{detailExpanded ? "收起清单" : "展开清单"}<span aria-hidden="true">{detailExpanded ? "⌃" : "⌄"}</span></button></div>
                 <div className={styles.summary}><b>已完成 {summary.completedCount}/{summary.itemCount} 项</b><span>{summary.completedQty}/{summary.totalQty} 件</span></div>
                 <progress aria-label="清单完成进度" max={summary.totalQty || 1} value={summary.completedQty}/>
+                <div id={detailBodyId} className={styles.detailContent} hidden={!detailExpanded}>
+                <p className={styles.metadata}>录入：{dateTime(selected.createdAt)}{selected.sourceTimeText ? ` · 文案时间：${selected.sourceTimeText}` : ""}</p>
                 <div className={styles.actions}><button type="button" className={styles.secondary} disabled={locked} onClick={beginEdit}>编辑清单</button>
                     <button type="button" className={styles.secondary} disabled={locked} onClick={() => void openBatch(selected.id)}>刷新当前清单</button></div>
                 <ul className={styles.items}>{selected.items.map(item => <li key={item.id} className={item.completed ? styles.completedItem : ""}>
@@ -237,15 +245,18 @@ export default function ShippingChecklistPanel({onNotify}: {onNotify: (message: 
                     {item.sku && <div className={styles.sku}><span>货号：{item.sku}</span><button type="button" onClick={() => void copySku(item.sku)}>复制</button></div>}
                 </li>)}</ul>
                 <details className={styles.original}><summary>查看原始发货文案</summary><pre>{selected.sourceText || "手动录入，无原始文案"}</pre></details>
+                </div>
             </section>}
 
             <section className={styles.history} aria-label="历史发货批次"><div className={styles.historyHead}><h3>发货批次</h3><span>共 {total} 批 · 每页 10 批</span></div>
                 {loading && <p className={styles.description} role="status">正在加载批次…</p>}
                 {listError && <div className={styles.error} role="alert">{listError}<button type="button" className={styles.secondary} onClick={() => setReload(value => value + 1)}>重新加载</button></div>}
                 {!loading && !listError && !batches.length && <p className={styles.empty}>暂无发货清单，粘贴文案即可创建第一批。</p>}
-                <ul>{batches.map(batch => <li key={batch.id}><button type="button" className={`${styles.batch} ${selected?.id === batch.id ? styles.selected : ""}`} aria-label={`打开清单 ${batch.id}`}
-                    disabled={locked || mode !== "none"} onClick={() => void openBatch(batch.id)}>
-                    <span><b>{batch.title}</b><small>{dateTime(batch.createdAt)}</small></span><span>{batch.completedCount}/{batch.itemCount} 项<small>{batch.totalQty} 件 · {batch.completedCount === batch.itemCount ? "已完成" : "待核对"}</small></span>
+                <ul>{batches.map(batch => <li key={batch.id}><button type="button" className={`${styles.batch} ${selected?.id === batch.id ? styles.selected : ""}`} aria-label={`${selected?.id === batch.id ? detailExpanded ? "收起清单" : "展开清单" : "打开清单"} ${batch.id}`}
+                    aria-expanded={selected?.id === batch.id ? detailExpanded : false} aria-controls={selected?.id === batch.id && mode === "none" ? detailBodyId : undefined}
+                    disabled={locked || mode !== "none"} onClick={() => {if (selected?.id === batch.id) setDetailExpanded(value => !value); else void openBatch(batch.id);}}>
+                    <span><b>{batch.title}</b><small>{dateTime(batch.createdAt)}</small></span><span>{batch.completedCount}/{batch.itemCount} 项<small>{batch.totalQty} 件 · {batch.completedCount === batch.itemCount ? "已完成" : "待核对"}</small>
+                        <em>{selected?.id === batch.id && detailExpanded ? "收起清单 ⌃" : "展开清单 ⌄"}</em></span>
                 </button></li>)}</ul>
                 {totalPages > 1 && <nav className={styles.pagination} aria-label="发货清单分页"><button type="button" className={styles.secondary} disabled={locked || loading || page <= 1} onClick={() => setPage(value => value - 1)}>上一页</button>
                     <span>{page}/{totalPages}</span><button type="button" className={styles.secondary} disabled={locked || loading || page >= totalPages} onClick={() => setPage(value => value + 1)}>下一页</button></nav>}

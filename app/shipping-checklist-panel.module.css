@@ -41,8 +41,12 @@
 .error {background: #fff0ed; color: #a74a3b;}
 .success {background: #edf8f1; color: #357550;}
 .warning pre, .original pre {margin: 10px 0 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere;}
-.detailHead {display: flex; align-items: flex-start; flex-wrap: wrap; justify-content: space-between; gap: 10px;}
+.detailHead {display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-bottom: 12px;}
+.detailHeading {display: flex; align-items: center; flex: 1; flex-wrap: wrap; gap: 8px; min-width: 0;}
 .detailHead h3 {min-width: 0; overflow-wrap: anywhere; flex: 1;}
+.detailToggle {display: inline-flex; align-items: center; gap: 8px; flex: none; border-color: #c8d9f2; background: #f4f8ff; color: #3565a4;}
+.detailToggle span {font-size: 18px; line-height: 1;}
+.detailContent[hidden] {display: none;}
 .metadata {color: #8290a5; font-size: 12px; line-height: 1.7;}
 .doneBadge, .pendingBadge {padding: 4px 8px; border-radius: 8px; font-size: 11px; white-space: nowrap;}
 .doneBadge {color: #397b54; background: #e8f5ed;}
@@ -71,6 +75,7 @@
 .batch > span {display: grid; gap: 6px; min-width: 0; overflow-wrap: anywhere; font-size: 13px;}
 .batch > span:last-child {flex: none; max-width: 42%; text-align: right;}
 .batch small {color: #8492a7; font-size: 11px; line-height: 1.5;}
+.batch em {color: #456ca7; font-size: 12px; font-style: normal;}
 .empty {padding: 16px 12px; border-radius: 12px; color: #8793a6; background: #f7f9fc; font-size: 13px; line-height: 1.7;}
 .pagination {display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #78869c; font-size: 13px;}
 @media (max-width: 380px) {.entry {gap: 9px; padding: 16px 12px;} .body {padding-inline: 12px;} .icon {width: 40px; height: 40px;} .entry small {font-size: 11px;} .grid {grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px;} .draftItem {padding: 10px;} }
