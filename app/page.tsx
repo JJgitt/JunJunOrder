@@ -134,6 +134,7 @@ const sortPurchaseOrders = (orders: PurchaseOrder[], sort: OrderSort) => {
 const matchesStatusFilter = (order: PurchaseOrder, statuses: string[]) => !statuses.length || statuses.some(status => status === "待发货" ? readyToShip(order.status) : order.status === status);
 const toggleStatusFilter = (current: string[], value: string) => value === "全部" ? [] : current.includes(value) ? current.filter(item => item !== value) : [...current, value];
 const courierCompanies = ["顺丰速运", "京东物流", "中通快递", "圆通速递", "申通快递", "韵达快递", "极兔速递", "邮政EMS"] as const;
+const shippingCourierCompanies = ["京东物流", ...courierCompanies.filter(company => company !== "京东物流")];
 const purchaseChannels = ["京东", "淘宝", "抖音", "唯品会", "拼多多", "其他"] as const;
 const courierCompanyChoice = (value?: string) => value && courierCompanies.some(company => company === value) ? value : value ? "其他" : "顺丰速运";
 const emptyOrderItemDraft = (): OrderItemDraft => ({
@@ -2713,7 +2714,7 @@ function BatchShipSheet({
                             onClose,
                             onSubmit
                         }: { orders: PurchaseOrder[]; onClose: () => void; onSubmit: (shipments: Array<{ orderId: string; courier: string; company: string }>) => Promise<void> }) {
-    const [company, setCompany] = useState("顺丰速运"), [customCompany, setCustomCompany] = useState(""), [courier, setCourier] = useState(""), [busy, setBusy] = useState(false);
+    const [company, setCompany] = useState(shippingCourierCompanies[0]), [customCompany, setCustomCompany] = useState(""), [courier, setCourier] = useState(""), [busy, setBusy] = useState(false);
     const resolvedCompany = company === "其他" ? customCompany.trim() : company;
     const complete = Boolean(resolvedCompany && courier.trim()) && orders.length > 0;
 
@@ -2734,7 +2735,7 @@ function BatchShipSheet({
     return <Modal title="批量发货" subtitle={`${orders.length} ORDERS`} onClose={onClose}>
         <div className="batch-ship-note"><b>整批共用一个发货运单</b><span>以下 {orders.length} 笔订单将使用同一物流公司和运单号；提交后全部待发货商品将一次性出库，任意订单失败时整批不会生效。</span></div>
         <label className="modal-field"><span>发货物流公司 *</span><select value={company}
-                                                                    onChange={e => setCompany(e.target.value)}>{courierCompanies.map(item =>
+                                                                    onChange={e => setCompany(e.target.value)}>{shippingCourierCompanies.map(item =>
             <option key={item}>{item}</option>)}
             <option>其他</option>
         </select></label>{company === "其他" &&
@@ -2758,7 +2759,7 @@ function ShipSheet({
                        onClose,
                        onSubmit
                    }: { order: PurchaseOrder; item: OrderItem; onClose: () => void; onSubmit: (itemId: string, shipped: boolean, resale: string, price: number, courier: string, company: string, resalePlatform: string) => void }) {
-    const initialCompany = item.outboundCompany ?? "";
+    const initialCompany = item.outboundCompany || shippingCourierCompanies[0];
     const [resalePlatform, setResalePlatform] = useState(item.resalePlatform ?? "得物"), [resale, setResale] = useState(item.resaleNo ?? ""), [price, setPrice] = useState(item.salePrice?.toString() ?? ""), [company, setCompany] = useState(courierCompanyChoice(initialCompany)), [customCompany, setCustomCompany] = useState(courierCompanyChoice(initialCompany) === "其他" ? initialCompany : ""), [courier, setCourier] = useState(item.outboundCourier ?? "");
     const resolvedCompany = company === "其他" ? customCompany.trim() : company, editingShipping = Boolean(item.shipped);
     return <Modal title={editingShipping ? "编辑发货信息" : "更新发货信息"} subtitle={order.id} subtitleCopyValue={order.id}
@@ -2779,7 +2780,7 @@ function ShipSheet({
                                                                               onChange={e => setPrice(e.target.value)}
                                                                               placeholder="可暂不填写售价"/></label>
         <div className="field-grid"><label className="modal-field"><span>发货物流公司 *</span><select value={company}
-                                                                                                onChange={e => setCompany(e.target.value)}>{courierCompanies.map(item =>
+                                                                                                onChange={e => setCompany(e.target.value)}>{shippingCourierCompanies.map(item =>
             <option key={item}>{item}</option>)}
             <option>其他</option>
         </select></label><label className="modal-field"><span>发货运单号 *</span><input value={courier}
