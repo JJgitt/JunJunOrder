@@ -113,7 +113,7 @@ try {
             const ownEdit = await edit({action: "resubmit-order", adminNote: "buyer override"});
             await expectStatus(buyerRoute.post(ownEdit), 200); assert.equal(await note(), content);
             const buyerVisible = (await expectStatus(buyerRoute.get(), 200)).orders.find(order => order.id === id);
-            assert.equal("adminNote" in buyerVisible, false, "owning buyer never receives the note");
+            assert.equal(buyerVisible.adminNote, content, "owning buyer reads the note but cannot edit it");
             const buyerCreated = await expectStatus(buyerRoute.post({action: "create-order", platform: "淘宝", platformNo: `${marker}_buyer_create`, items: [item], adminNote: content}), 201);
             assert.equal((await tx`SELECT admin_note FROM purchase_orders WHERE id=${buyerCreated.createdOrderId}`)[0].admin_note, "");
             await expectStatus(adminRoute.post({action: "approve", orderId: id}), 200);

@@ -1650,7 +1650,7 @@ function UploadPage({
             {mode === "admin" && editing && <label className="order-note-editor"><span>管理员备注（选填）</span>
                 <textarea aria-label="管理员备注" value={adminNote} maxLength={1000} rows={4} disabled={submitting}
                           onChange={event => setAdminNote(event.target.value)} placeholder="填写订单处理说明或需要留意的事项"/>
-                <small><span>仅管理员可见，支持换行</span><span>{adminNote.length}/1000</span></small>
+                <small><span>采购员可查看，仅管理员可编辑，支持换行</span><span>{adminNote.length}/1000</span></small>
             </label>}
             <label className="upload-zone"><input type="file" accept="image/*" multiple
                                                   onChange={e => setFiles(Array.from(e.target.files ?? []).slice(0, 3))}/><i>＋</i><b>{files.length ? `已选择 ${files.length} 张截图` : "上传订单截图"}</b><span>持久化保存，最多 3 张、单张不超过 5MB、合计不超过 8MB</span></label>
@@ -2165,9 +2165,9 @@ function OrderDetail({
             <KeyValue label="库位" value={order.location}/>}<KeyValue label="采购结款"
             value={order.settled ? `已结款 · ${order.settledAmount != null ? money(order.settledAmount) : "金额未记录"} · ${dateTime(order.settledAt)}` : isSettlementStage(order.status) ? "待结款" : "审核通过后可结款"}
             highlight={order.settled}/></div>
-        {canManage && (order.adminNote || (order.status === "在途" && onEditNote)) && <section className="detail-card order-note-card" aria-label="管理员备注">
+        {(order.adminNote || (canManage && order.status === "在途" && onEditNote)) && <section className="detail-card order-note-card" aria-label="管理员备注">
             <div className="order-note-head"><h3>管理员备注</h3>
-                {order.status === "在途" && onEditNote && <button type="button" className="order-note-edit" onClick={onEditNote}>
+                {canManage && order.status === "在途" && onEditNote && <button type="button" className="order-note-edit" onClick={onEditNote}>
                     {order.adminNote ? "编辑备注" : "添加备注"}
                 </button>}
             </div>

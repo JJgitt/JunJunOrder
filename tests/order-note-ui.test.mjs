@@ -48,7 +48,7 @@ test("administrator in-transit edit preloads a multiline optional note, updates 
     assert.equal(f.render().note.props.value, order.adminNote);
     assert.equal(f.render().note.props.maxLength, 1000);
     assert.equal(f.render().note.props.rows, 4);
-    assert.match(text(f.render().tree), /仅管理员可见/);
+    assert.match(text(f.render().tree), /仅管理员可编辑/);
     f.changeNote("新备注\n第二行");
     assert.match(text(f.render().tree), /7\/1000/);
     await f.submit();
@@ -92,7 +92,7 @@ const detailStubs = {
 };
 const detailCode = compile(`${sourceBetween("const statusTone:", "const initialAdminOrderListState:")}\n${sourceBetween("function OrderDetail(", "function OrderImageUploadSheet(")}`);
 const Detail = new Function(...Object.keys(detailStubs), `${detailCode}; return OrderDetail;`)(...Object.values(detailStubs));
-test("detail renders escaped multiline note text only for an administrator, and hides an empty note", () => {
+test("detail renders escaped multiline note text to administrator and buyer, and hides an empty note", () => {
     const value = "私密说明\n<script>alert('x')</script> & 再核对";
     const render = (canManage, adminNote = value) => renderToStaticMarkup(React.createElement(Detail, {order: {...order, adminNote}, canManage, showLocation: canManage}));
     const admin = render(true);
@@ -100,7 +100,10 @@ test("detail renders escaped multiline note text only for an administrator, and 
     assert.match(admin, /私密说明\n&lt;script&gt;/);
     assert.match(admin, /&amp; 再核对/);
     assert.doesNotMatch(admin, /<script>/);
-    assert.doesNotMatch(render(false), /管理员备注|私密说明|再核对/);
+    const buyer = render(false);
+    assert.match(buyer, /aria-label="管理员备注"/);
+    assert.match(buyer, /私密说明/);
+    assert.doesNotMatch(buyer, /<script>/);
     assert.doesNotMatch(render(true, ""), /aria-label="管理员备注"/);
 });
 
@@ -117,7 +120,14 @@ test("in-transit detail provides add/edit note actions before receipt, including
         const html = renderToStaticMarkup(tree);
         assert.match(html, /aria-label="管理员备注"/);
         assert.match(html, adminNote ? /在途跟进备注/ : /暂无备注/);
-        assert.doesNotMatch(renderToStaticMarkup(React.createElement(Detail, {...props, canManage: false})), /管理员备注|添加备注|编辑备注|在途跟进备注/);
+        const buyer = renderToStaticMarkup(React.createElement(Detail, {...props, canManage: false}));
+        if (adminNote) {
+            assert.match(buyer, /aria-label="管理员备注"/);
+            assert.match(buyer, /在途跟进备注/);
+            assert.doesNotMatch(buyer, /添加备注|编辑备注/);
+        } else {
+            assert.doesNotMatch(buyer, /管理员备注|添加备注|编辑备注/);
+        }
         const received = Detail({...props, order: {...props.order, status: "已入库"}});
         assert.equal(descendants(received).some(node => node.props?.className === "order-note-edit"), false);
     }
