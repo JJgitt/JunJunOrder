@@ -74,6 +74,13 @@ function fixture({records = [], fetchResult, cryptoValue = globalThis.crypto} = 
             saved = saved.map(row => row.id === updated.id ? updated : row);
             return Response.json({checklist: updated});
         }
+        if (options.method === "DELETE") {
+            const body = JSON.parse(options.body), old = saved.find(row => row.id === body.id);
+            if (!old) return Response.json({error: "清单不存在"}, {status: 404});
+            if (old.version !== body.version) return Response.json({error: "清单已被其他操作更新"}, {status: 409});
+            saved = saved.filter(row => row.id !== body.id);
+            return Response.json({deleted: body.id});
+        }
         const params = new URL(String(url), "http://localhost").searchParams;
         if (params.has("id")) return Response.json({checklist: saved.find(row => row.id === params.get("id"))});
         const page = Number(params.get("page") || 1), totalPages = Math.max(1, Math.ceil(saved.length / 10));
@@ -239,6 +246,48 @@ test("saved batch edits preserve content on conflicts and ignore a superseded de
     postpone = false;
 });
 
+test("administrators delete one batch after confirmation; cancellation and stale versions keep the data", async () => {
+    const f = fixture({records: [record("first", {title: "第一批"}), record("second", {title: "第二批"})]});
+    await f.open();
+    let view = f.render();
+    assert.ok(view.control("删除清单 first"), "each batch exposes its own delete control");
+    assert.ok(view.control("删除清单 second"));
+    view.control("删除清单 first").props.onClick();
+    view = f.render();
+    assert.match(text(view.tree), /确定删除清单「第一批」/);
+    assert.equal(f.requests.filter(request => request.options.method === "DELETE").length, 0, "confirmation never deletes immediately");
+    view.control("取消删除清单").props.onClick();
+    assert.doesNotMatch(text(f.render().tree), /确定删除清单/);
+    assert.equal(f.requests.filter(request => request.options.method === "DELETE").length, 0);
+
+    f.render().control("打开清单 first").props.onClick(); await nextTurn();
+    assert.ok(f.render().control("完成清单项 item-one"), "detail opens before deletion");
+    f.render().control("删除清单 first").props.onClick();
+    f.render().control("确认删除清单").props.onClick();
+    f.render().control("确认删除清单").props.onClick(); await nextTurn();
+    for (let turn = 0; turn < 6; turn++) {await nextTurn(); f.render();}
+    const deletions = f.requests.filter(request => request.options.method === "DELETE");
+    assert.equal(deletions.length, 1, "confirming twice cannot double-delete");
+    assert.deepEqual(JSON.parse(deletions[0].options.body), {id: "first", version: 1});
+    view = f.render();
+    assert.equal(view.control("删除清单 first"), undefined, "deleted batch disappears after reloading");
+    assert.ok(view.control("删除清单 second"), "other batches remain");
+    assert.equal(view.control("完成清单项 item-one"), undefined, "detail of the deleted batch is cleared");
+    assert.match(text(view.tree), /清单「第一批」已删除/);
+    assert.ok(f.notices.includes("发货清单已删除"));
+    assert.ok(f.requests.every(request => request.url.startsWith("/api/shipping-checklists")), "deleting a checklist never touches order or inventory APIs");
+});
+
+test("a stale or rejected delete shows an error and keeps the batch in the list", async () => {
+    const f = fixture({records: [record("stale")], fetchResult: request => request.options.method === "DELETE"
+        ? Response.json({error: "清单已被其他操作更新"}, {status: 409}) : undefined});
+    await f.open();
+    f.render().control("删除清单 stale").props.onClick();
+    f.render().control("确认删除清单").props.onClick(); await nextTurn();
+    assert.match(text(f.render().tree), /请点击「刷新批次」后重新删除/);
+    assert.ok(f.render().control("删除清单 stale"), "a rejected delete keeps the batch available");
+});
+
 test("shipping checklist is mounted only in the administrator profile and retains accessible mobile controls", async () => {
     const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
     const ast = ts.createSourceFile("page.tsx", page, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -252,4 +301,5 @@ test("shipping checklist is mounted only in the administrator profile and retain
     const css = await readFile(new URL("../app/shipping-checklist-panel.module.css", import.meta.url), "utf8");
     assert.match(css, /font-size:\s*16px/);
     assert.match(css, /min-height:\s*44px/);
+    assert.match(css, /\.deleteBatch\b[^}]*min-height:\s*44px/, "delete control keeps the 44px touch target");
 });

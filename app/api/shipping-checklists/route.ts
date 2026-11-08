@@ -72,6 +72,27 @@ export async function POST(request: Request) {
     } catch (error) {return routeError(error);}
 }
 
+export async function DELETE(request: Request) {
+    try {
+        assertSameOrigin(request);
+        const user = await requireAppUser(request);
+        requireAdmin(user);
+        const body = await bodyOf(request), id = string(body.id);
+        if (!id || id.length > 100 || typeof body.version !== "number" || !Number.isInteger(body.version) || body.version < 1 || body.version >= 2_147_483_647) return bad("清单标识或版本号无效，请刷新后重试");
+        const now = new Date().toISOString();
+        await getDb().transaction(async tx => {
+            const [before] = await tx.select().from(shippingChecklists).where(eq(shippingChecklists.id, id)).for("update").limit(1);
+            if (!before) throw missing();
+            if (before.version !== body.version) throw conflict();
+            await tx.delete(shippingChecklists).where(eq(shippingChecklists.id, id));
+            await tx.insert(auditLogs).values({id: `audit_${crypto.randomUUID()}`, actorId: user.id, action: "delete_shipping_checklist", entityType: "shipping_checklist", entityId: id,
+                detailJson: JSON.stringify({before: {title: before.title, sourceTimeText: before.sourceTimeText, declaredTotal: before.declaredTotal,
+                    itemCount: before.items.length, totalQty: before.items.reduce((sum, item) => sum + item.qty, 0), version: before.version}, sourceTextLength: before.sourceText.length}), createdAt: now});
+        });
+        return Response.json({deleted: id}, {headers});
+    } catch (error) {return routeError(error);}
+}
+
 export async function PATCH(request: Request) {
     try {
         assertSameOrigin(request);

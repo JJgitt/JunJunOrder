@@ -47,6 +47,7 @@ export default function ShippingChecklistPanel({onNotify}: {onNotify: (message: 
     const [source, setSource] = useState(""), [parsed, setParsed] = useState<ParseResult | null>(null);
     const [title, setTitle] = useState(""), [draft, setDraft] = useState<DraftItem[]>([]);
     const [reviewed, setReviewed] = useState(false), [discarding, setDiscarding] = useState(false), [conflict, setConflict] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<ChecklistSummary | null>(null);
     const writing = useRef(false), detailController = useRef<AbortController | null>(null), manualSequence = useRef(0);
 
     useEffect(() => () => detailController.current?.abort(), []);
@@ -170,6 +171,20 @@ export default function ShippingChecklistPanel({onNotify}: {onNotify: (message: 
         } finally {writing.current = false; setBusy(false);}
     }
 
+    async function removeBatch(target: ChecklistSummary) {
+        if (!deleteTarget || writing.current || mode !== "none") return;
+        writing.current = true; setBusy(true); setError(""); setMessage("");
+        try {
+            await checklistRequest("/api/shipping-checklists", {method: "DELETE", headers: {"content-type": "application/json"}, body: JSON.stringify({id: target.id, version: target.version})});
+            if (selected?.id === target.id) {setSelected(null); setDetailExpanded(true);}
+            setDeleteTarget(null); setConflict(false); setReload(value => value + 1);
+            setMessage(`清单「${target.title}」已删除。`); onNotify("发货清单已删除");
+        } catch (cause) {
+            setError(cause instanceof ChecklistRequestError && cause.status === 409 ? "清单已被其他操作更新，请点击「刷新批次」后重新删除"
+                : cause instanceof Error ? cause.message : "清单删除失败，请重试");
+        } finally {writing.current = false; setBusy(false);}
+    }
+
     async function copySku(value: string) {
         try {
             if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
@@ -252,12 +267,19 @@ export default function ShippingChecklistPanel({onNotify}: {onNotify: (message: 
                 {loading && <p className={styles.description} role="status">正在加载批次…</p>}
                 {listError && <div className={styles.error} role="alert">{listError}<button type="button" className={styles.secondary} onClick={() => setReload(value => value + 1)}>重新加载</button></div>}
                 {!loading && !listError && !batches.length && <p className={styles.empty}>暂无发货清单，粘贴文案即可创建第一批。</p>}
-                <ul>{batches.map(batch => <li key={batch.id}><button type="button" className={`${styles.batch} ${selected?.id === batch.id ? styles.selected : ""}`} aria-label={`${selected?.id === batch.id ? detailExpanded ? "收起清单" : "展开清单" : "打开清单"} ${batch.id}`}
-                    aria-expanded={selected?.id === batch.id ? detailExpanded : false} aria-controls={selected?.id === batch.id && mode === "none" ? detailBodyId : undefined}
-                    disabled={locked || mode !== "none"} onClick={() => {if (selected?.id === batch.id) setDetailExpanded(value => !value); else void openBatch(batch.id);}}>
-                    <span><b>{batch.title}</b><small>{dateTime(batch.createdAt)}</small></span><span>{batch.completedCount}/{batch.itemCount} 项<small>{batch.totalQty} 件 · {batch.completedCount === batch.itemCount ? "已完成" : "待核对"}</small>
-                        <em>{selected?.id === batch.id && detailExpanded ? "收起清单 ⌃" : "展开清单 ⌄"}</em></span>
-                </button></li>)}</ul>
+                {deleteTarget && <div className={styles.warning} role="status"><p>确定删除清单「{deleteTarget.title}」？删除后不可恢复，清单项与原始文案将一并移除。</p>
+                    <div className={styles.actions}><button type="button" className={styles.secondary} aria-label="取消删除清单" disabled={locked} onClick={() => setDeleteTarget(null)}>取消</button>
+                        <button type="button" className={styles.remove} aria-label="确认删除清单" disabled={locked} onClick={() => void removeBatch(deleteTarget)}>{busy ? "正在删除…" : "确认删除"}</button></div></div>}
+                <ul>{batches.map(batch => <li key={batch.id} className={styles.batchRow}>
+                    <button type="button" className={`${styles.batch} ${selected?.id === batch.id ? styles.selected : ""}`} aria-label={`${selected?.id === batch.id ? detailExpanded ? "收起清单" : "展开清单" : "打开清单"} ${batch.id}`}
+                        aria-expanded={selected?.id === batch.id ? detailExpanded : false} aria-controls={selected?.id === batch.id && mode === "none" ? detailBodyId : undefined}
+                        disabled={locked || mode !== "none"} onClick={() => {if (selected?.id === batch.id) setDetailExpanded(value => !value); else void openBatch(batch.id);}}>
+                        <span><b>{batch.title}</b><small>{dateTime(batch.createdAt)}</small></span><span>{batch.completedCount}/{batch.itemCount} 项<small>{batch.totalQty} 件 · {batch.completedCount === batch.itemCount ? "已完成" : "待核对"}</small>
+                            <em>{selected?.id === batch.id && detailExpanded ? "收起清单 ⌃" : "展开清单 ⌄"}</em></span>
+                    </button>
+                    <button type="button" className={styles.deleteBatch} aria-label={`删除清单 ${batch.id}`} disabled={locked || mode !== "none"}
+                            onClick={() => {setDeleteTarget(batch); setError(""); setMessage("");}}>删除</button>
+                </li>)}</ul>
                 {totalPages > 1 && <nav className={styles.pagination} aria-label="发货清单分页"><button type="button" className={styles.secondary} disabled={locked || loading || page <= 1} onClick={() => setPage(value => value - 1)}>上一页</button>
                     <span>{page}/{totalPages}</span><button type="button" className={styles.secondary} disabled={locked || loading || page >= totalPages} onClick={() => setPage(value => value + 1)}>下一页</button></nav>}
             </section>

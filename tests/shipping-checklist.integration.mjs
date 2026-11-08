@@ -34,7 +34,8 @@ function handlers(db, role, actor) {
         method, headers: {"content-type": "application/json", ...(origin ? {origin} : {})}, body: typeof body === "string" ? body : JSON.stringify(body),
     }));
     return {get: (query = "") => route.GET(new Request(`http://localhost/api/shipping-checklists${query}`)),
-        post: (body, origin) => write("POST", body, origin), patch: (body, origin) => write("PATCH", body, origin)};
+        post: (body, origin) => write("POST", body, origin), patch: (body, origin) => write("PATCH", body, origin),
+        del: (body, origin) => write("DELETE", body, origin)};
 }
 async function status(promise, expected) {
     const response = await promise, value = await response.json().catch(() => ({}));
@@ -62,9 +63,11 @@ try {
                 const expected = denied === buyer ? 403 : 401;
                 await status(denied.get(), expected); await status(denied.post(create()), expected);
                 await status(denied.patch({id: "missing", version: 1, action: "set-completed", itemId: "one", completed: true}), expected);
+                await status(denied.del({id: "missing", version: 1}), expected);
             }
             await status(admin.post(create(), "http://untrusted.invalid"), 403);
             await status(admin.patch({}, "http://untrusted.invalid"), 403);
+            await status(admin.del({id: "missing", version: 1}, "http://untrusted.invalid"), 403);
             for (const malformed of ["{", "[]", "null", "123"]) await status(admin.post(malformed), 400);
             for (const patch of [{title: " "}, {title: "x".repeat(101)}, {sourceText: null}, {sourceText: "x".repeat(50001)}, {sourceTimeText: "x".repeat(41)},
                 {declaredTotal: -1}, {declaredTotal: 1.5}, {declaredTotal: "2"}, {declaredTotal: 20000001}, {items: []}, {items: [item("one"), item("one")]},
@@ -114,6 +117,20 @@ try {
             page = await status(admin.get(), 200); assert.equal(page.checklists.length, 10); assert.equal(page.total, baseline + 12); assert.equal(page.pageSize, 10);
             const last = await status(admin.get("?page=999"), 200); assert.equal(last.page, last.totalPages); assert.equal(last.totalPages, Math.ceil((baseline + 12) / 10));
             await assert.rejects(tx.savepoint(inner => inner`INSERT INTO shipping_checklists (id,title,items) VALUES (${`${marker}_bad`},'x','{}'::jsonb)`), error => error.code === "23514");
+            // 整批删除：管理员按版本删除，审计同事务，失败回滚，不触碰订单/库存
+            let disposable = (await status(admin.post(create({title: "待删除批次"})), 201)).checklist;
+            for (const malformed of ["{", "[]", "null"]) await status(admin.del(malformed), 400);
+            await status(admin.del({id: "", version: disposable.version}), 400);
+            await status(admin.del({id: disposable.id, version: 0}), 400);
+            await status(admin.del({id: disposable.id, version: "1"}), 400);
+            await status(admin.del({id: "missing", version: 1}), 404);
+            disposable = (await status(admin.patch({id: disposable.id, version: 1, action: "update", title: "更名待删批次", items: [item("one")]}), 200)).checklist;
+            await status(admin.del({id: disposable.id, version: 1}), 409);
+            failAudit = true; await status(admin.del({id: disposable.id, version: disposable.version}), 500); failAudit = false;
+            assert.equal((await status(admin.get(`?id=${disposable.id}`), 200)).checklist.version, 2, "a failed delete rolls back the row");
+            await status(admin.del({id: disposable.id, version: 2}), 200);
+            await status(admin.get(`?id=${disposable.id}`), 404);
+            assert.equal((await tx`SELECT count(*)::int AS n FROM audit_logs WHERE entity_id=${disposable.id} AND action='delete_shipping_checklist'`)[0].n, 1);
             const [afterUntouched] = await tx`SELECT
                 (SELECT md5(coalesce(jsonb_agg(to_jsonb(p) ORDER BY id)::text,'')) FROM purchase_orders p) AS orders,
                 (SELECT md5(coalesce(jsonb_agg(to_jsonb(i) ORDER BY sku,size)::text,'')) FROM inventory i) AS stock,
@@ -123,7 +140,7 @@ try {
             throw rollback;
         });
     } catch (error) {if (error !== rollback) throw error;}
-    console.log("Shipping checklist real PostgreSQL creation, persistence, edits, per-item completion, privacy, pagination, audit rollback and order/stock independence verified.");
+    console.log("Shipping checklist real PostgreSQL creation, persistence, edits, per-item completion, admin-only deletion, privacy, pagination, audit rollback and order/stock independence verified.");
 
     // Committed UUID-only fixtures allow two distinct database connections to verify optimistic concurrency.
     const actor = `${marker}_concurrent_admin`;

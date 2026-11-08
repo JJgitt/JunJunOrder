@@ -76,6 +76,9 @@
 .batch > span:last-child {flex: none; max-width: 42%; text-align: right;}
 .batch small {color: #8492a7; font-size: 11px; line-height: 1.5;}
 .batch em {color: #456ca7; font-size: 12px; font-style: normal;}
+.batchRow {display: flex; align-items: stretch; gap: 8px; min-width: 0;}
+.batchRow .batch {flex: 1; width: auto; min-width: 0;}
+.deleteBatch {flex: none; min-height: 44px; padding: 10px 12px; border: 1px solid #ead0ce; border-radius: 12px; background: #fff8f7; color: #a34a40; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;}
 .empty {padding: 16px 12px; border-radius: 12px; color: #8793a6; background: #f7f9fc; font-size: 13px; line-height: 1.7;}
 .pagination {display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #78869c; font-size: 13px;}
 @media (max-width: 380px) {.entry {gap: 9px; padding: 16px 12px;} .body {padding-inline: 12px;} .icon {width: 40px; height: 40px;} .entry small {font-size: 11px;} .grid {grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px;} .draftItem {padding: 10px;} }
