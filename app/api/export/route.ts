@@ -52,8 +52,20 @@ export async function POST(request:Request){
     if(!ids.length)return Response.json({error:"请选择要导出的订单"},{status:400});
     const db=getDb();
     const [orders,items]=await Promise.all([
-      db.select({id:purchaseOrders.id,platformOrderNo:purchaseOrders.platformOrderNo,courierNo:purchaseOrders.courierNo}).from(purchaseOrders).where(inArray(purchaseOrders.id,ids)),
-      db.select({orderId:orderItems.orderId,title:orderItems.title,size:orderItems.size,qty:orderItems.qty,purchaseCourierNo:orderItems.purchaseCourierNo}).from(orderItems).where(inArray(orderItems.orderId,ids)).orderBy(asc(orderItems.createdAt)),
+      db.select({
+        id: purchaseOrders.id,
+        platformOrderNo: purchaseOrders.platformOrderNo,
+        courierCompany: purchaseOrders.courierCompany,
+        courierNo: purchaseOrders.courierNo,
+      }).from(purchaseOrders).where(inArray(purchaseOrders.id, ids)),
+      db.select({
+        orderId: orderItems.orderId,
+        title: orderItems.title,
+        size: orderItems.size,
+        qty: orderItems.qty,
+        purchaseCourierCompany: orderItems.purchaseCourierCompany,
+        purchaseCourierNo: orderItems.purchaseCourierNo,
+      }).from(orderItems).where(inArray(orderItems.orderId, ids)).orderBy(asc(orderItems.createdAt)),
     ]);
     if(!orders.length)return Response.json({error:"未找到可导出的订单"},{status:404});
     const index=new Map(ids.map((id,position)=>[id,position]));

@@ -1,7 +1,19 @@
 import ExcelJS from "exceljs";
 
-export type ExportOrder={id:string;platformOrderNo:string;courierNo:string};
-export type ExportItem={orderId:string;title:string;size:string;qty:number;purchaseCourierNo:string};
+export type ExportOrder = {
+  id: string;
+  platformOrderNo: string;
+  courierCompany: string;
+  courierNo: string;
+};
+export type ExportItem = {
+  orderId: string;
+  title: string;
+  size: string;
+  qty: number;
+  purchaseCourierCompany: string;
+  purchaseCourierNo: string;
+};
 
 /** Builds the compact order-list workbook. Text formatting preserves long tracking and platform numbers. */
 export async function createOrdersWorkbook(orders:ExportOrder[],items:ExportItem[],createdAt:string){
@@ -14,15 +26,23 @@ export async function createOrdersWorkbook(orders:ExportOrder[],items:ExportItem
     {header:"商品名",key:"title",width:28},
     {header:"尺码",key:"size",width:14},
     {header:"件数",key:"qty",width:10},
+    {header:"物流公司",key:"courierCompany",width:20},
     {header:"运单号",key:"courierNo",width:24},
     {header:"订单号",key:"orderNo",width:24},
   ];
   for(const item of items){
     const order=ordersById.get(item.orderId);
     if(!order)continue;
-    sheet.addRow({title:item.title,size:item.size,qty:item.qty,courierNo:item.purchaseCourierNo||order.courierNo,orderNo:order.platformOrderNo});
+    sheet.addRow({
+      title: item.title,
+      size: item.size,
+      qty: item.qty,
+      courierCompany: item.purchaseCourierCompany || order.courierCompany,
+      courierNo: item.purchaseCourierNo || order.courierNo,
+      orderNo: order.platformOrderNo,
+    });
   }
-  sheet.autoFilter={from:"A1",to:"E1"};
+  sheet.autoFilter={from:"A1",to:"F1"};
   const header=sheet.getRow(1);
   header.height=24;
   header.font={bold:true,color:{argb:"FFFFFFFF"}};
